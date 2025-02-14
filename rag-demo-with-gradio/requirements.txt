@@ -1,0 +1,49 @@
+gradio==4.19.2
+langchain==0.1.6
+langchain-community==0.0.19
+langchain_core==0.1.22
+langchain-openai==0.0.5
+faiss-cpu==1.7.3
+huggingface-hub==0.20.1
+google-generativeai==0.3.2
+openai==1.11.1
+opencv-python==4.9.0.80
+pdf2image==1.17.0
+pdfminer-six==20221105
+pikepdf==8.12.0
+pypdf==4.0.1
+rank-bm25==0.2.2
+replicate==0.23.1
+tiktoken==0.5.2
+unstructured==0.12.3
+unstructured-pytesseract==0.3.12
+unstructured-inference==0.7.23
+
+# generated
+
+# Transformers for the DeepSeek model and cross-encoder reranker
+transformers>=4.34.0
+
+# PyTorch required by DeepSeek and many Hugging Face models
+torch>=2.0.0
+
+# LangChain (the main package) – adjust the version if needed
+langchain>=0.0.200
+
+# LangChain Community components (for document loaders, vector stores, retrievers, etc.)
+langchain-community
+
+# LangChain Core components (for runnables, etc.)
+langchain-core
+
+# SentenceTransformers for embedding via HuggingFaceEmbeddings
+sentence-transformers
+
+# FAISS for vector storage and similarity search (CPU version)
+faiss-cpu
+
+# PDF parsing (e.g., used by OnlinePDFLoader)
+pdfminer.six
+
+# Pin Pydantic to a version < 2 (to avoid compatibility issues with LangChain)
+pydantic<2
