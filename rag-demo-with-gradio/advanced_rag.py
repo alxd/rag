@@ -2,7 +2,8 @@ import os
 os.environ["TOKENIZERS_PARALLELISM"] = "false"
 from typing import List
 
-# Imports for our DeepSeek model pipeline
+import torch
+import transformers
 from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
 from langchain.llms import HuggingFacePipeline
 
@@ -10,27 +11,35 @@ from langchain.llms import HuggingFacePipeline
 from langchain_community.document_loaders import OnlinePDFLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
-# Replace CohereEmbeddings with HuggingFaceEmbeddings
 from langchain.embeddings import HuggingFaceEmbeddings  
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
 from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+from transformers.quantizers.auto import AutoQuantizationConfig
+
+# ----------------------------
+# LLM Pipeline Creators
+# ----------------------------
 
 def create_deepseek_pipeline() -> HuggingFacePipeline:
     """
     Create a HuggingFace pipeline using the DeepSeek-R1 model and wrap it as a LangChain LLM.
+    ERROR: https://github.com/deepseek-ai/DeepSeek-V3/issues/558
     """
-    # Load the DeepSeek model and tokenizer
+    quant_config = AutoQuantizationConfig.from_dict({
+    "activation_scheme": "dynamic",
+    "fmt": "e4m3",
+    "quant_method": "bitsandbytes_4bit",
+    "weight_block_size": [128, 128]
+})
     model = AutoModelForCausalLM.from_pretrained(
         "deepseek-ai/DeepSeek-R1", 
-        trust_remote_code=True
+        trust_remote_code=True,
+        quantization_config=quant_config #  supported types are: ['awq', 'bitsandbytes_4bit', 'bitsandbytes_8bit', 'gptq', 'aqlm', 'quanto', 'eetq', 'higgs', 'hqq', 'compressed-tensors', 'fbgemm_fp8', 'torchao', 'bitnet', 'vptq']
     )
     tokenizer = AutoTokenizer.from_pretrained("deepseek-ai/DeepSeek-R1")
-    
-    # Create a text-generation pipeline.
-    # Adjust parameters like max_length, temperature, and top_p as needed.
     pipe = pipeline(
         "text-generation", 
         model=model, 
@@ -39,29 +48,72 @@ def create_deepseek_pipeline() -> HuggingFacePipeline:
         max_length=2048,
         do_sample=True,
         temperature=0.5,
+        top_p=1,
+        device=0 if torch.cuda.is_available() else -1
+    )
+    return HuggingFacePipeline(pipeline=pipe)
+
+def create_llama3_pipeline() -> HuggingFacePipeline:
+    """
+    Create a HuggingFace pipeline using Meta-Llama-3-8B-Instruct and wrap it as a LangChain LLM.
+    To use this, first download the model with:
+    
+    ```
+    huggingface-cli download meta-llama/Meta-Llama-3-8B-Instruct --include "original/*" --local-dir meta-llama/Meta-Llama-3-8B-Instruct
+    ```
+    ACCESS ISSUE - Agree with license: https://huggingface.co/meta-llama/Meta-Llama-3-8B/discussions/172 
+    ACCESS ISSUE - Pass huggingface token: https://huggingface.co/meta-llama/Meta-Llama-3-8B-Instruct/discussions/68 
+    ACCESS ISSUE - WRITE token required: https://discuss.huggingface.co/t/loading-llama-3/90492
+    Adjust device settings as needed.
+    """
+    model_id = "meta-llama/Meta-Llama-3-8B-Instruct"
+    #model_id = 'meta/llama-2-70b-chat:2d19859030ff705a87c746f7e96eea03aefb71f166725aee39692f1476566d48'
+    pipe = pipeline(
+        "text-generation",
+        model=model_id,
+        model_kwargs={"torch_dtype": torch.bfloat16},
+        device=0 if torch.cuda.is_available() else -1,
+        max_length=2048,
+        do_sample=True,
+        temperature=0.5,
         top_p=1
     )
-    
-    # Wrap the pipeline with HuggingFacePipeline for LangChain compatibility
     return HuggingFacePipeline(pipeline=pipe)
+
+def create_llm_pipeline(choice: str = "llama3") -> HuggingFacePipeline:
+    """
+    Wrapper to choose between 'deepseek' and 'llama3' pipelines.
+    """
+    if choice.lower() == "llama3":
+        print ("Using Meta Llama-3")
+        return create_llama3_pipeline()        
+    else:
+        print ("Using DeepSeek R1")
+        return create_deepseek_pipeline()
+
+# ----------------------------
+# ElevatedRagChain Class
+# ----------------------------
 
 class ElevatedRagChain:
     """
-    ElevatedRagChain integrates various components from LangChain to build an advanced
-    retrieval-augmented generation (RAG) system. It processes PDF documents by loading,
-    chunking, embedding, and adding their embeddings to a FAISS vector store for efficient
-    retrieval. It then uses an ensemble retriever (BM25 + FAISS) and a DeepSeek model (via a
-    HuggingFace pipeline) for generating detailed technical answers.
+    ElevatedRagChain builds an advanced retrieval-augmented generation (RAG) system.
+    It processes PDFs by loading, chunking, embedding, and indexing in a FAISS vector store.
+    It uses an ensemble retriever (BM25 + FAISS) and a configurable LLM (DeepSeek or Meta-Llama-3)
+    to generate detailed technical answers.
     """
-    def __init__(self) -> None:
+    def __init__(self, llm_choice: str = "llama3") -> None:
         """
-        Initialize the class with a predefined embedding function, weights, and top_k value.
+        Initialize with a HuggingFaceEmbeddings instance (using an open source SentenceTransformer),
+        retriever weights, top_k value, and select the LLM pipeline based on llm_choice.
+        
+        llm_choice: "deepseek" (default) or "llama3"
         """
-        # Use HuggingFaceEmbeddings with a model that doesn't require an API key.
         self.embed_func   = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
         self.bm25_weight  = 0.6
         self.faiss_weight = 0.4
         self.top_k        = 5
+        self.llm_choice   = llm_choice  # Save the LLM choice for later use
 
     def add_pdfs_to_vectore_store(
             self,
@@ -70,49 +122,37 @@ class ElevatedRagChain:
         ) -> None:
         """
         Processes PDF documents by loading, chunking, embedding, and adding them to a FAISS vector store.
-        
-        Args:
-            pdf_links (List): List of URLs pointing to the PDF documents to be processed.
-            chunk_size (int, optional): Size of text chunks to split the documents into (default: 1500).
-        """        
-        # Load PDFs
+        """
         self.raw_data = [OnlinePDFLoader(doc).load()[0] for doc in pdf_links]
-
-        # Chunk text
         self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=100)
         self.split_data    = self.text_splitter.split_documents(self.raw_data)
-
-        # Create BM25 retriever from the split documents
         self.bm25_retriever = BM25Retriever.from_documents(self.split_data)
         self.bm25_retriever.k = self.top_k
-
-        # Embed and add chunks to FAISS vector store
         self.vector_store    = FAISS.from_documents(self.split_data, self.embed_func)
         self.faiss_retriever = self.vector_store.as_retriever(search_kwargs={"k": self.top_k})
         print("All PDFs processed and added to vector store.")
-        
-        # Build the advanced RAG system
         self.build_elevated_rag_system()
         print("RAG system is built successfully.")
 
     def build_elevated_rag_system(self) -> None:
         """
-        Build an advanced RAG system by combining:
-         - BM25 retriever
-         - FAISS vector store retriever
-         - A DeepSeek model (via a HuggingFace pipeline)
-        
-        Note: The retrieval is performed using an ensemble of BM25 and FAISS retrievers
-        without applying any additional reranking.
+        Build the RAG system by chaining:
+          - An ensemble retriever (BM25 + FAISS)
+          - A prompt template
+          - The selected LLM (DeepSeek or Meta-Llama-3) via a HuggingFace pipeline
         """
-        # Combine BM25 and FAISS retrievers into an ensemble retriever
-        self.ensemble_retriever = EnsembleRetriever(
+        ensemble = EnsembleRetriever(
             retrievers=[self.bm25_retriever, self.faiss_retriever],
             weights=[self.bm25_weight, self.faiss_weight]
         )
-
-        # Define the prompt template for the language model
-        RAG_PROMPT_TEMPLATE = """\
+        base_runnable = RunnableParallel(
+            {
+                "context": ensemble,
+                "question": RunnablePassthrough()
+            }
+        )
+        self.rag_prompt = ChatPromptTemplate.from_template(
+            """\
 Use the following context to provide a detailed technical answer to the user's question.
 Do not include an introduction like "Based on the provided documents, ...". Just answer the question.
 If you don't know the answer, please respond with "I don't know".
@@ -123,21 +163,8 @@ Context:
 User's question:
 {question}
 """
-        self.rag_prompt = ChatPromptTemplate.from_template(RAG_PROMPT_TEMPLATE)
-        self.str_output_parser = StrOutputParser()
-
-        # Prepare parallel execution of context retrieval and question processing
-        # Use the ensemble retriever directly (without reranking)
-        self.entry_point_and_elevated_retriever = RunnableParallel(
-            {
-                "context": self.ensemble_retriever,
-                "question": RunnablePassthrough()
-            }
         )
-
-        # Initialize the DeepSeek model using a HuggingFace pipeline as our LLM
-        self.llm = create_deepseek_pipeline()
-
-        # Chain the components to form the final elevated RAG system.
-        # Optionally, you can append self.str_output_parser if output parsing is needed.
-        self.elevated_rag_chain = self.entry_point_and_elevated_retriever | self.rag_prompt | self.llm
+        self.str_output_parser = StrOutputParser()
+        # Select the LLM pipeline based on the llm_choice provided during initialization
+        self.llm = create_llm_pipeline(choice=self.llm_choice)
+        self.elevated_rag_chain = base_runnable | self.rag_prompt | self.llm
