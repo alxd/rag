@@ -33,6 +33,9 @@ last_token_count = 0
 
 def debug_token_count_function(prompt: str, tokenizer) -> str:
     global last_token_count
+    if tokenizer is None:
+        print("Can't count tokens. Tokenizer failed to initialize. Please check the model name and dependencies.")
+        return prompt
     tokens = tokenizer.encode(prompt)
     last_token_count = len(tokens)
     debug_print(f"Token count for prompt: {last_token_count}")
@@ -47,24 +50,22 @@ def create_llama3_pipeline_remote():
     hf_api_token = os.environ.get("HF_API_TOKEN")
     if hf_api_token is None:
         raise ValueError("Please set the HF_API_TOKEN environment variable to use remote inference.")
-    from huggingface_hub.inference_api import InferenceApi
-    inference = InferenceApi(repo_id=repo_id, token=hf_api_token)
+    
+    # Import and create the client
+    from huggingface_hub import InferenceClient
+    client = InferenceClient(token=hf_api_token)
     
     def remote_generate(prompt: str) -> str:
-        # Call the Inference API with parameters
-        response = inference(inputs=prompt, parameters={
-            "max_length": 2048,
-            "do_sample": True,
-            "temperature": 0.5,
-            "top_p": 1,
-        })
-        # Expecting a list of dicts with key "generated_text"
-        if isinstance(response, list) and response and "generated_text" in response[0]:
-            return response[0]["generated_text"]
-        elif isinstance(response, dict) and "generated_text" in response:
-            return response["generated_text"]
-        else:
-            return str(response)
+        # Use the client's text-generation method
+        response = client.text_generation(
+            prompt,
+            model=repo_id,
+            max_new_tokens=512,
+            temperature=0.7,
+            top_p=0.95,
+            repetition_penalty=1.1
+        )
+        return response
     
     # Wrap remote_generate in a LangChain LLM interface
     from langchain.llms.base import LLM
@@ -72,14 +73,16 @@ def create_llama3_pipeline_remote():
         @property
         def _llm_type(self) -> str:
             return "remote_llm"
+        
         def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
             return remote_generate(prompt)
+        
         @property
         def _identifying_params(self) -> dict:
             return {"model": repo_id}
+    
     debug_print("Remote Meta-Llama-3 pipeline created successfully.")
     return RemoteLLM()
-
 # ----------------------------
 # Local LLM Pipeline Creators
 # ----------------------------
@@ -115,7 +118,8 @@ def create_deepseek_pipeline() -> HuggingFacePipeline:
         do_sample=True,
         temperature=0.5,
         top_p=1,
-        device=0 if torch.cuda.is_available() else -1
+#        device=0 if torch.cuda.is_available() else -1
+        device=-1 
     )
     debug_print("DeepSeek pipeline created successfully.")
     return HuggingFacePipeline(pipeline=pipe)
@@ -127,11 +131,12 @@ def create_llama3_pipeline() -> HuggingFacePipeline:
         "text-generation",
         model=model_id,
         model_kwargs={"torch_dtype": torch.bfloat16},
-        device=0 if torch.cuda.is_available() else -1,
         max_length=4096,
         do_sample=True,
         temperature=0.5,
-        top_p=1
+        top_p=1,
+        device=-1
+        #device=0 if torch.cuda.is_available() else -1,        
     )
     debug_print("Local Meta-Llama-3 pipeline created successfully.")
     return HuggingFacePipeline(pipeline=pipe)
@@ -142,11 +147,12 @@ def create_gemini_pipeline() -> HuggingFacePipeline:
     pipe = pipeline(
         "text-generation",
         model=model_id,
-        device=0 if torch.cuda.is_available() else -1,
         max_length=4096,
         do_sample=True,
         temperature=0.5,
-        top_p=1
+        top_p=1,
+        device=-1
+        #device=0 if torch.cuda.is_available() else -1,        
     )
     debug_print("Gemini Flash 1.5 pipeline created successfully.")
     return HuggingFacePipeline(pipeline=pipe)
@@ -188,7 +194,11 @@ User's question:
 class ElevatedRagChain:
     def __init__(self, llm_choice: str = "Meta-Llama-3", prompt_template: str = default_prompt) -> None:
         debug_print("Initializing ElevatedRagChain with llm_choice: " + llm_choice)
-        self.embed_func   = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2")
+        self.embed_func = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2",
+            model_kwargs={"device": "cpu"}
+            )
+        #self.embed_func = HuggingFaceEmbeddings(model_name="sentence-transformers/all-MiniLM-L6-v2", device="cpu")
         self.bm25_weight  = 0.6
         self.faiss_weight = 0.4
         self.top_k        = 5
@@ -240,6 +250,7 @@ class ElevatedRagChain:
 # ----------------------------
 # Gradio Interface Functions
 # ----------------------------
+os.environ["HF_API_TOKEN"] = "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" 
 rag_chain = ElevatedRagChain()
 
 def load_pdfs(pdf_links, model_choice, prompt_template):
