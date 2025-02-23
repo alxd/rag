@@ -1,3 +1,9 @@
+---
+title: PhiRAG
+app_file: advanced_rag.py
+sdk: gradio
+sdk_version: 3.40.0
+---
 
 # Advanced RAG System
 

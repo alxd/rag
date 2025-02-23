@@ -1,10 +1,10 @@
-gradio<=3.x
+gradio==3.0
 langchain==0.1.6
 langchain-community==0.0.19
 langchain_core==0.1.22
 langchain-openai==0.0.5
 faiss-cpu==1.7.3
-huggingface-hub==0.20.1
+huggingface-hub==0.24.7
 google-generativeai==0.3.2
 openai==1.11.1
 opencv-python==4.9.0.80
@@ -36,8 +36,6 @@ langchain-community
 # LangChain Core components (for runnables, etc.)
 langchain-core
 
-# SentenceTransformers for embedding via HuggingFaceEmbeddings
-sentence-transformers
 
 # FAISS for vector storage and similarity search (CPU version)
 faiss-cpu
@@ -46,4 +44,8 @@ faiss-cpu
 pdfminer.six
 
 # Pin Pydantic to a version < 2 (to avoid compatibility issues with LangChain)
-pydantic<2
+pydantic>=2.5.2,<3
+
+sentence-transformers>=2.4.0
+
+mistralai
