@@ -23,6 +23,7 @@ from langchain_core.runnables import RunnableParallel, RunnableLambda
 from transformers.quantizers.auto import AutoQuantizationConfig
 import gradio as gr
 import requests
+from pydantic import PrivateAttr
 
 # Add Mistral imports with fallback handling
 try:
@@ -174,7 +175,7 @@ class ElevatedRagChain:
             class MistralLLM(LLM):
                 temperature: float = 0.7
                 top_p: float = 0.95
-                _client: Any = None
+                _client: Any = PrivateAttr()  # Declare _client as a private attribute
                 def __init__(self, api_key: str, temperature: float = 0.7, top_p: float = 0.95):
                     super().__init__()
                     self._client = Mistral(api_key=api_key)
@@ -184,12 +185,12 @@ class ElevatedRagChain:
                 def _llm_type(self) -> str:
                     return "mistral_llm"
                 def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-                    response = self._client.chat.complete(
+                    response = self._client.chat.complete( 
                         model="mistral-small-latest",
                         messages=[{"role": "user", "content": prompt}],
                         temperature=self.temperature,
                         top_p=self.top_p,
-                        max_tokens=512
+                        max_tokens=32000
                     )
                     return response.choices[0].message.content
                 @property
@@ -220,7 +221,13 @@ class ElevatedRagChain:
                 def _llm_type(self) -> str:
                     return "local_llm"
                 def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-                    return pipe(prompt)[0]["generated_text"]
+                    # Reserve tokens for generation (e.g., 512 tokens)
+                    reserved_gen = 512
+                    max_total = 8192
+                    max_prompt_tokens = max_total - reserved_gen
+                    truncated_prompt = truncate_prompt(prompt, max_tokens=max_prompt_tokens)
+                    generated = pipe(truncated_prompt, max_new_tokens=reserved_gen)[0]["generated_text"]
+                    return generated
                 @property
                 def _identifying_params(self) -> dict:
                     return {"model": model_id, "max_length": extra_kwargs.get("max_length")}
@@ -398,7 +405,7 @@ def submit_query_updated(query):
                 "question": query
             }
             if "llama" in rag_chain.llm_choice.lower():
-                prompt_variables["context"] = truncate_prompt(prompt_variables["context"], max_tokens=4096)
+                prompt_variables["context"] = truncate_prompt(prompt_variables["context"], max_tokens=4092)
             response = rag_chain.elevated_rag_chain.invoke(prompt_variables)
             rag_chain.conversation_history.append({"query": query, "response": response})
             input_token_count = count_tokens(query)
@@ -450,20 +457,26 @@ with gr.Blocks(css=custom_css) as app:
 **PhiRAG** Query Your Data with Advanced RAG Techniques
 
 **Model Selection & Parameters:** Choose from the following options:
-- 🇺🇸 Remote Meta-Llama-3
-- 🇪🇺 Mistral-API
+- 🇺🇸 Remote Meta-Llama-3 - has context windows of 8000 tokens
+- 🇪🇺 Mistral-API - has context windows of 32000 tokens
 
-**🔥 Randomness (Temperature):** Adjusts output predictability.
+**🔥 Randomness (Temperature):** Adjusts output predictability. 
+- Example: 0.2 makes the output very deterministic (less creative), while 0.8 introduces more variety and spontaneity.
 
 **🎯 Word Variety (Top‑p):** Limits word choices to a set probability percentage.
+- Example: 0.5 restricts output to the most likely 50% of token choices for a focused answer; 0.95 allows almost all possibilities for more diverse responses.
+
+**⚖️ BM25 Weight:** Adjust Lexical vs Semantics.
+- Example: A value of 0.8 puts more emphasis on exact keyword (lexical) matching, while 0.3 shifts emphasis toward semantic similarity.
 
 **✏️ Prompt Template:** Edit as desired.
 
-**🔗 File URLs:** Enter one URL per line (.pdf or .txt).
-
-**⚖️ BM25 Weight:** Adjust Lexical vs Semantics.
+**🔗 File URLs:** Enter one URL per line (.pdf or .txt).\
+- Example: Provide one URL per line, such as
+https://www.gutenberg.org/ebooks/8438.txt.utf-8
 
 **🔍 Query:** Enter your query below.
+- Example: Select all parts in each book focusing on moral responsibility in Aristotle philosophy and discuss in a comprehensible way and link the topics to other top world philosophers. Use a structure and bullet points
 
 The response displays the model used, word count, and current context (with conversation history).
 ''')
