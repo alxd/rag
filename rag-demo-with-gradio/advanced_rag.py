@@ -34,6 +34,7 @@ import time
 print("Pydantic Version: ")
 print(pydantic.__version__)
 # Add Mistral imports with fallback handling
+
 try:
     from mistralai import Mistral
     MISTRAL_AVAILABLE = True
@@ -45,7 +46,7 @@ except ImportError:
     debug_print("Mistral client library not found. Install with: pip install mistralai")
 
 def debug_print(message: str):
-    print(f"[{datetime.datetime.now().isoformat()}] {message}")
+    print(f"[{datetime.datetime.now().isoformat()}] {message}", flush=True)
 
 def word_count(text: str) -> int:
     return len(text.split())
@@ -81,23 +82,27 @@ jobs = {}  # Stores job status and results
 results_queue = queue.Queue()  # Thread-safe queue for completed jobs
 processing_lock = threading.Lock()  # Prevent simultaneous processing of the same job
 
-# Function to process tasks in background
-def process_in_background(job_id: str, function, args):
+# Add these missing async processing functions
+
+def process_in_background(job_id, function, args):
+    """Process a function in the background and store results"""
     try:
+        debug_print(f"Processing job {job_id} in background")
         result = function(*args)
         results_queue.put((job_id, result))
+        debug_print(f"Job {job_id} completed and added to results queue")
     except Exception as e:
-        error_msg = f"Error: {str(e)}\n\nTraceback: {traceback.format_exc()}"
-        debug_print(f"Job {job_id} failed: {error_msg}")
-        results_queue.put((job_id, (error_msg, "", "", "")))
+        debug_print(f"Error in background job {job_id}: {str(e)}")
+        error_result = (f"Error processing job: {str(e)}", "", "", "")
+        results_queue.put((job_id, error_result))
 
-# Async version of load_pdfs_updated
 def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p):
+    """Asynchronous version of load_pdfs_updated to prevent timeouts"""
     if not file_links:
-        return "Please enter non-empty URLs", "", "Model used: N/A", "Context: N/A"
+        return "Please enter non-empty URLs", "", "Model used: N/A"
     
     job_id = str(uuid.uuid4())
-    debug_print(f"Starting async job {job_id} for loading files")
+    debug_print(f"Starting async job {job_id} for file loading")
     
     # Start background thread
     threading.Thread(
@@ -106,28 +111,32 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
     ).start()
     
     jobs[job_id] = {
-        "status": "processing",
+        "status": "processing", 
         "type": "load_files",
-        "start_time": time.time()
+        "start_time": time.time(),
+        "query": f"Loading files: {file_links.split()[0]}..." if file_links else "No files"
     }
     
     return (
-        f"Files are being processed in the background (Job ID: {job_id}).\n\n"
-        f"Use 'Check Job Status' with this ID to get results.",
+        f"Files submitted and processing in the background (Job ID: {job_id}).\n\n"
+        f"Use 'Check Job Status' tab with this ID to get results.",
         f"Job ID: {job_id}",
-        f"Model selected: {model_choice}"
+        f"Model requested: {model_choice}"
     )
 
-# Async version of submit_query_updated
-def submit_query_async(query):
+def submit_query_async(query, model_choice=None):
+    """Asynchronous version of submit_query_updated to prevent timeouts"""
     if not query:
         return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
     
-    if not hasattr(rag_chain, 'elevated_rag_chain') or not rag_chain.raw_data:
-        return "Please load files first", "", "Input tokens: 0", "Output tokens: 0"
-    
     job_id = str(uuid.uuid4())
     debug_print(f"Starting async job {job_id} for query: {query}")
+    
+    # Update model if specified
+    if model_choice and rag_chain and rag_chain.llm_choice != model_choice:
+        debug_print(f"Updating model to {model_choice} for this query")
+        rag_chain.update_llm_pipeline(model_choice, rag_chain.temperature, rag_chain.top_p,
+                                     rag_chain.prompt_template, rag_chain.bm25_weight)
     
     # Start background thread
     threading.Thread(
@@ -139,21 +148,68 @@ def submit_query_async(query):
         "status": "processing", 
         "type": "query",
         "start_time": time.time(),
-        "query": query
+        "query": query,
+        "model": rag_chain.llm_choice if hasattr(rag_chain, 'llm_choice') else "Unknown"
     }
     
     return (
         f"Query submitted and processing in the background (Job ID: {job_id}).\n\n"
-        f"Use 'Check Job Status' with this ID to get results.",
+        f"Use 'Check Job Status' tab with this ID to get results.",
         f"Job ID: {job_id}",
         f"Input tokens: {count_tokens(query)}",
         "Output tokens: pending"
     )
 
+# Function to display all jobs as a clickable list
+def get_job_list():
+    job_list_md = "### Submitted Jobs\n\n"
+    
+    if not jobs:
+        return "No jobs found. Submit a query or load files to create jobs."
+    
+    # Sort jobs by start time (newest first)
+    sorted_jobs = sorted(
+        [(job_id, job_info) for job_id, job_info in jobs.items()],
+        key=lambda x: x[1].get("start_time", 0),
+        reverse=True
+    )
+    
+    for job_id, job_info in sorted_jobs:
+        status = job_info.get("status", "unknown")
+        job_type = job_info.get("type", "unknown")
+        query = job_info.get("query", "")
+        start_time = job_info.get("start_time", 0)
+        time_str = datetime.datetime.fromtimestamp(start_time).strftime("%Y-%m-%d %H:%M:%S")
+        
+        # Create a shortened query preview
+        query_preview = query[:30] + "..." if query and len(query) > 30 else query or "N/A"
+        
+        # Create clickable links using Markdown
+        if job_type == "query":
+            job_list_md += f"- [{job_id}](javascript:void) - {time_str} - {status} - Query: {query_preview}\n"
+        else:
+            job_list_md += f"- [{job_id}](javascript:void) - {time_str} - {status} - File Load Job\n"
+    
+    return job_list_md
+    
+# Function to handle job list clicks
+def job_selected(job_id):
+    if job_id in jobs:
+        return job_id, jobs[job_id].get("query", "No query for this job")
+    return job_id, "Job not found"
+
+# Function to refresh the job list
+def refresh_job_list():
+    return get_job_list()
+
+# Function to sync model dropdown boxes
+def sync_model_dropdown(value):
+    return value    
+
 # Function to check job status
 def check_job_status(job_id):
     if not job_id:
-        return "Please enter a job ID", "", "", ""
+        return "Please enter a job ID", "", "", "", ""
     
     # Process any completed jobs in the queue
     try:
@@ -169,9 +225,10 @@ def check_job_status(job_id):
     
     # Check if the requested job exists
     if job_id not in jobs:
-        return "Job not found. Please check the ID and try again.", "", "", ""
+        return "Job not found. Please check the ID and try again.", "", "", "", ""
     
     job = jobs[job_id]
+    job_query = job.get("query", "No query available for this job")
     
     # If job is still processing
     if job["status"] == "processing":
@@ -183,7 +240,9 @@ def check_job_status(job_id):
                 f"Files are still being processed (elapsed: {elapsed_time:.1f}s).\n\n"
                 f"Try checking again in a few seconds.",
                 f"Job ID: {job_id}",
-                f"Status: Processing"
+                f"Status: Processing",
+                "",
+                job_query
             )
         else:  # query job
             return (
@@ -191,7 +250,8 @@ def check_job_status(job_id):
                 f"Try checking again in a few seconds.",
                 f"Job ID: {job_id}",
                 f"Input tokens: {count_tokens(job.get('query', ''))}",
-                "Output tokens: pending"
+                "Output tokens: pending",
+                job_query
             )
     
     # If job is completed
@@ -203,18 +263,21 @@ def check_job_status(job_id):
             return (
                 f"{result[0]}\n\nProcessing time: {processing_time:.1f}s",
                 result[1],
-                result[2] 
+                result[2],
+                "",
+                job_query
             )
         else:  # query job
             return (
                 f"{result[0]}\n\nProcessing time: {processing_time:.1f}s",
                 result[1],
                 result[2],
-                result[3]
+                result[3],
+                job_query
             )
     
     # Fallback for unknown status
-    return f"Job status: {job['status']}", "", "", ""
+    return f"Job status: {job['status']}", "", "", "", job_query
 
 # Function to clean up old jobs
 def cleanup_old_jobs():
@@ -328,6 +391,7 @@ class ElevatedRagChain:
 
     # Improve error handling in the ElevatedRagChain class
     def create_llm_pipeline(self):
+        from langchain.llms.base import LLM  # Import LLM here so it's always defined
         normalized = self.llm_choice.lower()
         try:
             if "remote" in normalized:
@@ -340,7 +404,7 @@ class ElevatedRagChain:
                 
                 client = InferenceClient(token=hf_api_token, timeout=120)
                 
-                from huggingface_hub.utils._errors import HfHubHTTPError
+                # We no longer use wait_for_model because it's unsupported
                 def remote_generate(prompt: str) -> str:
                     max_retries = 3
                     backoff = 2  # start with 2 seconds
@@ -368,7 +432,7 @@ class ElevatedRagChain:
                     def _llm_type(self) -> str:
                         return "remote_llm"
                     
-                    def _call(self, prompt: str, stop: typing.Optional[List[str]] = None) -> str:
+                    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
                         return remote_generate(prompt)
                     
                     @property
@@ -378,68 +442,66 @@ class ElevatedRagChain:
                 debug_print("Remote Meta-Llama-3 pipeline created successfully.")
                 return RemoteLLM()
                 
-            elif "mistral" in normalized:
+            elif "mistral-api" in normalized:
                 debug_print("Creating Mistral API pipeline...")
                 mistral_api_key = os.environ.get("MISTRAL_API_KEY")
                 if not mistral_api_key:
                     raise ValueError("Please set the MISTRAL_API_KEY environment variable to use Mistral API.")
-                
-                # Import Mistral library with proper error handling
                 try:
-                    from mistralai import Mistral
-                    from mistralai.exceptions import MistralException
+                    from mistralai import Mistral                    
                     debug_print("Mistral library imported successfully")
                 except ImportError:
-                    raise ImportError("Mistral client library not found. Install with: pip install mistralai")
-                
-                # Fixed MistralLLM implementation that works with Pydantic v1
-                class MistralLLM(LLM):
-                    client: Optional[Any] = None
-                    temperature: float = 0.7
-                    top_p: float = 0.95
-                    
-                    def __init__(self, api_key: str, temperature: float = 0.7, top_p: float = 0.95, **kwargs: Any):
-                        super().__init__(temperature=temperature, top_p=top_p, **kwargs)
-                        self.client = Mistral(api_key=api_key)
-                        debug_print("Mistral client initialized")
-                    
-                    @property
-                    def _llm_type(self) -> str:
-                        return "mistral_llm"
-                    
-                    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-                        try:
-                            debug_print("Calling Mistral API...")
-                            response = self.client.chat.complete(
-                                model="mistral-small-latest",
-                                messages=[{"role": "user", "content": prompt}],
-                                temperature=self.temperature,
-                                top_p=self.top_p,
-                                max_tokens=1024  # Limit token count for faster response
-                            )
-                            return response.choices[0].message.content
-                        except Exception as e:
-                            debug_print(f"Mistral API error: {str(e)}")
-                            return f"Error generating response: {str(e)}"
-                    
-                    @property
-                    def _identifying_params(self) -> dict:
-                        return {"model": "mistral-small-latest"}
-                
-                debug_print("Creating Mistral LLM instance")
-                mistral_llm = MistralLLM(
-                    api_key=mistral_api_key, 
-                    temperature=self.temperature, 
-                    top_p=self.top_p
-                )
-                debug_print("Mistral API pipeline created successfully.")
-                return mistral_llm
+                    debug_print("Mistral client library not installed. Falling back to Llama pipeline.")
+                    normalized = "llama"
+                if normalized != "llama":
+#                    from pydantic import PrivateAttr
+#                    from langchain.llms.base import LLM
+#                    from typing import Any, Optional, List
+#                    import typing
+
+                    class MistralLLM(LLM):
+                        temperature: float = 0.7
+                        top_p: float = 0.95
+                        _client: Any = PrivateAttr(default=None)
+
+                        def __init__(self, api_key: str, temperature: float = 0.7, top_p: float = 0.95, **kwargs: Any):
+                            try:
+                                super().__init__(**kwargs)
+                                # Bypass Pydantic's __setattr__ to assign to _client
+                                object.__setattr__(self, '_client', Mistral(api_key=api_key))
+                                self.temperature = temperature
+                                self.top_p = top_p
+                            except Exception as e:
+                                debug_print(f"Init Mistral failed with error: {e}")
+                                                    
+                        @property
+                        def _llm_type(self) -> str:
+                            return "mistral_llm"
+                        def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+                            try:
+                                debug_print("Calling Mistral API...")
+                                response = self._client.chat.complete(
+                                    model="mistral-small-latest",
+                                    messages=[{"role": "user", "content": prompt}],
+                                    temperature=self.temperature,
+                                    top_p=self.top_p
+                                )
+                                return response.choices[0].message.content
+                            except Exception as e:
+                                debug_print(f"Mistral API error: {str(e)}")
+                                return f"Error generating response: {str(e)}"
+                        @property
+                        def _identifying_params(self) -> dict:
+                            return {"model": "mistral-small-latest"}
+                    debug_print("Creating Mistral LLM instance")
+                    mistral_llm = MistralLLM(api_key=mistral_api_key, temperature=self.temperature, top_p=self.top_p)
+                    debug_print("Mistral API pipeline created successfully.")
+                    return mistral_llm
                 
             else:
-                # Default case - use a smaller model that's more likely to work within constraints
+                # Default case - using a fallback model (or Llama)
                 debug_print("Using local/fallback model pipeline")
-                model_id = "facebook/opt-350m"  # Much smaller model
-                
+                model_id = "facebook/opt-350m"  # Use a smaller model as fallback
                 pipe = pipeline(
                     "text-generation",
                     model=model_id,
@@ -451,27 +513,21 @@ class ElevatedRagChain:
                     @property
                     def _llm_type(self) -> str:
                         return "local_llm"
-                    
                     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-                        # Aggressively truncate prompt
-                        truncated_prompt = truncate_prompt(prompt, max_tokens=512)
-                        try:
-                            generated = pipe(truncated_prompt, max_new_tokens=256)[0]["generated_text"]
-                            # Only return the newly generated part
-                            if generated.startswith(truncated_prompt):
-                                return generated[len(truncated_prompt):].strip()
-                            return generated
-                        except Exception as e:
-                            debug_print(f"Generation error: {str(e)}")
-                            return f"Error generating response: {str(e)}"
-                    
+                        # For this fallback, truncate prompt if it exceeds limits
+                        reserved_gen = 128
+                        max_total = 1024
+                        max_prompt_tokens = max_total - reserved_gen
+                        truncated_prompt = truncate_prompt(prompt, max_tokens=max_prompt_tokens)
+                        generated = pipe(truncated_prompt, max_new_tokens=reserved_gen)[0]["generated_text"]
+                        return generated
                     @property
                     def _identifying_params(self) -> dict:
-                        return {"model": model_id}
+                        return {"model": model_id, "max_length": 1024}
                 
                 debug_print("Local fallback pipeline created.")
                 return LocalLLM()
-                
+                    
         except Exception as e:
             debug_print(f"Error creating LLM pipeline: {str(e)}")
             # Return a dummy LLM that explains the error
@@ -480,7 +536,7 @@ class ElevatedRagChain:
                 def _llm_type(self) -> str:
                     return "error_llm"
                 
-                def _call(self, prompt: str, stop: typing.Optional[List[str]] = None) -> str:
+                def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
                     return f"Error initializing LLM: \n\nPlease check your environment variables and try again."
                 
                 @property
@@ -488,6 +544,7 @@ class ElevatedRagChain:
                     return {"model": "error"}
             
             return ErrorLLM()
+
 
     def update_llm_pipeline(self, new_model_choice: str, temperature: float, top_p: float, prompt_template: str, bm25_weight: float):
         debug_print(f"Updating chain with new model: {new_model_choice}")
@@ -554,14 +611,24 @@ class ElevatedRagChain:
             retrievers=[self.bm25_retriever, self.faiss_retriever],
             weights=[self.bm25_weight, self.faiss_weight]
         )
+        
         base_runnable = RunnableParallel({
             "context": RunnableLambda(self.extract_question) | self.ensemble_retriever,
             "question": RunnableLambda(self.extract_question)
         }) | self.capture_context
+
+        # Ensure the prompt template is set
         self.rag_prompt = ChatPromptTemplate.from_template(self.prompt_template)
+        if self.rag_prompt is None:
+            raise ValueError("Prompt template could not be created from the given template.")
+        prompt_runnable = RunnableLambda(lambda vars: self.rag_prompt.format(**vars))
+        
         self.str_output_parser = StrOutputParser()
         debug_print("Selecting LLM pipeline based on choice: " + self.llm_choice)
         self.llm = self.create_llm_pipeline()
+        if self.llm is None:
+            raise ValueError("LLM pipeline creation failed.")
+        
         def format_response(response: str) -> str:
             input_tokens = count_tokens(self.context + self.prompt_template)
             output_tokens = count_tokens(response)
@@ -571,8 +638,11 @@ class ElevatedRagChain:
             formatted += f"- **Generated using:** {self.llm_choice}\n"
             formatted += f"\n**Conversation History:** {len(self.conversation_history)} conversation(s) considered.\n"
             return formatted
-        self.elevated_rag_chain = base_runnable | self.rag_prompt | self.llm | format_response
+        
+        self.elevated_rag_chain = base_runnable | prompt_runnable | self.llm | format_response
         debug_print("Elevated RAG chain successfully built and ready to use.")
+
+
 
     def get_current_context(self) -> str:
         base_context = "\n".join([str(doc) for doc in self.split_data[:3]]) if self.split_data else "No context available."
@@ -744,7 +814,30 @@ textarea {
 """
 
 # Update the Gradio interface to include job status checking
-with gr.Blocks(css=custom_css) as app:
+with gr.Blocks(css=custom_css, js="""
+document.addEventListener('DOMContentLoaded', function() {
+    // Add event listener for job list clicks
+    const jobListInterval = setInterval(() => {
+        const jobLinks = document.querySelectorAll('.job-list-container a');
+        if (jobLinks.length > 0) {
+            jobLinks.forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const jobId = this.textContent.split(' ')[0];
+                    // Find the job ID input textbox and set its value
+                    const jobIdInput = document.querySelector('.job-id-input input');
+                    if (jobIdInput) {
+                        jobIdInput.value = jobId;
+                        // Trigger the input event to update Gradio's state
+                        jobIdInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                });
+            });
+            clearInterval(jobListInterval);
+        }
+    }, 500);
+});
+""") as app:
     gr.Markdown('''# PhiRAG - Async Version  
 **PhiRAG** Query Your Data with Advanced RAG Techniques
 
@@ -828,6 +921,13 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         
         with gr.TabItem("Submit Query"):
             with gr.Row():
+                # Add this line to define the query_model_dropdown
+                query_model_dropdown = gr.Dropdown(
+                    choices=["🇺🇸 Remote Meta-Llama-3", "🇪🇺 Mistral-API"],
+                    value="🇺🇸 Remote Meta-Llama-3",
+                    label="Query Model"
+                )
+
                 query_input = gr.Textbox(
                     label="Enter your query here",
                     placeholder="Type your query",
@@ -851,31 +951,45 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                 input_tokens = gr.Markdown("Input tokens: 0")
                 output_tokens = gr.Markdown("Output tokens: 0")
         
-        with gr.TabItem("Check Job Status"):
-            with gr.Row():
-                job_id_input = gr.Textbox(
-                    label="Enter Job ID",
-                    placeholder="Paste the Job ID here",
-                    lines=1
-                )
-                check_button = gr.Button("Check Status")
-                cleanup_button = gr.Button("Cleanup Old Jobs")
-            
-            with gr.Row():
-                status_response = gr.Textbox(
-                    label="Job Result",
-                    placeholder="Job result will appear here",
-                    lines=6
-                )
-                status_context = gr.Textbox(
-                    label="Context Information",
-                    placeholder="Context information will appear here",
-                    lines=6
-                )
-            
-            with gr.Row():
-                status_tokens1 = gr.Markdown("")
-                status_tokens2 = gr.Markdown("")
+            with gr.TabItem("Check Job Status"):
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        job_list = gr.Markdown(
+                            value="No jobs yet",
+                            label="Job List (Click to select)"
+                        )
+                        refresh_button = gr.Button("Refresh Job List")
+                    
+                    with gr.Column(scale=2):
+                        job_id_input = gr.Textbox(
+                            label="Job ID",
+                            placeholder="Job ID will appear here when selected from the list",
+                            lines=1
+                        )
+                        job_query_display = gr.Textbox(
+                            label="Job Query",
+                            placeholder="The query associated with this job will appear here",
+                            lines=2,
+                            interactive=False
+                        )
+                        check_button = gr.Button("Check Status")
+                        cleanup_button = gr.Button("Cleanup Old Jobs")
+                
+                with gr.Row():
+                    status_response = gr.Textbox(
+                        label="Job Result",
+                        placeholder="Job result will appear here",
+                        lines=6
+                    )
+                    status_context = gr.Textbox(
+                        label="Context Information",
+                        placeholder="Context information will appear here",
+                        lines=6
+                    )
+                
+                with gr.Row():
+                    status_tokens1 = gr.Markdown("")
+                    status_tokens2 = gr.Markdown("")
         
         with gr.TabItem("App Management"):
             with gr.Row():
@@ -903,35 +1017,63 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         inputs=[pdf_input, model_dropdown, prompt_input, bm25_weight_slider, temperature_slider, top_p_slider],
         outputs=[load_response, load_context, model_output]
     )
-    
+
+    # Also sync in the other direction
+    query_model_dropdown.change(
+        fn=sync_model_dropdown,
+        inputs=query_model_dropdown,
+        outputs=model_dropdown
+    )
+
     submit_button.click(
         submit_query_async, 
-        inputs=[query_input],
+        inputs=[query_input, query_model_dropdown],
         outputs=[query_response, query_context, input_tokens, output_tokens]
     )
-    
+
     check_button.click(
         check_job_status,
         inputs=[job_id_input],
-        outputs=[status_response, status_context, status_tokens1, status_tokens2]
+        outputs=[status_response, status_context, status_tokens1, status_tokens2, job_query_display]
     )
-    
+
+    refresh_button.click(
+        refresh_job_list,
+        inputs=[],
+        outputs=[job_list]
+    )
+
+    # Connect the job list selection event (this is handled by JavaScript)
+    job_id_input.change(
+        job_selected,
+        inputs=[job_id_input],
+        outputs=[job_id_input, job_query_display]
+    )
+
     cleanup_button.click(
         cleanup_old_jobs,
         inputs=[],
         outputs=[status_response, status_context, status_tokens1]
     )
-    
+
     reset_button.click(
         reset_app_updated, 
         inputs=[], 
         outputs=[reset_response, reset_context, reset_model]
     )
-    
+
+
     model_dropdown.change(
-        fn=update_model,
+        fn=sync_model_dropdown,
         inputs=model_dropdown,
-        outputs=model_output
+        outputs=query_model_dropdown
+    )
+
+    # Add an event to refresh the job list on page load
+    app.load(
+        fn=refresh_job_list,
+        inputs=None,
+        outputs=job_list
     )
     
 if __name__ == "__main__":
