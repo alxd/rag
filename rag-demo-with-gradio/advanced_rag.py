@@ -205,11 +205,22 @@ def get_job_list():
         # Create a shortened query preview
         query_preview = query[:30] + "..." if query and len(query) > 30 else query or "N/A"
         
+        # Add color and icons based on status
+        if status == "processing":
+            # Red color with processing icon for processing jobs
+            status_formatted = f"<span style='color: red'>⏳ {status}</span>"
+        elif status == "completed":
+            # Green color with checkmark for completed jobs
+            status_formatted = f"<span style='color: green'>✅ {status}</span>"
+        else:
+            # Default formatting for unknown status
+            status_formatted = f"<span style='color: orange'>❓ {status}</span>"
+        
         # Create clickable links using Markdown
         if job_type == "query":
-            job_list_md += f"- [{job_id}](javascript:void) - {time_str} - {status} - Query: {query_preview}\n"
+            job_list_md += f"- [{job_id}](javascript:void) - {time_str} - {status_formatted} - Query: {query_preview}\n"
         else:
-            job_list_md += f"- [{job_id}](javascript:void) - {time_str} - {status} - File Load Job\n"
+            job_list_md += f"- [{job_id}](javascript:void) - {time_str} - {status_formatted} - File Load Job\n"
     
     return job_list_md
     
