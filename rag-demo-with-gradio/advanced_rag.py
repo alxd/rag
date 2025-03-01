@@ -82,6 +82,9 @@ jobs = {}  # Stores job status and results
 results_queue = queue.Queue()  # Thread-safe queue for completed jobs
 processing_lock = threading.Lock()  # Prevent simultaneous processing of the same job
 
+# Add a global variable to store the last job ID
+last_job_id = None
+
 # Add these missing async processing functions
 
 def process_in_background(job_id, function, args):
@@ -98,8 +101,9 @@ def process_in_background(job_id, function, args):
 
 def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p):
     """Asynchronous version of load_pdfs_updated to prevent timeouts"""
+    global last_job_id
     if not file_links:
-        return "Please enter non-empty URLs", "", "Model used: N/A"
+        return "Please enter non-empty URLs", "", "Model used: N/A", "", "", get_job_list()
     
     job_id = str(uuid.uuid4())
     debug_print(f"Starting async job {job_id} for file loading")
@@ -110,24 +114,31 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
         args=(job_id, load_pdfs_updated, [file_links, model_choice, prompt_template, bm25_weight, temperature, top_p])
     ).start()
     
+    job_query = f"Loading files: {file_links.split()[0]}..." if file_links else "No files"
     jobs[job_id] = {
         "status": "processing", 
         "type": "load_files",
         "start_time": time.time(),
-        "query": f"Loading files: {file_links.split()[0]}..." if file_links else "No files"
+        "query": job_query
     }
+    
+    last_job_id = job_id
     
     return (
         f"Files submitted and processing in the background (Job ID: {job_id}).\n\n"
         f"Use 'Check Job Status' tab with this ID to get results.",
         f"Job ID: {job_id}",
-        f"Model requested: {model_choice}"
+        f"Model requested: {model_choice}",
+        job_id,  # Return job_id to update the job_id_input component
+        job_query,  # Return job_query to update the job_query_display component
+        get_job_list()  # Return updated job list
     )
 
 def submit_query_async(query, model_choice=None):
     """Asynchronous version of submit_query_updated to prevent timeouts"""
+    global last_job_id
     if not query:
-        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
+        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
     
     job_id = str(uuid.uuid4())
     debug_print(f"Starting async job {job_id} for query: {query}")
@@ -152,13 +163,23 @@ def submit_query_async(query, model_choice=None):
         "model": rag_chain.llm_choice if hasattr(rag_chain, 'llm_choice') else "Unknown"
     }
     
+    last_job_id = job_id
+    
     return (
         f"Query submitted and processing in the background (Job ID: {job_id}).\n\n"
         f"Use 'Check Job Status' tab with this ID to get results.",
         f"Job ID: {job_id}",
         f"Input tokens: {count_tokens(query)}",
-        "Output tokens: pending"
+        "Output tokens: pending",
+        job_id,  # Return job_id to update the job_id_input component
+        query,  # Return query to update the job_query_display component
+        get_job_list()  # Return updated job list
     )
+
+def update_ui_with_last_job_id():
+    # This function doesn't need to do anything anymore
+    # We'll update the UI directly in the functions that call this
+    pass
 
 # Function to display all jobs as a clickable list
 def get_job_list():
@@ -1015,7 +1036,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
     load_button.click(
         load_pdfs_async, 
         inputs=[pdf_input, model_dropdown, prompt_input, bm25_weight_slider, temperature_slider, top_p_slider],
-        outputs=[load_response, load_context, model_output]
+        outputs=[load_response, load_context, model_output, job_id_input, job_query_display, job_list]
     )
 
     # Also sync in the other direction
@@ -1028,7 +1049,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
     submit_button.click(
         submit_query_async, 
         inputs=[query_input, query_model_dropdown],
-        outputs=[query_response, query_context, input_tokens, output_tokens]
+        outputs=[query_response, query_context, input_tokens, output_tokens, job_id_input, job_query_display, job_list]
     )
 
     check_button.click(
