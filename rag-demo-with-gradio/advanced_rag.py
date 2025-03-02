@@ -845,6 +845,38 @@ textarea {
 }
 """
 
+# Function to add dots and reset
+def add_dots_and_reset():
+    if not hasattr(add_dots_and_reset, "dots"):
+        add_dots_and_reset.dots = ""  # Initialize the attribute
+
+    # Add a dot
+    add_dots_and_reset.dots += "."
+    
+    # Reset after 5 dots
+    if len(add_dots_and_reset.dots) > 5:
+        add_dots_and_reset.dots = ""
+    
+    print(f"Current dots: {add_dots_and_reset.dots}")  # Debugging print
+    return add_dots_and_reset.dots
+
+# Define a dummy function to simulate data retrieval
+def run_query(max_value):
+    # Simulate a data retrieval or processing function
+    return [[i, i**2] for i in range(1, max_value + 1)]
+
+# Function to call both refresh_job_list and check_job_status using the last job ID
+def periodic_update(is_checked):
+    if is_checked:
+        global last_job_id
+        job_list_md = refresh_job_list()
+        job_status = check_job_status(last_job_id) if last_job_id else ("No job ID available", "", "", "", "")
+        query_results = run_query(10)  # Use a fixed value or another logic if needed
+        context_info = rag_chain.get_current_context() if rag_chain else "No context available."
+        return job_list_md, job_status[0], query_results, context_info
+    else:
+        return "", "", [], ""
+
 # Update the Gradio interface to include job status checking
 with gr.Blocks(css=custom_css, js="""
 document.addEventListener('DOMContentLoaded', function() {
@@ -990,7 +1022,22 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                             value="No jobs yet",
                             label="Job List (Click to select)"
                         )
+                        # Add the Refresh Job List button
                         refresh_button = gr.Button("Refresh Job List")
+                        
+                        # Use a Checkbox to control the periodic updates
+                        auto_refresh_checkbox = gr.Checkbox(
+                            label="Enable Auto Refresh",
+                            value=False  # Default to unchecked
+                        )
+                        
+                        # Use a DataFrame to display results
+                        df = gr.DataFrame(
+                            value=run_query(10),  # Initial value
+                            headers=["Number", "Square"],
+                            label="Query Results",
+                            visible=False  # Set the DataFrame to be invisible
+                        )
                     
                     with gr.Column(scale=2):
                         job_id_input = gr.Textbox(
@@ -1069,6 +1116,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         outputs=[status_response, status_context, status_tokens1, status_tokens2, job_query_display]
     )
 
+    # Connect the refresh button to the refresh_job_list function
     refresh_button.click(
         refresh_job_list,
         inputs=[],
@@ -1094,7 +1142,6 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         outputs=[reset_response, reset_context, reset_model]
     )
 
-
     model_dropdown.change(
         fn=sync_model_dropdown,
         inputs=model_dropdown,
@@ -1107,7 +1154,15 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         inputs=None,
         outputs=job_list
     )
-    
+
+    # Use the Checkbox to control the periodic updates
+    auto_refresh_checkbox.change(
+        fn=periodic_update,
+        inputs=[auto_refresh_checkbox],
+        outputs=[job_list, status_response, df, status_context],
+        every=2
+    )
+
 if __name__ == "__main__":
     debug_print("Launching Gradio interface.")
-    app.launch(share=False)
+    app.queue().launch(share=False)
