@@ -30,6 +30,9 @@ from langchain.llms.base import LLM
 from typing import Any, Optional, List
 import typing
 import time
+import requests
+import re
+
 
 print("Pydantic Version: ")
 print(pydantic.__version__)
@@ -317,10 +320,10 @@ def cleanup_old_jobs():
     to_delete = []
     
     for job_id, job in jobs.items():
-        # Keep completed jobs for 1 hour, processing jobs for 2 hours
-        if job["status"] == "completed" and (current_time - job.get("end_time", 0)) > 3600:
+        # Keep completed jobs for 24 hours, processing jobs for 48 hours
+        if job["status"] == "completed" and (current_time - job.get("end_time", 0)) > 86400:
             to_delete.append(job_id)
-        elif job["status"] == "processing" and (current_time - job.get("start_time", 0)) > 7200:
+        elif job["status"] == "processing" and (current_time - job.get("start_time", 0)) > 172800:
             to_delete.append(job_id)
     
     for job_id in to_delete:
@@ -366,7 +369,6 @@ default_prompt = """\
 {conversation_history}
 Use the following context to provide a detailed technical answer to the user's question.
 Do not include an introduction like "Based on the provided documents, ...". Just answer the question.
-If you don't know the answer, please respond with "I don't know".
 
 Context:
 {context}
@@ -374,6 +376,8 @@ Context:
 User's question:
 {question}
 """
+
+# #If you don't know the answer, please respond with "I don't know".
 
 def load_txt_from_url(url: str) -> Document:
     response = requests.get(url)
@@ -384,6 +388,30 @@ def load_txt_from_url(url: str) -> Document:
         return Document(page_content=text, metadata={"source": url})
     else:
         raise Exception(f"Failed to load {url} with status {response.status_code}")
+        
+def load_txt_from_google_drive(link: str) -> Document:
+    """
+    Load text from a Google Drive shared link
+    """
+    # Extract the file ID from the Google Drive link
+    file_id_match = re.search(r'\/d\/(.*?)\/view', link)
+    if not file_id_match:
+        raise ValueError(f"Could not extract file ID from Google Drive link: {link}")
+    
+    file_id = file_id_match.group(1)
+    
+    # Create direct download link
+    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    # Request the file content
+    response = requests.get(download_url)
+    if response.status_code != 200:
+        raise ValueError(f"Failed to download file from Google Drive. Status code: {response.status_code}")
+    
+    # Create a Document object
+    content = response.text
+    metadata = {"source": link}
+    return Document(page_content=content, metadata=metadata)        
 
 class ElevatedRagChain:
     def __init__(self, llm_choice: str = "Meta-Llama-3", prompt_template: str = default_prompt,
@@ -603,6 +631,7 @@ class ElevatedRagChain:
         self.elevated_rag_chain = base_runnable | self.rag_prompt | self.llm | format_response
         debug_print("Chain updated successfully with new LLM pipeline.")
 
+
     def add_pdfs_to_vectore_store(self, file_links: List[str]) -> None:
         debug_print(f"Processing files using {self.llm_choice}")
         self.raw_data = []
@@ -620,10 +649,25 @@ class ElevatedRagChain:
                     self.raw_data.append(load_txt_from_url(link))
                 except Exception as e:
                     debug_print(f"Error loading TXT file {link}: {e}")
+            elif "drive.google.com" in link and ("file/d" in link or "open?id=" in link):
+                debug_print(f"Loading Google Drive file: {link}")
+                try:
+                    if ".pdf" in link.lower():
+                        # Google Drive PDF handling
+                        file_id = re.search(r'\/d\/(.*?)\/view', link).group(1)
+                        direct_pdf_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+                        loaded_docs = OnlinePDFLoader(direct_pdf_url).load()
+                        if loaded_docs:
+                            self.raw_data.append(loaded_docs[0])
+                    else:
+                        # Assuming it's a text file
+                        self.raw_data.append(load_txt_from_google_drive(link))
+                except Exception as e:
+                    debug_print(f"Error loading Google Drive file {link}: {e}")
             else:
                 debug_print(f"File type not supported for URL: {link}")
-        if not self.raw_data:
-            raise ValueError("No files were successfully loaded. Please check the URLs and file formats.")
+            
+            
         debug_print("Files loaded successfully.")
         debug_print("Starting text splitting...")
         self.text_splitter = RecursiveCharacterTextSplitter(chunk_size=1500, chunk_overlap=100)
@@ -867,6 +911,8 @@ def run_query(max_value):
 
 # Function to call both refresh_job_list and check_job_status using the last job ID
 def periodic_update(is_checked):
+    interval = 2 if is_checked else None
+    debug_print(f"Auto-refresh checkbox is {'checked' if is_checked else 'unchecked'}, every={interval}")
     if is_checked:
         global last_job_id
         job_list_md = refresh_job_list()
@@ -875,7 +921,12 @@ def periodic_update(is_checked):
         context_info = rag_chain.get_current_context() if rag_chain else "No context available."
         return job_list_md, job_status[0], query_results, context_info
     else:
+        # Return empty values to stop updates
         return "", "", [], ""
+
+# Define a function to determine the interval based on the checkbox state
+def get_interval(is_checked):
+    return 2 if is_checked else None
 
 # Update the Gradio interface to include job status checking
 with gr.Blocks(css=custom_css, js="""
@@ -1160,7 +1211,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         fn=periodic_update,
         inputs=[auto_refresh_checkbox],
         outputs=[job_list, status_response, df, status_context],
-        every=2
+        every=2 #if auto_refresh_checkbox.value else None  # Directly set `every` based on the checkbox state
     )
 
 if __name__ == "__main__":
