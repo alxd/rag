@@ -22,7 +22,6 @@ from langchain.schema import StrOutputParser, Document
 from langchain_core.runnables import RunnableParallel, RunnableLambda
 from transformers.quantizers.auto import AutoQuantizationConfig
 import gradio as gr
-import requests
 from pydantic import PrivateAttr
 import pydantic
 
@@ -30,10 +29,16 @@ from langchain.llms.base import LLM
 from typing import Any, Optional, List
 import typing
 import time
-import requests
 import re
+import requests
+from langchain.schema import Document
+from langchain_community.document_loaders import PyMuPDFLoader  # Updated loader
+import tempfile
+import mimetypes
 
-
+def get_mime_type(file_path):
+    return mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
+    
 print("Pydantic Version: ")
 print(pydantic.__version__)
 # Add Mistral imports with fallback handling
@@ -389,30 +394,81 @@ def load_txt_from_url(url: str) -> Document:
     else:
         raise Exception(f"Failed to load {url} with status {response.status_code}")
         
-def load_txt_from_google_drive(link: str) -> Document:
-    """
-    Load text from a Google Drive shared link
-    """
-    # Extract the file ID from the Google Drive link
-    file_id_match = re.search(r'\/d\/(.*?)\/view', link)
-    if not file_id_match:
-        raise ValueError(f"Could not extract file ID from Google Drive link: {link}")
-    
-    file_id = file_id_match.group(1)
-    
-    # Create direct download link
-    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-    
-    # Request the file content
-    response = requests.get(download_url)
-    if response.status_code != 200:
-        raise ValueError(f"Failed to download file from Google Drive. Status code: {response.status_code}")
-    
-    # Create a Document object
-    content = response.text
-    metadata = {"source": link}
-    return Document(page_content=content, metadata=metadata)        
+from pdfminer.high_level import extract_text
+from langchain_core.documents import Document
 
+
+def get_confirm_token(response):
+    for key, value in response.cookies.items():
+        if key.startswith("download_warning"):
+            return value
+    return None
+
+def download_file_from_google_drive(file_id, destination):
+    """
+    Download a file from Google Drive handling large file confirmation.
+    """
+    URL = "https://docs.google.com/uc?export=download&confirm=1"
+    session = requests.Session()
+
+    response = session.get(URL, params={"id": file_id}, stream=True)
+    token = get_confirm_token(response)
+
+    if token:
+        params = {"id": file_id, "confirm": token}
+        response = session.get(URL, params=params, stream=True)
+
+    save_response_content(response, destination)
+
+
+def save_response_content(response, destination):
+    CHUNK_SIZE = 32768
+    with open(destination, "wb") as f:
+        for chunk in response.iter_content(CHUNK_SIZE):
+            if chunk:
+                f.write(chunk)
+
+
+def extract_file_id(drive_link: str) -> str:
+    match = re.search(r"/d/([a-zA-Z0-9_-]+)", drive_link)
+    if match:
+        return match.group(1)
+    raise ValueError("Could not extract file ID from the provided Google Drive link.")
+
+
+def load_file_from_google_drive(link: str) -> list:
+    """
+    Load a document from a Google Drive link using pdfminer to extract text.
+    Returns a list of LangChain Document objects.
+    """
+    file_id = extract_file_id(link)
+    print(f"[DEBUG] Extracted file ID: {file_id}")
+
+    with tempfile.NamedTemporaryFile(delete=False) as temp_file:
+        temp_path = temp_file.name
+
+    try:
+        download_file_from_google_drive(file_id, temp_path)
+        print(f"[DEBUG] File downloaded to: {temp_path}")
+
+        try:
+            full_text = extract_text(temp_path)
+            if not full_text.strip():
+                raise ValueError("Extracted text is empty. The PDF might be image-based.")
+            print("[DEBUG] Extracted preview text from PDF:")
+            print(full_text[:1000])  # Preview first 500 characters
+
+            document = Document(page_content=full_text, metadata={"source": link})
+            return [document]
+
+        except Exception as e:
+            print(f"[ERROR] Could not extract text from PDF: {e}")
+            return []
+
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+            
 class ElevatedRagChain:
     def __init__(self, llm_choice: str = "Meta-Llama-3", prompt_template: str = default_prompt,
                  bm25_weight: float = 0.6, temperature: float = 0.5, top_p: float = 0.95) -> None:
@@ -636,7 +692,15 @@ class ElevatedRagChain:
         debug_print(f"Processing files using {self.llm_choice}")
         self.raw_data = []
         for link in file_links:
-            if link.lower().endswith(".pdf"):
+            if "drive.google.com" in link and ("file/d" in link or "open?id=" in link):
+                debug_print(f"Loading Google Drive file: {link}")
+                try:
+                    documents = load_file_from_google_drive(link)
+                    self.raw_data.extend(documents)
+                    debug_print(f"Successfully loaded {len(documents)} pages/documents from Google Drive")
+                except Exception as e:
+                    debug_print(f"Error loading Google Drive file {link}: {e}")
+            elif link.lower().endswith(".pdf"):
                 debug_print(f"Loading PDF: {link}")
                 loaded_docs = OnlinePDFLoader(link).load()
                 if loaded_docs:
@@ -649,21 +713,6 @@ class ElevatedRagChain:
                     self.raw_data.append(load_txt_from_url(link))
                 except Exception as e:
                     debug_print(f"Error loading TXT file {link}: {e}")
-            elif "drive.google.com" in link and ("file/d" in link or "open?id=" in link):
-                debug_print(f"Loading Google Drive file: {link}")
-                try:
-                    if ".pdf" in link.lower():
-                        # Google Drive PDF handling
-                        file_id = re.search(r'\/d\/(.*?)\/view', link).group(1)
-                        direct_pdf_url = f"https://drive.google.com/uc?export=download&id={file_id}"
-                        loaded_docs = OnlinePDFLoader(direct_pdf_url).load()
-                        if loaded_docs:
-                            self.raw_data.append(loaded_docs[0])
-                    else:
-                        # Assuming it's a text file
-                        self.raw_data.append(load_txt_from_google_drive(link))
-                except Exception as e:
-                    debug_print(f"Error loading Google Drive file {link}: {e}")
             else:
                 debug_print(f"File type not supported for URL: {link}")
             
