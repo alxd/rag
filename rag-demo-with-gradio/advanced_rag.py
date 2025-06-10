@@ -43,6 +43,8 @@ print("Pydantic Version: ")
 print(pydantic.__version__)
 # Add Mistral imports with fallback handling
 
+slider_max_tokens = None
+
 try:
     from mistralai import Mistral
     MISTRAL_AVAILABLE = True
@@ -107,11 +109,14 @@ def process_in_background(job_id, function, args):
         error_result = (f"Error processing job: {str(e)}", "", "", "")
         results_queue.put((job_id, error_result))
 
-def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p):
+def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p, top_k, max_tokens_slider):
     """Asynchronous version of load_pdfs_updated to prevent timeouts"""
     global last_job_id
     if not file_links:
-        return "Please enter non-empty URLs", "", "Model used: N/A", "", "", get_job_list()
+        return "Please enter non-empty URLs", "", "Model used: N/A", "", "", get_job_list(), ""
+    global slider_max_tokens 
+    slider_max_tokens = max_tokens_slider      
+
     
     job_id = str(uuid.uuid4())
     debug_print(f"Starting async job {job_id} for file loading")
@@ -119,7 +124,7 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
     # Start background thread
     threading.Thread(
         target=process_in_background,
-        args=(job_id, load_pdfs_updated, [file_links, model_choice, prompt_template, bm25_weight, temperature, top_p])
+        args=(job_id, load_pdfs_updated, [file_links, model_choice, prompt_template, bm25_weight, temperature, top_p, top_k])
     ).start()
     
     job_query = f"Loading files: {file_links.split()[0]}..." if file_links else "No files"
@@ -132,6 +137,8 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
     
     last_job_id = job_id
     
+    init_message = "Vector database initialized using the files.\nThe above parameters were used in the initialization of the RAG chain."
+    
     return (
         f"Files submitted and processing in the background (Job ID: {job_id}).\n\n"
         f"Use 'Check Job Status' tab with this ID to get results.",
@@ -139,14 +146,17 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
         f"Model requested: {model_choice}",
         job_id,  # Return job_id to update the job_id_input component
         job_query,  # Return job_query to update the job_query_display component
-        get_job_list()  # Return updated job list
+        get_job_list(),  # Return updated job list
+        init_message  # Return initialization message
     )
 
-def submit_query_async(query, model_choice=None):
+def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_p, top_k, bm25_weight):
     """Asynchronous version of submit_query_updated to prevent timeouts"""
     global last_job_id
     if not query:
         return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+    global slider_max_tokens 
+    slider_max_tokens = max_tokens_slider    
     
     job_id = str(uuid.uuid4())
     debug_print(f"Starting async job {job_id} for query: {query}")
@@ -154,13 +164,13 @@ def submit_query_async(query, model_choice=None):
     # Update model if specified
     if model_choice and rag_chain and rag_chain.llm_choice != model_choice:
         debug_print(f"Updating model to {model_choice} for this query")
-        rag_chain.update_llm_pipeline(model_choice, rag_chain.temperature, rag_chain.top_p,
-                                     rag_chain.prompt_template, rag_chain.bm25_weight)
+        rag_chain.update_llm_pipeline(model_choice, temperature, top_p, top_k,
+                                     rag_chain.prompt_template, bm25_weight)
     
     # Start background thread
     threading.Thread(
         target=process_in_background,
-        args=(job_id, submit_query_updated, [query])
+        args=(job_id, submit_query_updated, [query, temperature, top_p, top_k, bm25_weight])
     ).start()
     
     jobs[job_id] = {
@@ -397,7 +407,6 @@ def load_txt_from_url(url: str) -> Document:
 from pdfminer.high_level import extract_text
 from langchain_core.documents import Document
 
-
 def get_confirm_token(response):
     for key, value in response.cookies.items():
         if key.startswith("download_warning"):
@@ -410,16 +419,12 @@ def download_file_from_google_drive(file_id, destination):
     """
     URL = "https://docs.google.com/uc?export=download&confirm=1"
     session = requests.Session()
-
     response = session.get(URL, params={"id": file_id}, stream=True)
     token = get_confirm_token(response)
-
     if token:
         params = {"id": file_id, "confirm": token}
         response = session.get(URL, params=params, stream=True)
-
     save_response_content(response, destination)
-
 
 def save_response_content(response, destination):
     CHUNK_SIZE = 32768
@@ -428,50 +433,134 @@ def save_response_content(response, destination):
             if chunk:
                 f.write(chunk)
 
-
 def extract_file_id(drive_link: str) -> str:
+    # Check for /d/ format
     match = re.search(r"/d/([a-zA-Z0-9_-]+)", drive_link)
     if match:
         return match.group(1)
+    
+    # Check for open?id= format
+    match = re.search(r"open\?id=([a-zA-Z0-9_-]+)", drive_link)
+    if match:
+        return match.group(1)
+        
     raise ValueError("Could not extract file ID from the provided Google Drive link.")
 
-
-def load_file_from_google_drive(link: str) -> list:
+def load_txt_from_google_drive(link: str) -> Document:
     """
-    Load a document from a Google Drive link using pdfminer to extract text.
+    Load text from a Google Drive shared link
+    """
+    file_id = extract_file_id(link)
+    
+    # Create direct download link
+    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    # Request the file content
+    response = requests.get(download_url)
+    if response.status_code != 200:
+        raise ValueError(f"Failed to download file from Google Drive. Status code: {response.status_code}")
+    
+    # Create a Document object
+    content = response.text
+    if not content.strip():
+        raise ValueError(f"TXT file from Google Drive is empty.")
+    metadata = {"source": link}
+    return Document(page_content=content, metadata=metadata)
+
+def load_pdf_from_google_drive(link: str) -> list:
+    """
+    Load a PDF document from a Google Drive link using pdfminer to extract text.
     Returns a list of LangChain Document objects.
     """
     file_id = extract_file_id(link)
-    print(f"[DEBUG] Extracted file ID: {file_id}")
-
+    debug_print(f"Extracted file ID: {file_id}")
     with tempfile.NamedTemporaryFile(delete=False) as temp_file:
         temp_path = temp_file.name
-
     try:
         download_file_from_google_drive(file_id, temp_path)
-        print(f"[DEBUG] File downloaded to: {temp_path}")
-
+        debug_print(f"File downloaded to: {temp_path}")
         try:
             full_text = extract_text(temp_path)
             if not full_text.strip():
                 raise ValueError("Extracted text is empty. The PDF might be image-based.")
-            print("[DEBUG] Extracted preview text from PDF:")
-            print(full_text[:1000])  # Preview first 500 characters
-
+            debug_print("Extracted preview text from PDF:")
+            debug_print(full_text[:1000])  # Preview first 1000 characters
             document = Document(page_content=full_text, metadata={"source": link})
             return [document]
-
         except Exception as e:
-            print(f"[ERROR] Could not extract text from PDF: {e}")
+            debug_print(f"Could not extract text from PDF: {e}")
             return []
-
     finally:
         if os.path.exists(temp_path):
             os.remove(temp_path)
+
+def load_file_from_google_drive(link: str) -> list:
+    """
+    Load a document from a Google Drive link, detecting whether it's a PDF or TXT file.
+    Returns a list of LangChain Document objects.
+    """
+    file_id = extract_file_id(link)
+    
+    # Create direct download link
+    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    
+    # First, try to read a small portion of the file to determine its type
+    try:
+        # Use a streaming request to read just the first part of the file
+        response = requests.get(download_url, stream=True)
+        if response.status_code != 200:
+            raise ValueError(f"Failed to download file from Google Drive. Status code: {response.status_code}")
+        
+        # Read just the first 1024 bytes to check file signature
+        file_start = next(response.iter_content(1024))
+        response.close()  # Close the stream
+        
+        # Convert bytes to string for pattern matching
+        file_start_str = file_start.decode('utf-8', errors='ignore')
+        
+        # Check for PDF signature (%PDF-) at the beginning of the file
+        if file_start_str.startswith('%PDF-') or b'%PDF-' in file_start:
+            debug_print(f"Detected PDF file by content signature from Google Drive: {link}")
+            return load_pdf_from_google_drive(link)
+        else:
+            # If not a PDF, try as text
+            debug_print(f"No PDF signature found, treating as TXT file from Google Drive: {link}")
             
+            # Since we already downloaded part of the file, get the full content
+            response = requests.get(download_url)
+            if response.status_code != 200:
+                raise ValueError(f"Failed to download complete file from Google Drive. Status code: {response.status_code}")
+            
+            content = response.text
+            if not content.strip():
+                raise ValueError(f"TXT file from Google Drive is empty.")
+            
+            doc = Document(page_content=content, metadata={"source": link})
+            return [doc]
+            
+    except UnicodeDecodeError:
+        # If we get a decode error, it's likely a binary file like PDF
+        debug_print(f"Got decode error, likely a binary file. Treating as PDF from Google Drive: {link}")
+        return load_pdf_from_google_drive(link)
+    except Exception as e:
+        debug_print(f"Error detecting file type: {e}")
+        
+        # Fall back to trying both formats
+        debug_print("Falling back to trying both formats for Google Drive file")
+        try:
+            return load_pdf_from_google_drive(link)
+        except Exception as pdf_error:
+            debug_print(f"Failed to load as PDF: {pdf_error}")
+            try:
+                doc = load_txt_from_google_drive(link)
+                return [doc]
+            except Exception as txt_error:
+                debug_print(f"Failed to load as TXT: {txt_error}")
+                raise ValueError(f"Could not load file from Google Drive as either PDF or TXT: {link}")
+                
 class ElevatedRagChain:
     def __init__(self, llm_choice: str = "Meta-Llama-3", prompt_template: str = default_prompt,
-                 bm25_weight: float = 0.6, temperature: float = 0.5, top_p: float = 0.95) -> None:
+                 bm25_weight: float = 0.6, temperature: float = 0.5, top_p: float = 0.95, top_k: int = 50) -> None:
         debug_print(f"Initializing ElevatedRagChain with model: {llm_choice}")
         self.embed_func = HuggingFaceEmbeddings(
             model_name="sentence-transformers/all-MiniLM-L6-v2",
@@ -479,7 +568,7 @@ class ElevatedRagChain:
         )
         self.bm25_weight = bm25_weight
         self.faiss_weight = 1.0 - bm25_weight
-        self.top_k = 5
+        self.top_k = top_k
         self.llm_choice = llm_choice
         self.temperature = temperature
         self.top_p = top_p
@@ -508,9 +597,119 @@ class ElevatedRagChain:
     # Improve error handling in the ElevatedRagChain class
     def create_llm_pipeline(self):
         from langchain.llms.base import LLM  # Import LLM here so it's always defined
-        normalized = self.llm_choice.lower()
+        from typing import Optional, List, Any
+        from pydantic import PrivateAttr
+        global slider_max_tokens
+        
+        # Extract the model name without the flag emoji prefix
+        clean_llm_choice = self.llm_choice.split(" ", 1)[-1] if " " in self.llm_choice else self.llm_choice
+        normalized = clean_llm_choice.lower()
+        print(f"Normalized model name: {normalized}")
+        
+        # Model configurations from the second file
+        model_token_limits = {
+            "gpt-3.5": 16385,
+            "gpt-4o": 128000,
+            "gpt-4o-mini": 128000,
+            "meta-llama-3": 4096,
+            "mistral-api": 128000,
+            "o1-mini": 128000,
+            "o3-mini": 128000
+        }
+        
+        model_map = {
+            "gpt-3.5": "gpt-3.5-turbo",
+            "gpt-4o": "gpt-4o",
+            "gpt-4o mini": "gpt-4o-mini",
+            "o1-mini": "gpt-4o-mini",
+            "o3-mini": "gpt-4o-mini",
+            "mistral": "mistral-small-latest",
+            "mistral-api": "mistral-small-latest",
+            "meta-llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
+            "remote meta-llama-3": "meta-llama/Meta-Llama-3-8B-Instruct"
+        }
+        
+        model_pricing = {
+            "gpt-3.5": {"USD": {"input": 0.0000005, "output": 0.0000015}, "RON": {"input": 0.0000023, "output": 0.0000069}},
+            "gpt-4o": {"USD": {"input": 0.0000025, "output": 0.00001}, "RON": {"input": 0.0000115, "output": 0.000046}},
+            "gpt-4o-mini": {"USD": {"input": 0.00000015, "output": 0.0000006}, "RON": {"input": 0.0000007, "output": 0.0000028}},
+            "o1-mini": {"USD": {"input": 0.0000011, "output": 0.0000044}, "RON": {"input": 0.0000051, "output": 0.0000204}},
+            "o3-mini": {"USD": {"input": 0.0000011, "output": 0.0000044}, "RON": {"input": 0.0000051, "output": 0.0000204}},
+            "meta-llama-3": {"USD": {"input": 0.00, "output": 0.00}, "RON": {"input": 0.00, "output": 0.00}},
+            "mistral": {"USD": {"input": 0.00, "output": 0.00}, "RON": {"input": 0.00, "output": 0.00}},
+            "mistral-api": {"USD": {"input": 0.00, "output": 0.00}, "RON": {"input": 0.00, "output": 0.00}}
+        }
+        pricing_info = ""
+        
+        # Find the matching model
+        model_key = None
+        for key in model_map:
+            if key.lower() in normalized:
+                model_key = key
+                break
+                
+        if not model_key:
+            raise ValueError(f"Unsupported model: {normalized}")
+        model = model_map[model_key]   
+        max_tokens = model_token_limits.get(model, 4096)
+        max_tokens = min(slider_max_tokens, max_tokens)                 
+        pricing_info = model_pricing.get(model_key, {"USD": {"input": 0.00, "output": 0.00}, "RON": {"input": 0.00, "output": 0.00}})
+        
         try:
-            if "remote" in normalized:
+            # OpenAI models (GPT-3.5, GPT-4o, GPT-4o mini, o1-mini, o3-mini)
+            if any(model in normalized for model in ["gpt-3.5", "gpt-4o", "o1-mini", "o3-mini"]):
+                debug_print(f"Creating OpenAI API pipeline for {normalized}...")
+                openai_api_key = os.environ.get("OPENAI_API_KEY")
+                if not openai_api_key:
+                    raise ValueError("Please set the OPENAI_API_KEY environment variable to use OpenAI API.")
+                
+                import openai
+                
+                class OpenAILLM(LLM):
+                    model_name: str = model
+                    llm_choice: str = model
+                    max_context_tokens: int = max_tokens
+                    pricing: dict = pricing_info
+                    temperature: float = 0.7
+                    top_p: float = 0.95
+                    top_k: int = 50
+  
+                    
+                    @property
+                    def _llm_type(self) -> str:
+                        return "openai_llm"
+                    
+                    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+                        try:
+                            openai.api_key = openai_api_key
+                            print(f" tokens: {max_tokens}")
+                            response = openai.ChatCompletion.create(
+                                model=self.model_name,
+                                messages=[{"role": "user", "content": prompt}],
+                                temperature=self.temperature,
+                                top_p=self.top_p,
+                                max_tokens=max_tokens
+                            )
+                            return response["choices"][0]["message"]["content"]
+                        except Exception as e:
+                            debug_print(f"OpenAI API error: {str(e)}")                            
+                            return f"Error generating response: {str(e)}"
+                    
+                    @property
+                    def _identifying_params(self) -> dict:
+                        return {
+                            "model": self.model_name, 
+                            "max_tokens": self.max_context_tokens,
+                            "temperature": self.temperature,
+                            "top_p": self.top_p,
+                            "top_k": self.top_k
+                        }
+                
+                debug_print(f"OpenAI {model} pipeline created successfully.")
+                return OpenAILLM()
+            
+            # Meta-Llama-3 model
+            elif "meta-llama" in normalized or "llama" in normalized:
                 debug_print("Creating remote Meta-Llama-3 pipeline via Hugging Face Inference API...")
                 from huggingface_hub import InferenceClient
                 repo_id = "meta-llama/Meta-Llama-3-8B-Instruct"
@@ -519,20 +718,19 @@ class ElevatedRagChain:
                     raise ValueError("Please set the HF_API_TOKEN environment variable to use remote inference.")
                 
                 client = InferenceClient(token=hf_api_token, timeout=120)
-                
-                # We no longer use wait_for_model because it's unsupported
+
                 def remote_generate(prompt: str) -> str:
                     max_retries = 3
                     backoff = 2  # start with 2 seconds
                     for attempt in range(max_retries):
                         try:
-                            debug_print(f"Remote generation attempt {attempt+1}")
+                            debug_print(f"Remote generation attempt {attempt+1} tokens: {self.max_tokens}")
                             response = client.text_generation(
                                 prompt,
                                 model=repo_id,
                                 temperature=self.temperature,
                                 top_p=self.top_p,
-                                max_new_tokens=512  # Reduced token count for speed
+                                max_tokens= max_tokens  # Reduced token count for speed
                             )
                             return response
                         except Exception as e:
@@ -544,6 +742,11 @@ class ElevatedRagChain:
                     return "Failed to generate response after multiple attempts."
                 
                 class RemoteLLM(LLM):
+                    model_name: str = repo_id
+                    llm_choice: str = repo_id
+                    max_context_tokens: int = max_tokens
+                    pricing: dict = pricing_info
+                    
                     @property
                     def _llm_type(self) -> str:
                         return "remote_llm"
@@ -553,97 +756,74 @@ class ElevatedRagChain:
                     
                     @property
                     def _identifying_params(self) -> dict:
-                        return {"model": repo_id}
+                        return {"model": self.model_name, "max_tokens": self.max_context_tokens}
                 
                 debug_print("Remote Meta-Llama-3 pipeline created successfully.")
                 return RemoteLLM()
-                
-            elif "mistral-api" in normalized:
+            
+            # Mistral API model
+            elif "mistral" in normalized:
                 debug_print("Creating Mistral API pipeline...")
                 mistral_api_key = os.environ.get("MISTRAL_API_KEY")
                 if not mistral_api_key:
                     raise ValueError("Please set the MISTRAL_API_KEY environment variable to use Mistral API.")
+
                 try:
-                    from mistralai import Mistral                    
+                    from mistralai import Mistral
                     debug_print("Mistral library imported successfully")
                 except ImportError:
-                    debug_print("Mistral client library not installed. Falling back to Llama pipeline.")
-                    normalized = "llama"
-                if normalized != "llama":
-#                    from pydantic import PrivateAttr
-#                    from langchain.llms.base import LLM
-#                    from typing import Any, Optional, List
-#                    import typing
-
-                    class MistralLLM(LLM):
-                        temperature: float = 0.7
-                        top_p: float = 0.95
-                        _client: Any = PrivateAttr(default=None)
-
-                        def __init__(self, api_key: str, temperature: float = 0.7, top_p: float = 0.95, **kwargs: Any):
-                            try:
-                                super().__init__(**kwargs)
-                                # Bypass Pydantic's __setattr__ to assign to _client
-                                object.__setattr__(self, '_client', Mistral(api_key=api_key))
-                                self.temperature = temperature
-                                self.top_p = top_p
-                            except Exception as e:
-                                debug_print(f"Init Mistral failed with error: {e}")
-                                                    
-                        @property
-                        def _llm_type(self) -> str:
-                            return "mistral_llm"
-                        def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-                            try:
-                                debug_print("Calling Mistral API...")
-                                response = self._client.chat.complete(
-                                    model="mistral-small-latest",
-                                    messages=[{"role": "user", "content": prompt}],
-                                    temperature=self.temperature,
-                                    top_p=self.top_p
-                                )
-                                return response.choices[0].message.content
-                            except Exception as e:
-                                debug_print(f"Mistral API error: {str(e)}")
-                                return f"Error generating response: {str(e)}"
-                        @property
-                        def _identifying_params(self) -> dict:
-                            return {"model": "mistral-small-latest"}
-                    debug_print("Creating Mistral LLM instance")
-                    mistral_llm = MistralLLM(api_key=mistral_api_key, temperature=self.temperature, top_p=self.top_p)
-                    debug_print("Mistral API pipeline created successfully.")
-                    return mistral_llm
+                    raise ImportError("Mistral client library not installed. Please install with 'pip install mistralai'.")
                 
-            else:
-                # Default case - using a fallback model (or Llama)
-                debug_print("Using local/fallback model pipeline")
-                model_id = "facebook/opt-350m"  # Use a smaller model as fallback
-                pipe = pipeline(
-                    "text-generation",
-                    model=model_id,
-                    device=-1,  # CPU
-                    max_length=1024
-                )
-                
-                class LocalLLM(LLM):
+                class MistralLLM(LLM):
+                    temperature: float = 0.7
+                    top_p: float = 0.95
+                    model_name: str = model
+                    llm_choice: str = model
+
+                    pricing: dict = pricing_info
+                    _client: Any = PrivateAttr(default=None)
+                    
+                    def __init__(self, api_key: str, temperature: float = 0.7, top_p: float = 0.95, **kwargs: Any):
+                        try:
+                            super().__init__(**kwargs)
+                            # Bypass Pydantic's __setattr__ to assign to _client
+                            object.__setattr__(self, '_client', Mistral(api_key=api_key))
+                            self.temperature = temperature
+                            self.top_p = top_p
+                        except Exception as e:
+                            debug_print(f"Init Mistral failed with error: {e}")
+                    
                     @property
                     def _llm_type(self) -> str:
-                        return "local_llm"
+                        return "mistral_llm"
+                    
                     def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
-                        # For this fallback, truncate prompt if it exceeds limits
-                        reserved_gen = 128
-                        max_total = 1024
-                        max_prompt_tokens = max_total - reserved_gen
-                        truncated_prompt = truncate_prompt(prompt, max_tokens=max_prompt_tokens)
-                        generated = pipe(truncated_prompt, max_new_tokens=reserved_gen)[0]["generated_text"]
-                        return generated
+                        try:
+                            debug_print(f"Calling Mistral API...  tokens: {max_tokens}")
+                            response = self._client.chat.complete(
+                                model=self.model_name,
+                                messages=[{"role": "user", "content": prompt}],
+                                temperature=self.temperature,
+                                top_p=self.top_p,
+                                max_tokens= max_tokens 
+                            )
+                            return response.choices[0].message.content
+                        except Exception as e:
+                            debug_print(f"Mistral API error: {str(e)}")
+                            return f"Error generating response: {str(e)}"
+                    
                     @property
                     def _identifying_params(self) -> dict:
-                        return {"model": model_id, "max_length": 1024}
+                        return {"model": self.model_name, "max_tokens": max_tokens}
                 
-                debug_print("Local fallback pipeline created.")
-                return LocalLLM()
-                    
+                debug_print("Creating Mistral LLM instance")
+                mistral_llm = MistralLLM(api_key=mistral_api_key, temperature=self.temperature, top_p=self.top_p)
+                debug_print("Mistral API pipeline created successfully.")
+                return mistral_llm
+            
+            else:
+                raise ValueError(f"Unsupported model choice: {self.llm_choice}")
+                
         except Exception as e:
             debug_print(f"Error creating LLM pipeline: {str(e)}")
             # Return a dummy LLM that explains the error
@@ -662,11 +842,12 @@ class ElevatedRagChain:
             return ErrorLLM()
 
 
-    def update_llm_pipeline(self, new_model_choice: str, temperature: float, top_p: float, prompt_template: str, bm25_weight: float):
+    def update_llm_pipeline(self, new_model_choice: str, temperature: float, top_p: float, top_k: int, prompt_template: str, bm25_weight: float):
         debug_print(f"Updating chain with new model: {new_model_choice}")
         self.llm_choice = new_model_choice
         self.temperature = temperature
         self.top_p = top_p
+        self.top_k = top_k
         self.prompt_template = prompt_template
         self.bm25_weight = bm25_weight
         self.faiss_weight = 1.0 - bm25_weight
@@ -674,7 +855,14 @@ class ElevatedRagChain:
         def format_response(response: str) -> str:
             input_tokens = count_tokens(self.context + self.prompt_template)
             output_tokens = count_tokens(response)
-            formatted = f"### Response\n\n{response}\n\n---\n"
+            formatted = f"✅ Response:\n\n"
+            formatted += f"Model: {self.llm_choice}\n"
+            formatted += f"Model Parameters:\n"
+            formatted += f"- Temperature: {self.temperature}\n"
+            formatted += f"- Top-p: {self.top_p}\n"
+            formatted += f"- Top-k: {self.top_k}\n"
+            formatted += f"- BM25 Weight: {self.bm25_weight}\n\n"
+            formatted += f"{response}\n\n---\n"
             formatted += f"- **Input tokens:** {input_tokens}\n"
             formatted += f"- **Output tokens:** {output_tokens}\n"
             formatted += f"- **Generated using:** {self.llm_choice}\n"
@@ -757,7 +945,14 @@ class ElevatedRagChain:
         def format_response(response: str) -> str:
             input_tokens = count_tokens(self.context + self.prompt_template)
             output_tokens = count_tokens(response)
-            formatted = f"### Response\n\n{response}\n\n---\n"
+            formatted = f"✅ Response:\n\n"
+            formatted += f"Model: {self.llm_choice}\n"
+            formatted += f"Model Parameters:\n"
+            formatted += f"- Temperature: {self.temperature}\n"
+            formatted += f"- Top-p: {self.top_p}\n"
+            formatted += f"- Top-k: {self.top_k}\n"
+            formatted += f"- BM25 Weight: {self.bm25_weight}\n\n"
+            formatted += f"{response}\n\n---\n"
             formatted += f"- **Input tokens:** {input_tokens}\n"
             formatted += f"- **Output tokens:** {output_tokens}\n"
             formatted += f"- **Generated using:** {self.llm_choice}\n"
@@ -766,8 +961,6 @@ class ElevatedRagChain:
         
         self.elevated_rag_chain = base_runnable | prompt_runnable | self.llm | format_response
         debug_print("Elevated RAG chain successfully built and ready to use.")
-
-
 
     def get_current_context(self) -> str:
         base_context = "\n".join([str(doc) for doc in self.split_data[:3]]) if self.split_data else "No context available."
@@ -786,7 +979,7 @@ class ElevatedRagChain:
 global rag_chain
 rag_chain = ElevatedRagChain()
 
-def load_pdfs_updated(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p):
+def load_pdfs_updated(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p, top_k):
     debug_print("Inside load_pdfs function.")
     if not file_links:
         debug_print("Please enter non-empty URLs")
@@ -795,7 +988,7 @@ def load_pdfs_updated(file_links, model_choice, prompt_template, bm25_weight, te
         links = [link.strip() for link in file_links.split("\n") if link.strip()]
         global rag_chain
         if rag_chain.raw_data:
-            rag_chain.update_llm_pipeline(model_choice, temperature, top_p, prompt_template, bm25_weight)
+            rag_chain.update_llm_pipeline(model_choice, temperature, top_p, top_k, prompt_template, bm25_weight)
             context_display = rag_chain.get_current_context()
             response_msg = f"Files already loaded. Chain updated with model: {model_choice}"
             return (
@@ -810,7 +1003,8 @@ def load_pdfs_updated(file_links, model_choice, prompt_template, bm25_weight, te
                 prompt_template=prompt_template,
                 bm25_weight=bm25_weight,
                 temperature=temperature,
-                top_p=top_p
+                top_p=top_p,
+                top_k=top_k
             )
             rag_chain.add_pdfs_to_vectore_store(links)
             context_display = rag_chain.get_current_context()
@@ -834,7 +1028,7 @@ def load_pdfs_updated(file_links, model_choice, prompt_template, bm25_weight, te
 def update_model(new_model: str):
     global rag_chain
     if rag_chain and rag_chain.raw_data:
-        rag_chain.update_llm_pipeline(new_model, rag_chain.temperature, rag_chain.top_p,
+        rag_chain.update_llm_pipeline(new_model, rag_chain.temperature, rag_chain.top_p, rag_chain.top_k,
                                       rag_chain.prompt_template, rag_chain.bm25_weight)
         debug_print(f"Model updated to {rag_chain.llm_choice}")
         return f"Model updated to: {rag_chain.llm_choice}"
@@ -843,7 +1037,7 @@ def update_model(new_model: str):
 
 
 # Update submit_query_updated to better handle context limitation
-def submit_query_updated(query):
+def submit_query_updated(query, temperature, top_p, top_k, bm25_weight):
     debug_print(f"Processing query: {query}")
     if not query:
         debug_print("Empty query received")
@@ -854,6 +1048,19 @@ def submit_query_updated(query):
         return "Please load files first.", "", "Input tokens: 0", "Output tokens: 0"
     
     try:
+        # Update all parameters for this query
+        rag_chain.temperature = temperature
+        rag_chain.top_p = top_p
+        rag_chain.top_k = top_k
+        rag_chain.bm25_weight = bm25_weight
+        rag_chain.faiss_weight = 1.0 - bm25_weight
+        
+        # Update the ensemble retriever weights
+        rag_chain.ensemble_retriever = EnsembleRetriever(
+            retrievers=[rag_chain.bm25_retriever, rag_chain.faiss_retriever],
+            weights=[rag_chain.bm25_weight, rag_chain.faiss_weight]
+        )
+        
         # Determine max context size based on model
         model_name = rag_chain.llm_choice.lower()
         max_context_tokens = 32000 if "mistral" in model_name else 4096
@@ -1000,6 +1207,43 @@ document.addEventListener('DOMContentLoaded', function() {
             clearInterval(jobListInterval);
         }
     }, 500);
+
+    // Function to disable sliders
+    function disableSliders() {
+        const sliders = document.querySelectorAll('input[type="range"]');
+        sliders.forEach(slider => {
+            if (!slider.closest('.query-tab')) {  // Don't disable sliders in query tab
+                slider.disabled = true;
+                slider.style.opacity = '0.5';
+            }
+        });
+    }
+
+    // Function to enable sliders
+    function enableSliders() {
+        const sliders = document.querySelectorAll('input[type="range"]');
+        sliders.forEach(slider => {
+            slider.disabled = false;
+            slider.style.opacity = '1';
+        });
+    }
+
+    // Add event listener for load button
+    const loadButton = document.querySelector('button:contains("Load Files (Async)")');
+    if (loadButton) {
+        loadButton.addEventListener('click', function() {
+            // Wait for the response to come back
+            setTimeout(disableSliders, 1000);
+        });
+    }
+
+    // Add event listener for reset button
+    const resetButton = document.querySelector('button:contains("Reset App")');
+    if (resetButton) {
+        resetButton.addEventListener('click', function() {
+            enableSliders();
+        });
+    }
 });
 """) as app:
     gr.Markdown('''# PhiRAG - Async Version  
@@ -1036,8 +1280,16 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             with gr.Row():
                 with gr.Column():
                     model_dropdown = gr.Dropdown(
-                        choices=["🇺🇸 Remote Meta-Llama-3", "🇪🇺 Mistral-API"],
-                        value="🇺🇸 Remote Meta-Llama-3",
+                        choices=[
+                            "🇺🇸 GPT-3.5",
+                            "🇺🇸 GPT-4o",
+                            "🇺🇸 GPT-4o mini",
+                            "🇺🇸 o1-mini", 
+                            "🇺🇸 o3-mini",
+                            "🇺🇸 Remote Meta-Llama-3", 
+                            "🇪🇺 Mistral-API",
+                        ],
+                        value="🇪🇺 Mistral-API",
                         label="Select Model"
                     )
                     temperature_slider = gr.Slider(
@@ -1047,6 +1299,10 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                     top_p_slider = gr.Slider(
                         minimum=0.1, maximum=0.99, value=0.95, step=0.05,
                         label="Word Variety (Top-p)"
+                    )
+                    top_k_slider = gr.Slider(
+                        minimum=1, maximum=100, value=50, step=1,
+                        label="Token Selection (Top-k)"
                     )
                 with gr.Column():
                     pdf_input = gr.Textbox(
@@ -1083,21 +1339,46 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             with gr.Row():
                 model_output = gr.Markdown("**Current Model**: Not selected")
         
-        with gr.TabItem("Submit Query"):
+        with gr.TabItem("Submit Query", elem_classes=["query-tab"]):
             with gr.Row():
-                # Add this line to define the query_model_dropdown
-                query_model_dropdown = gr.Dropdown(
-                    choices=["🇺🇸 Remote Meta-Llama-3", "🇪🇺 Mistral-API"],
-                    value="🇺🇸 Remote Meta-Llama-3",
-                    label="Query Model"
-                )
-
-                query_input = gr.Textbox(
-                    label="Enter your query here",
-                    placeholder="Type your query",
-                    lines=4
-                )
-                submit_button = gr.Button("Submit Query (Async)")
+                with gr.Column():
+                    query_model_dropdown = gr.Dropdown(
+                        choices=[
+                            "🇺🇸 GPT-3.5",
+                            "🇺🇸 GPT-4o",
+                            "🇺🇸 GPT-4o mini",
+                            "🇺🇸 o1-mini", 
+                            "🇺🇸 o3-mini",
+                            "🇺🇸 Remote Meta-Llama-3", 
+                            "🇪🇺 Mistral-API",
+                        ],
+                        value="🇪🇺 Mistral-API",
+                        label="Query Model"
+                    )
+                    query_temperature_slider = gr.Slider(
+                        minimum=0.1, maximum=1.0, value=0.5, step=0.1,
+                        label="Randomness (Temperature)"
+                    )
+                    query_top_p_slider = gr.Slider(
+                        minimum=0.1, maximum=0.99, value=0.95, step=0.05,
+                        label="Word Variety (Top-p)"
+                    )
+                    query_top_k_slider = gr.Slider(
+                        minimum=1, maximum=100, value=50, step=1,
+                        label="Token Selection (Top-k)"
+                    )
+                    query_bm25_weight_slider = gr.Slider(
+                        minimum=0.0, maximum=1.0, value=0.6, step=0.1,
+                        label="Lexical vs Semantics (BM25 Weight)"
+                    )
+                with gr.Column():
+                    max_tokens_slider = gr.Slider(minimum=1000, maximum=128000, value=3000, label="🔢 Max Tokens", step=1000)
+                    query_input = gr.Textbox(
+                        label="Enter your query here",
+                        placeholder="Type your query",
+                        lines=4
+                    )
+                    submit_button = gr.Button("Submit Query (Async)")
             
             with gr.Row():
                 query_response = gr.Textbox(
@@ -1190,26 +1471,50 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             with gr.Row():
                 reset_model = gr.Markdown("")
     
-    # Connect the buttons to their respective functions
+    # Add initialization info display
+    init_info = gr.Markdown("")
+    
+    # Update load_button click to include top_k
     load_button.click(
         load_pdfs_async, 
-        inputs=[pdf_input, model_dropdown, prompt_input, bm25_weight_slider, temperature_slider, top_p_slider],
-        outputs=[load_response, load_context, model_output, job_id_input, job_query_display, job_list]
+        inputs=[pdf_input, model_dropdown, prompt_input, bm25_weight_slider, temperature_slider, top_p_slider, top_k_slider, max_tokens_slider],
+        outputs=[load_response, load_context, model_output, job_id_input, job_query_display, job_list, init_info]
     )
 
-    # Also sync in the other direction
-    query_model_dropdown.change(
-        fn=sync_model_dropdown,
-        inputs=query_model_dropdown,
-        outputs=model_dropdown
-    )
-
+    # Update submit_button click to include top_k
     submit_button.click(
         submit_query_async, 
-        inputs=[query_input, query_model_dropdown],
+        inputs=[query_input, query_model_dropdown, max_tokens_slider, query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider],
         outputs=[query_response, query_context, input_tokens, output_tokens, job_id_input, job_query_display, job_list]
     )
 
+    # Add function to sync all parameters
+    def sync_parameters(temperature, top_p, top_k, bm25_weight):
+        return temperature, top_p, top_k, bm25_weight
+
+    # Sync parameters between tabs
+    temperature_slider.change(
+        fn=sync_parameters,
+        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
+        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
+    )
+    top_p_slider.change(
+        fn=sync_parameters,
+        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
+        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
+    )
+    top_k_slider.change(
+        fn=sync_parameters,
+        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
+        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
+    )
+    bm25_weight_slider.change(
+        fn=sync_parameters,
+        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
+        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
+    )
+
+    # Connect the buttons to their respective functions
     check_button.click(
         check_job_status,
         inputs=[job_id_input],
