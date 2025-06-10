@@ -44,7 +44,7 @@ def generate_parameter_values(min_val, max_val, num_values):
     step = (max_val - min_val) / (num_values - 1)
     return [min_val + (step * i) for i in range(num_values)]
 
-def process_batch_query(query, model_choice, max_tokens, param_configs, slider_values):
+def process_batch_query(query, model_choice, max_tokens, param_configs, slider_values, job_id):
     """Process a batch of queries with different parameter combinations"""
     results = []
     
@@ -94,7 +94,94 @@ def process_batch_query(query, model_choice, max_tokens, param_configs, slider_v
                             "Progress": f"Query {current}/{total_combinations}"
                         })
     
-    return results
+    # Format final results
+    formatted_results = "### Batch Query Results\n\n"
+    for result in results:
+        formatted_results += f"#### {result['Parameters']}\n"
+        formatted_results += f"**Progress:** {result['Progress']}\n\n"
+        formatted_results += f"{result['Response']}\n\n"
+        formatted_results += "---\n\n"
+    
+    return (
+        formatted_results,
+        f"Job ID: {job_id}",
+        f"Input tokens: {count_tokens(query)}",
+        f"Output tokens: {sum(count_tokens(r['Response']) for r in results)}"
+    )
+
+def process_batch_query_async(query, model_choice, max_tokens, param_configs, slider_values):
+    """Asynchronous version of batch query processing"""
+    global last_job_id
+    if not query:
+        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+    
+    if not hasattr(rag_chain, 'elevated_rag_chain') or not rag_chain.raw_data:
+        return "Please load files first.", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+    
+    job_id = str(uuid.uuid4())
+    debug_print(f"Starting async batch job {job_id} for query: {query}")
+    
+    # Get slider values
+    slider_values = {
+        'temperature': slider_values['temperature'],
+        'top_p': slider_values['top_p'],
+        'top_k': slider_values['top_k'],
+        'bm25': slider_values['bm25']
+    }
+    
+    # Start background thread
+    threading.Thread(
+        target=process_in_background,
+        args=(job_id, process_batch_query, [query, model_choice, max_tokens, param_configs, slider_values, job_id])
+    ).start()
+    
+    jobs[job_id] = {
+        "status": "processing", 
+        "type": "batch_query",
+        "start_time": time.time(),
+        "query": query,
+        "model": model_choice,
+        "param_configs": param_configs
+    }
+    
+    last_job_id = job_id
+    
+    return (
+        f"Batch query submitted and processing in the background (Job ID: {job_id}).\n\n"
+        f"Use 'Check Job Status' tab with this ID to get results.",
+        f"Job ID: {job_id}",
+        f"Input tokens: {count_tokens(query)}",
+        "Output tokens: pending",
+        job_id,  # Return job_id to update the job_id_input component
+        query,  # Return query to update the job_query_display component
+        get_job_list()  # Return updated job list
+    )
+
+def submit_batch_query_async(query, model_choice, max_tokens, temp_config, top_p_config, top_k_config, bm25_config,
+                           temp_slider, top_p_slider, top_k_slider, bm25_slider):
+    """Handle batch query submission with async processing"""
+    if not query:
+        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+    
+    if not hasattr(rag_chain, 'elevated_rag_chain') or not rag_chain.raw_data:
+        return "Please load files first.", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+    
+    # Get slider values
+    slider_values = {
+        'temperature': temp_slider,
+        'top_p': top_p_slider,
+        'top_k': top_k_slider,
+        'bm25': bm25_slider
+    }
+    
+    param_configs = {
+        'temperature': temp_config,
+        'top_p': top_p_config,
+        'top_k': top_k_config,
+        'bm25': bm25_config
+    }
+    
+    return process_batch_query_async(query, model_choice, max_tokens, param_configs, slider_values)
 
 def submit_batch_query(query, model_choice, max_tokens, temp_config, top_p_config, top_k_config, bm25_config,
                       temp_slider, top_p_slider, top_k_slider, bm25_slider):
@@ -1612,7 +1699,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                         placeholder="Type your query",
                         lines=4
                     )
-                    batch_submit_button = gr.Button("Submit Batch Query")
+                    batch_submit_button = gr.Button("Submit Batch Query (Async)")
             
             with gr.Row():
                 batch_query_response = gr.Textbox(
@@ -1629,6 +1716,55 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             with gr.Row():
                 batch_input_tokens = gr.Markdown("Input tokens: 0")
                 batch_output_tokens = gr.Markdown("Output tokens: 0")
+        
+            with gr.Row():
+                with gr.Column(scale=1):
+                    batch_job_list = gr.Markdown(
+                        value="No jobs yet",
+                        label="Job List (Click to select)"
+                    )
+                    batch_refresh_button = gr.Button("Refresh Job List")
+                    batch_auto_refresh_checkbox = gr.Checkbox(
+                        label="Enable Auto Refresh",
+                        value=False
+                    )
+                    batch_df = gr.DataFrame(
+                        value=run_query(10),
+                        headers=["Number", "Square"],
+                        label="Query Results",
+                        visible=False
+                    )
+                
+                with gr.Column(scale=2):
+                    batch_job_id_input = gr.Textbox(
+                        label="Job ID",
+                        placeholder="Job ID will appear here when selected from the list",
+                        lines=1
+                    )
+                    batch_job_query_display = gr.Textbox(
+                        label="Job Query",
+                        placeholder="The query associated with this job will appear here",
+                        lines=2,
+                        interactive=False
+                    )
+                    batch_check_button = gr.Button("Check Status")
+                    batch_cleanup_button = gr.Button("Cleanup Old Jobs")
+            
+            with gr.Row():
+                batch_status_response = gr.Textbox(
+                    label="Job Result",
+                    placeholder="Job result will appear here",
+                    lines=6
+                )
+                batch_status_context = gr.Textbox(
+                    label="Context Information",
+                    placeholder="Context information will appear here",
+                    lines=6
+                )
+            
+            with gr.Row():
+                batch_status_tokens1 = gr.Markdown("")
+                batch_status_tokens2 = gr.Markdown("")
         
         with gr.TabItem("App Management"):
             with gr.Row():
@@ -1749,7 +1885,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
 
     # Add batch query button click handler
     batch_submit_button.click(
-        submit_batch_query,
+        submit_batch_query_async,
         inputs=[
             batch_query_input,
             batch_model_dropdown,
@@ -1767,8 +1903,47 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             batch_query_response,
             batch_query_context,
             batch_input_tokens,
-            batch_output_tokens
+            batch_output_tokens,
+            batch_job_id_input,
+            batch_job_query_display,
+            batch_job_list
         ]
+    )
+
+    # Add batch job status checking
+    batch_check_button.click(
+        check_job_status,
+        inputs=[batch_job_id_input],
+        outputs=[batch_status_response, batch_status_context, batch_status_tokens1, batch_status_tokens2, batch_job_query_display]
+    )
+
+    # Add batch job list refresh
+    batch_refresh_button.click(
+        refresh_job_list,
+        inputs=[],
+        outputs=[batch_job_list]
+    )
+
+    # Add batch job list selection
+    batch_job_id_input.change(
+        job_selected,
+        inputs=[batch_job_id_input],
+        outputs=[batch_job_id_input, batch_job_query_display]
+    )
+
+    # Add batch cleanup
+    batch_cleanup_button.click(
+        cleanup_old_jobs,
+        inputs=[],
+        outputs=[batch_status_response, batch_status_context, batch_status_tokens1]
+    )
+
+    # Add batch auto-refresh
+    batch_auto_refresh_checkbox.change(
+        fn=periodic_update,
+        inputs=[batch_auto_refresh_checkbox],
+        outputs=[batch_job_list, batch_status_response, batch_df, batch_status_context],
+        every=2
     )
 
 if __name__ == "__main__":
