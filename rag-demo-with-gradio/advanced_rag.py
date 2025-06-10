@@ -36,6 +36,102 @@ from langchain_community.document_loaders import PyMuPDFLoader  # Updated loader
 import tempfile
 import mimetypes
 
+# Add batch processing helper functions
+def generate_parameter_values(min_val, max_val, num_values):
+    """Generate evenly spaced values between min and max"""
+    if num_values == 1:
+        return [min_val]
+    step = (max_val - min_val) / (num_values - 1)
+    return [min_val + (step * i) for i in range(num_values)]
+
+def process_batch_query(query, model_choice, max_tokens, param_configs, slider_values):
+    """Process a batch of queries with different parameter combinations"""
+    results = []
+    
+    # Generate all parameter combinations
+    temp_values = [slider_values['temperature']] if param_configs['temperature'] == "Constant" else generate_parameter_values(0.1, 1.0, int(param_configs['temperature'].split()[2]))
+    top_p_values = [slider_values['top_p']] if param_configs['top_p'] == "Constant" else generate_parameter_values(0.1, 0.99, int(param_configs['top_p'].split()[2]))
+    top_k_values = [slider_values['top_k']] if param_configs['top_k'] == "Constant" else generate_parameter_values(1, 100, int(param_configs['top_k'].split()[2]))
+    bm25_values = [slider_values['bm25']] if param_configs['bm25'] == "Constant" else generate_parameter_values(0.0, 1.0, int(param_configs['bm25'].split()[2]))
+    
+    total_combinations = len(temp_values) * len(top_p_values) * len(top_k_values) * len(bm25_values)
+    current = 0
+    
+    for temp in temp_values:
+        for top_p in top_p_values:
+            for top_k in top_k_values:
+                for bm25 in bm25_values:
+                    current += 1
+                    try:
+                        # Update parameters
+                        rag_chain.temperature = temp
+                        rag_chain.top_p = top_p
+                        rag_chain.top_k = top_k
+                        rag_chain.bm25_weight = bm25
+                        rag_chain.faiss_weight = 1.0 - bm25
+                        
+                        # Update ensemble retriever
+                        rag_chain.ensemble_retriever = EnsembleRetriever(
+                            retrievers=[rag_chain.bm25_retriever, rag_chain.faiss_retriever],
+                            weights=[rag_chain.bm25_weight, rag_chain.faiss_weight]
+                        )
+                        
+                        # Process query
+                        response = rag_chain.elevated_rag_chain.invoke({"question": query})
+                        
+                        # Format result
+                        result = {
+                            "Parameters": f"Temp: {temp:.2f}, Top-p: {top_p:.2f}, Top-k: {top_k}, BM25: {bm25:.2f}",
+                            "Response": response,
+                            "Progress": f"Query {current}/{total_combinations}"
+                        }
+                        results.append(result)
+                        
+                    except Exception as e:
+                        results.append({
+                            "Parameters": f"Temp: {temp:.2f}, Top-p: {top_p:.2f}, Top-k: {top_k}, BM25: {bm25:.2f}",
+                            "Response": f"Error: {str(e)}",
+                            "Progress": f"Query {current}/{total_combinations}"
+                        })
+    
+    return results
+
+def submit_batch_query(query, model_choice, max_tokens, temp_config, top_p_config, top_k_config, bm25_config,
+                      temp_slider, top_p_slider, top_k_slider, bm25_slider):
+    """Handle batch query submission"""
+    if not query:
+        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
+    
+    if not hasattr(rag_chain, 'elevated_rag_chain') or not rag_chain.raw_data:
+        return "Please load files first.", "", "Input tokens: 0", "Output tokens: 0"
+    
+    # Get slider values
+    slider_values = {
+        'temperature': temp_slider,
+        'top_p': top_p_slider,
+        'top_k': top_k_slider,
+        'bm25': bm25_slider
+    }
+    
+    try:
+        results = process_batch_query(query, model_choice, max_tokens, 
+                                    {'temperature': temp_config, 'top_p': top_p_config, 
+                                     'top_k': top_k_config, 'bm25': bm25_config},
+                                    slider_values)
+        
+        # Format results for display
+        formatted_results = "### Batch Query Results\n\n"
+        for result in results:
+            formatted_results += f"#### {result['Parameters']}\n"
+            formatted_results += f"**Progress:** {result['Progress']}\n\n"
+            formatted_results += f"{result['Response']}\n\n"
+            formatted_results += "---\n\n"
+        
+        return formatted_results, "", f"Input tokens: {count_tokens(query)}", f"Output tokens: {sum(count_tokens(r['Response']) for r in results)}"
+    
+    except Exception as e:
+        return f"Error processing batch query: {str(e)}", "", "Input tokens: 0", "Output tokens: 0"
+
 def get_mime_type(file_path):
     return mimetypes.guess_type(file_path)[0] or 'application/octet-stream'
     
@@ -1451,6 +1547,89 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                     status_tokens1 = gr.Markdown("")
                     status_tokens2 = gr.Markdown("")
         
+        with gr.TabItem("Batch Query"):
+            with gr.Row():
+                with gr.Column():
+                    batch_model_dropdown = gr.Dropdown(
+                        choices=[
+                            "🇺🇸 GPT-3.5",
+                            "🇺🇸 GPT-4o",
+                            "🇺🇸 GPT-4o mini",
+                            "🇺🇸 o1-mini", 
+                            "🇺🇸 o3-mini",
+                            "🇺🇸 Remote Meta-Llama-3", 
+                            "🇪🇺 Mistral-API",
+                        ],
+                        value="🇪🇺 Mistral-API",
+                        label="Query Model"
+                    )
+                    with gr.Row():
+                        temp_variation = gr.Dropdown(
+                            choices=["Constant", "Whole range 3 values", "Whole range 5 values", "Whole range 7 values", "Whole range 10 values"],
+                            value="Constant",
+                            label="Temperature Variation"
+                        )
+                        batch_temperature_slider = gr.Slider(
+                            minimum=0.1, maximum=1.0, value=0.5, step=0.1,
+                            label="Randomness (Temperature)"
+                        )
+                    with gr.Row():
+                        top_p_variation = gr.Dropdown(
+                            choices=["Constant", "Whole range 3 values", "Whole range 5 values", "Whole range 7 values", "Whole range 10 values"],
+                            value="Constant",
+                            label="Top-p Variation"
+                        )
+                        batch_top_p_slider = gr.Slider(
+                            minimum=0.1, maximum=0.99, value=0.95, step=0.05,
+                            label="Word Variety (Top-p)"
+                        )
+                    with gr.Row():
+                        top_k_variation = gr.Dropdown(
+                            choices=["Constant", "Whole range 3 values", "Whole range 5 values", "Whole range 7 values", "Whole range 10 values"],
+                            value="Constant",
+                            label="Top-k Variation"
+                        )
+                        batch_top_k_slider = gr.Slider(
+                            minimum=1, maximum=100, value=50, step=1,
+                            label="Token Selection (Top-k)"
+                        )
+                    with gr.Row():
+                        bm25_variation = gr.Dropdown(
+                            choices=["Constant", "Whole range 3 values", "Whole range 5 values", "Whole range 7 values", "Whole range 10 values"],
+                            value="Constant",
+                            label="BM25 Weight Variation"
+                        )
+                        batch_bm25_weight_slider = gr.Slider(
+                            minimum=0.0, maximum=1.0, value=0.6, step=0.1,
+                            label="Lexical vs Semantics (BM25 Weight)"
+                        )
+                with gr.Column():
+                    batch_max_tokens_slider = gr.Slider(
+                        minimum=1000, maximum=128000, value=3000, label="🔢 Max Tokens", step=1000
+                    )
+                    batch_query_input = gr.Textbox(
+                        label="Enter your query here",
+                        placeholder="Type your query",
+                        lines=4
+                    )
+                    batch_submit_button = gr.Button("Submit Batch Query")
+            
+            with gr.Row():
+                batch_query_response = gr.Textbox(
+                    label="Batch Query Results",
+                    placeholder="Results will appear here (formatted as Markdown)",
+                    lines=10
+                )
+                batch_query_context = gr.Textbox(
+                    label="Context Information",
+                    placeholder="Retrieved context will appear here",
+                    lines=6
+                )
+            
+            with gr.Row():
+                batch_input_tokens = gr.Markdown("Input tokens: 0")
+                batch_output_tokens = gr.Markdown("Output tokens: 0")
+        
         with gr.TabItem("App Management"):
             with gr.Row():
                 reset_button = gr.Button("Reset App")
@@ -1566,6 +1745,30 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         inputs=[auto_refresh_checkbox],
         outputs=[job_list, status_response, df, status_context],
         every=2 #if auto_refresh_checkbox.value else None  # Directly set `every` based on the checkbox state
+    )
+
+    # Add batch query button click handler
+    batch_submit_button.click(
+        submit_batch_query,
+        inputs=[
+            batch_query_input,
+            batch_model_dropdown,
+            batch_max_tokens_slider,
+            temp_variation,
+            top_p_variation,
+            top_k_variation,
+            bm25_variation,
+            batch_temperature_slider,
+            batch_top_p_slider,
+            batch_top_k_slider,
+            batch_bm25_weight_slider
+        ],
+        outputs=[
+            batch_query_response,
+            batch_query_context,
+            batch_input_tokens,
+            batch_output_tokens
+        ]
     )
 
 if __name__ == "__main__":
