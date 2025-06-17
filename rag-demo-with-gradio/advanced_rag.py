@@ -4,6 +4,11 @@ import datetime
 import functools
 import traceback
 from typing import List, Optional, Any, Dict
+import csv
+import pandas as pd
+import tempfile
+import shutil
+import glob
 
 import torch
 import transformers
@@ -44,7 +49,7 @@ def generate_parameter_values(min_val, max_val, num_values):
     step = (max_val - min_val) / (num_values - 1)
     return [min_val + (step * i) for i in range(num_values)]
 
-def process_batch_query(query, model_choice, max_tokens, param_configs, slider_values, job_id):
+def process_batch_query(query, model_choice, max_tokens, param_configs, slider_values, job_id, use_history=True):
     """Process a batch of queries with different parameter combinations"""
     results = []
     
@@ -79,6 +84,11 @@ def process_batch_query(query, model_choice, max_tokens, param_configs, slider_v
                         # Process query
                         response = rag_chain.elevated_rag_chain.invoke({"question": query})
                         
+                        # Store response in history if enabled
+                        if use_history:
+                            trimmed_response = response[:1000] + ("..." if len(response) > 1000 else "")
+                            rag_chain.conversation_history.append({"query": query, "response": trimmed_response})
+                        
                         # Format result
                         result = {
                             "Parameters": f"Temp: {temp:.2f}, Top-p: {top_p:.2f}, Top-k: {top_k}, BM25: {bm25:.2f}",
@@ -94,13 +104,8 @@ def process_batch_query(query, model_choice, max_tokens, param_configs, slider_v
                             "Progress": f"Query {current}/{total_combinations}"
                         })
     
-    # Format final results
-    formatted_results = "### Batch Query Results\n\n"
-    for result in results:
-        formatted_results += f"#### {result['Parameters']}\n"
-        formatted_results += f"**Progress:** {result['Progress']}\n\n"
-        formatted_results += f"{result['Response']}\n\n"
-        formatted_results += "---\n\n"
+    # Format results with CSV file links
+    formatted_results = format_batch_result_files(results, job_id)
     
     return (
         formatted_results,
@@ -109,7 +114,7 @@ def process_batch_query(query, model_choice, max_tokens, param_configs, slider_v
         f"Output tokens: {sum(count_tokens(r['Response']) for r in results)}"
     )
 
-def process_batch_query_async(query, model_choice, max_tokens, param_configs, slider_values):
+def process_batch_query_async(query, model_choice, max_tokens, param_configs, slider_values, use_history):
     """Asynchronous version of batch query processing"""
     global last_job_id
     if not query:
@@ -132,7 +137,7 @@ def process_batch_query_async(query, model_choice, max_tokens, param_configs, sl
     # Start background thread
     threading.Thread(
         target=process_in_background,
-        args=(job_id, process_batch_query, [query, model_choice, max_tokens, param_configs, slider_values, job_id])
+        args=(job_id, process_batch_query, [query, model_choice, max_tokens, param_configs, slider_values, job_id, use_history])
     ).start()
     
     jobs[job_id] = {
@@ -158,7 +163,7 @@ def process_batch_query_async(query, model_choice, max_tokens, param_configs, sl
     )
 
 def submit_batch_query_async(query, model_choice, max_tokens, temp_config, top_p_config, top_k_config, bm25_config,
-                           temp_slider, top_p_slider, top_k_slider, bm25_slider):
+                           temp_slider, top_p_slider, top_k_slider, bm25_slider, use_history):
     """Handle batch query submission with async processing"""
     if not query:
         return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
@@ -181,7 +186,7 @@ def submit_batch_query_async(query, model_choice, max_tokens, temp_config, top_p
         'bm25': bm25_config
     }
     
-    return process_batch_query_async(query, model_choice, max_tokens, param_configs, slider_values)
+    return process_batch_query_async(query, model_choice, max_tokens, param_configs, slider_values, use_history)
 
 def submit_batch_query(query, model_choice, max_tokens, temp_config, top_p_config, top_k_config, bm25_config,
                       temp_slider, top_p_slider, top_k_slider, bm25_slider):
@@ -333,7 +338,7 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
         init_message  # Return initialization message
     )
 
-def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_p, top_k, bm25_weight):
+def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_p, top_k, bm25_weight, use_history):
     """Asynchronous version of submit_query_updated to prevent timeouts"""
     global last_job_id
     if not query:
@@ -353,7 +358,7 @@ def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_
     # Start background thread
     threading.Thread(
         target=process_in_background,
-        args=(job_id, submit_query_updated, [query, temperature, top_p, top_k, bm25_weight])
+        args=(job_id, submit_query_updated, [query, temperature, top_p, top_k, bm25_weight, use_history])
     ).start()
     
     jobs[job_id] = {
@@ -1220,7 +1225,7 @@ def update_model(new_model: str):
 
 
 # Update submit_query_updated to better handle context limitation
-def submit_query_updated(query, temperature, top_p, top_k, bm25_weight):
+def submit_query_updated(query, temperature, top_p, top_k, bm25_weight, use_history=True):
     debug_print(f"Processing query: {query}")
     if not query:
         debug_print("Empty query received")
@@ -1252,8 +1257,8 @@ def submit_query_updated(query, temperature, top_p, top_k, bm25_weight):
         reserved_tokens = int(max_context_tokens * 0.2)
         max_context_tokens -= reserved_tokens
         
-        # Collect conversation history (last 2 only to save tokens)
-        if rag_chain.conversation_history:
+        # Collect conversation history (last 2 only to save tokens) if enabled
+        if use_history and rag_chain.conversation_history:
             recent_history = rag_chain.conversation_history[-2:]
             history_text = "\n".join([f"Q: {conv['query']}\nA: {conv['response'][:300]}..." 
                                      for conv in recent_history])
@@ -1283,9 +1288,10 @@ def submit_query_updated(query, temperature, top_p, top_k, bm25_weight):
         debug_print("Invoking RAG chain")
         response = rag_chain.elevated_rag_chain.invoke({"question": query})
         
-        # Store only a reasonable amount of the response in history
-        trimmed_response = response[:1000] + ("..." if len(response) > 1000 else "")
-        rag_chain.conversation_history.append({"query": query, "response": trimmed_response})
+        # Store only a reasonable amount of the response in history if enabled
+        if use_history:
+            trimmed_response = response[:1000] + ("..." if len(response) > 1000 else "")
+            rag_chain.conversation_history.append({"query": query, "response": trimmed_response})
         
         input_token_count = count_tokens(query)
         output_token_count = count_tokens(response)
@@ -1561,6 +1567,10 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                         placeholder="Type your query",
                         lines=4
                     )
+                    use_history_checkbox = gr.Checkbox(
+                        label="Use Conversation History",
+                        value=True
+                    )
                     submit_button = gr.Button("Submit Query (Async)")
             
             with gr.Row():
@@ -1699,6 +1709,10 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                         placeholder="Type your query",
                         lines=4
                     )
+                    batch_use_history_checkbox = gr.Checkbox(
+                        label="Use Conversation History",
+                        value=True
+                    )
                     batch_submit_button = gr.Button("Submit Batch Query (Async)")
             
             with gr.Row():
@@ -1796,10 +1810,27 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         outputs=[load_response, load_context, model_output, job_id_input, job_query_display, job_list, init_info]
     )
 
-    # Update submit_button click to include top_k
+    # Add function to sync job IDs between tabs
+    def sync_job_id(job_id):
+        return job_id, job_id
+
+    # Sync job IDs between tabs
+    job_id_input.change(
+        fn=sync_job_id,
+        inputs=[job_id_input],
+        outputs=[batch_job_id_input, job_id_input]
+    )
+
+    batch_job_id_input.change(
+        fn=sync_job_id,
+        inputs=[batch_job_id_input],
+        outputs=[job_id_input, batch_job_id_input]
+    )
+
+    # Update submit_button click to include top_k and use_history
     submit_button.click(
         submit_query_async, 
-        inputs=[query_input, query_model_dropdown, max_tokens_slider, query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider],
+        inputs=[query_input, query_model_dropdown, max_tokens_slider, query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider, use_history_checkbox],
         outputs=[query_response, query_context, input_tokens, output_tokens, job_id_input, job_query_display, job_list]
     )
 
@@ -1897,7 +1928,8 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             batch_temperature_slider,
             batch_top_p_slider,
             batch_top_k_slider,
-            batch_bm25_weight_slider
+            batch_bm25_weight_slider,
+            batch_use_history_checkbox
         ],
         outputs=[
             batch_query_response,
@@ -1946,6 +1978,98 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         every=2
     )
 
+def create_csv_from_batch_results(results: List[Dict], job_id: str) -> str:
+    """Create a CSV file from batch query results and return the file path"""
+    # Create a temporary directory for CSV files if it doesn't exist
+    csv_dir = os.path.join(tempfile.gettempdir(), "rag_batch_results")
+    os.makedirs(csv_dir, exist_ok=True)
+    
+    # Create a unique filename using job_id and timestamp
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    csv_filename = f"batch_results_{job_id}_{timestamp}.csv"
+    csv_path = os.path.join(csv_dir, csv_filename)
+    
+    # Extract parameters and responses
+    data = []
+    start_time = time.time()
+    for result in results:
+        params = result["Parameters"]
+        response = result["Response"]
+        progress = result["Progress"]
+        
+        # Calculate elapsed time for this query
+        current_time = time.time()
+        elapsed_time = current_time - start_time
+        
+        # Extract individual parameter values
+        temp = float(re.search(r"Temp: ([\d.]+)", params).group(1))
+        top_p = float(re.search(r"Top-p: ([\d.]+)", params).group(1))
+        top_k = int(re.search(r"Top-k: (\d+)", params).group(1))
+        bm25 = float(re.search(r"BM25: ([\d.]+)", params).group(1))
+        
+        # Extract response components
+        model_info = re.search(r"Model: (.*?)\n", response)
+        model = model_info.group(1) if model_info else "Unknown"
+        
+        # Extract main answer (everything between the parameters and the token counts)
+        answer_match = re.search(r"Model Parameters:.*?\n\n(.*?)\n\n---", response, re.DOTALL)
+        main_answer = answer_match.group(1).strip() if answer_match else response
+        
+        # Extract token counts
+        input_tokens = re.search(r"Input tokens: (\d+)", response)
+        output_tokens = re.search(r"Output tokens: (\d+)", response)
+        
+        # Extract conversation history count
+        conv_history = re.search(r"Conversation History: (\d+) conversation", response)
+        
+        data.append({
+            "Temperature": temp,
+            "Top-p": top_p,
+            "Top-k": top_k,
+            "BM25 Weight": bm25,
+            "Model": model,
+            "Main Answer": main_answer,
+            "Input Tokens": input_tokens.group(1) if input_tokens else "N/A",
+            "Output Tokens": output_tokens.group(1) if output_tokens else "N/A",
+            "Conversation History": conv_history.group(1) if conv_history else "0",
+            "Progress": progress,
+            "Elapsed Time (s)": f"{elapsed_time:.2f}"
+        })
+    
+    # Create DataFrame and save to CSV
+    df = pd.DataFrame(data)
+    df.to_csv(csv_path, index=False)
+    
+    return csv_path
+
+def format_batch_result_files(results: List[Dict], job_id: str) -> str:
+    """Format batch results with links to CSV files"""
+    # Create CSV file
+    csv_path = create_csv_from_batch_results(results, job_id)
+    
+    # Get list of all CSV files for this job
+    csv_dir = os.path.join(tempfile.gettempdir(), "rag_batch_results")
+    job_csv_files = glob.glob(os.path.join(csv_dir, f"batch_results_{job_id}_*.csv"))
+    
+    # Format the results with links to all CSV files
+    formatted_results = "### Batch Query Results\n\n"
+    
+    # Add links to all CSV files
+    formatted_results += "#### Download Results\n"
+    for csv_file in sorted(job_csv_files, reverse=True):
+        filename = os.path.basename(csv_file)
+        formatted_results += f"- [Download {filename}](file/{csv_file})\n"
+    formatted_results += "\n"
+    
+    # Add the actual results
+    for result in results:
+        formatted_results += f"#### {result['Parameters']}\n"
+        formatted_results += f"**Progress:** {result['Progress']}\n\n"
+        formatted_results += f"{result['Response']}\n\n"
+        formatted_results += "---\n\n"
+    
+    return formatted_results
+
 if __name__ == "__main__":
     debug_print("Launching Gradio interface.")
-    app.queue().launch(share=False)
+    app.queue().launch(share=False, allowed_paths=[os.path.join(tempfile.gettempdir(), "rag_batch_results")])
