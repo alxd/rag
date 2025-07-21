@@ -1,0 +1,923 @@
+Temperature,Top-p,Top-k,BM25 Weight,Model,Main Answer,Input Tokens,Output Tokens,Conversation History,Progress,Elapsed Time (s)
+0.1,0.95,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ""Nicomachean Ethics,"" along with explanations and specific uses of those terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those for which an individual is morally responsible, while involuntary actions are not.
+   - **Specific Use**: ""Those things, then, are thought involuntary, which take place under compulsion or owing to ignorance; and that is compulsory of which the moving principle is outside, being a principle in which nothing is contributed by the person who is acting or is feeling the passion"" (Book III, 1).
+
+2. **Choice (Prohairesis)**:
+   - **Reason for Selection**: Choice is a fundamental concept in Aristotle's ethics, as it is the basis for voluntary actions and moral responsibility.
+   - **Specific Use**: ""The origin of action—its efficient, not its final cause—is choice, and that of choice is desire and reasoning with a view to an end"" (Nicomachean Ethics/93).
+
+3. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the intellectual virtue that enables individuals to make the right choices and act virtuously, which is essential for moral responsibility.
+   - **Specific Use**: ""Practical wisdom is a right rule about such matters. Socrates, then, thought the virtues were rules or rational principles (for he thought they were, all of them, forms of scientific knowledge), while we think they involve a rational principle"" (Nicomachean Ethics/105).
+
+4. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation is the process by which individuals develop virtues and vices, which in turn affects their moral responsibility.
+   - **Specific Use**: ""From this it is also plain that none of the moral virtues arises in us by nature; for nothing that exists by nature can form a habit contrary to its nature"" (Book II, 1).
+
+5. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the state of character that enables individuals to act in accordance with reason and achieve eudaimonia (happiness), which is the ultimate goal of moral responsibility.
+   - **Specific Use**: ""Virtue, then, being of two kinds, intellectual and moral, intellectual virtue in the main owes both its birth and its growth to teaching (for which reason it requires experience and time), while moral virtue comes about as a result of habit"" (Book II, 1).
+
+6. **Passions (Pathē)**:
+   - **Reason for Selection**: Passions are the emotions and desires that can influence an individual's actions and moral responsibility.
+   - **Specific Use**: ""Since virtue is concerned with passions and actions, and on voluntary passions and actions praise and blame are bestowed, on those that are involuntary pardon, and sometimes also pity, to distinguish the voluntary and the involuntary is presumably necessary for those who are studying the nature of virtue"" (Book III, 1).
+
+7. **Moral Virtues**:
+   - **Reason for Selection**: Moral virtues are the habits that enable individuals to act in accordance with reason and achieve eudaimonia, which is the ultimate goal of moral responsibility.
+   - **Specific Use**: ""The virtues we get by first exercising them, as also happens in the case of the arts as well. For the things we have to learn before we can do them, we learn by doing them, e.g., men become builders by building and lyreplayers by playing the lyre; so too we become just by doing just acts, temperate by doing temperate acts, brave by doing brave acts"" (Nicomachean Ethics/22).
+
+8. **Punishment and Reward**:
+   - **Reason for Selection**: Punishment and reward are the consequences of moral responsibility, which motivate individuals to act virtuously.
+   - **Specific Use**: ""The work of both the intellectual parts, then, is truth. Therefore the states that are most strictly those in respect of which each of these parts will reach truth are the virtues of the two parts"" (Nicomachean Ethics/93).
+
+9. **Moral Luck**:
+   - **Reason for Selection**: Moral luck refers to the idea that individuals can be morally responsible for actions that are beyond their control, which is a complex issue in Aristotle's ethics.
+   - **Specific Use**: ""The question might be asked, what we mean by saying that we must become just by doing just acts, and temperate by doing temperate acts; for if men do just and temperate acts, they are already just and temperate, exactly as, if they do what is in accordance with the laws of grammar and of music, they are grammarians and musicians"" (Nicomachean Ethics/25).
+
+10. **Moral Character (Ethos)**:
+    - **Reason for Selection**: Moral character is the disposition that enables individuals to act virtuously and be morally responsible.
+    - **Specific Use**: ""The excellence of the reason is a thing apart; we must be content to say this much about it, for to describe it precisely is a task greater than our purpose requires"" (page_content='8).
+
+These concepts are central to Aristotle's discussion of moral responsibility in the ""Nicomachean Ethics"" and provide a comprehensive framework for understanding his views on the subject.",,,0,Query 1/5,0.0
+0.33,0.95,50,0.6,🇪🇺 Mistral-API,"Based on the provided text, here are the key concepts describing criteria for moral responsibility in Aristotle's *Nicomachean Ethics*, along with explanations for their selection:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Selection Reason**: Aristotle frequently distinguishes between voluntary and involuntary actions to determine moral responsibility. He states, ""Those things, then, are thought involuntary, which take place under compulsion or owing to ignorance; and that is compulsory of which the moving principle is outside, being a principle in which nothing is contributed by the person who is acting or is feeling the passion"" (Book III, 1).
+   - **Significance**: This distinction is crucial because voluntary actions are subject to praise or blame, while involuntary actions are not.
+
+2. **Choice (Prohairesis)**:
+   - **Selection Reason**: Choice is central to Aristotle's ethics. He defines it as ""desiderative reason"" or ""ratiocinative desire,"" indicating that it involves both rational deliberation and emotional motivation (Book VI, 2).
+   - **Significance**: Choice is the origin of action, and it is through choice that individuals exhibit their character and moral responsibility.
+
+3. **Habituation (Ethos)**:
+   - **Selection Reason**: Aristotle emphasizes the role of habituation in the development of moral character. He states, ""From this it is also plain that none of the moral virtues arises in us by nature; for nothing that exists by nature can form a habit contrary to its nature"" (Book II, 1).
+   - **Significance**: Habituation is the process by which individuals develop virtues or vices, making it a key factor in moral responsibility.
+
+4. **Practical Wisdom (Phronesis)**:
+   - **Selection Reason**: Practical wisdom is the ability to make correct decisions about what is good and bad for oneself and others. Aristotle states, ""Practical wisdom is a right rule about such matters"" (Book VI, 13).
+   - **Significance**: Practical wisdom is essential for making morally responsible choices, as it guides individuals in acting according to virtue.
+
+5. **Virtue (Arete)**:
+   - **Selection Reason**: Virtue is the mean between excess and deficiency in actions and passions. Aristotle explains, ""Virtue, then, being of two kinds, intellectual and moral, intellectual virtue in the main owes both its birth and its growth to teaching... while moral virtue comes about as a result of habit"" (Book I, 13).
+   - **Significance**: Virtue is the goal of moral education and the basis for moral responsibility, as it enables individuals to act in accordance with reason and the right rule.
+
+6. **Moral Virtues (Ethikai Aretai)**:
+   - **Selection Reason**: Moral virtues are habits that enable individuals to act in accordance with reason and the right rule in matters of action and passion. Aristotle lists virtues such as courage, temperance, and justice (Book II, 7).
+   - **Significance**: These virtues are the specific habits that make individuals morally responsible and capable of acting rightly.
+
+7. **Incontinence (Akrasia)**:
+   - **Selection Reason**: Incontinence is the state of acting against one's better judgment due to strong passions. Aristotle discusses it extensively, noting, ""Incontinence and continence are concerned with that which is in excess of the state characteristic of most men"" (Book VII, 11).
+   - **Significance**: Incontinence highlights the struggle between reason and passion, and it is a key concept in understanding moral responsibility and weakness of will.
+
+8. **Justice (Dikaiosyne)**:
+   - **Selection Reason**: Justice is the virtue that ensures fairness and equality in interactions with others. Aristotle defines it as ""a kind of mean, but not in the same way as the other virtues, but because it relates to an intermediate amount"" (Book V, 5).
+   - **Significance**: Justice is crucial for moral responsibility in social and political contexts, as it governs how individuals treat one another.
+
+9. **Injustice (Adikia)**:
+   - **Selection Reason**: Injustice is the vice that involves acting against the principles of justice. Aristotle states, ""Injustice is excess and defect, viz. because it is productive of excess and defect—in one’s own case excess of what is in its own nature useful and defect of what is hurtful"" (Book V, 8).
+   - **Significance**: Understanding injustice is essential for comprehending moral responsibility, as it involves acting contrary to the right rule.
+
+10. **Pleasure and Pain**:
+    - **Selection Reason**: Aristotle discusses the role of pleasure and pain in moral decision-making, noting that virtues are concerned with the right amount of pleasure and pain. He states, ""Virtue, then, being of two kinds, intellectual and moral, intellectual virtue in the main owes both its birth and its growth to teaching... while moral virtue comes about as a result of habit"" (Book II, 2).
+    - **Significance**: Pleasure and pain influence moral choices, and understanding their role is crucial for moral responsibility.
+
+These concepts are fundamental to Aristotle's ethics and provide a comprehensive framework for understanding moral responsibility in his philosophy.",,,0,Query 2/5,0.0
+0.55,0.95,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ""Nicomachean Ethics,"" along with explanations and specific uses of those terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those for which an individual is morally responsible, while involuntary actions are not.
+   - **Specific Uses**:
+     - ""Those things, then, are thought involuntary, which take place under compulsion or owing to ignorance; and that is compulsory of which the moving principle is outside, being a principle in which nothing is contributed by the person who is acting or is feeling the passion"" (Book III, 1).
+     - ""The person struck may be the striker’s father, and the striker may know that it is a man or one of the persons present, but not know that it is his father; a similar distinction may be made in the case of the end, and with regard to the whole action"" (Book III, 1).
+
+2. **Choice (Prohairesis)**:
+   - **Reason for Selection**: Choice is a critical concept in Aristotle's ethics, as it is the origin of action and is linked to moral responsibility. Choice involves both desire and reasoning with a view to an end.
+   - **Specific Uses**:
+     - ""The origin of action—its efficient, not its final cause—is choice, and that of choice is desire and reasoning with a view to an end"" (Book III, 3).
+     - ""Choice cannot exist either without reason and intellect or without a moral state; for good action and its opposite cannot exist without a combination of intellect and character"" (Book III, 3).
+
+3. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is essential for making the right choices and acting virtuously. It is the intellectual virtue that guides moral action.
+   - **Specific Uses**:
+     - ""Practical wisdom is a right rule about such matters"" (Book VI, 13).
+     - ""Practical wisdom is concerned with things that are good and bad for man; it seeks to do what is fine and chooses what is best for itself"" (Book VI, 5).
+
+4. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the disposition to act in accordance with reason and is the basis for moral responsibility. Virtues are habits that enable individuals to act rightly.
+   - **Specific Uses**:
+     - ""Virtue, then, being of two kinds, intellectual and moral, intellectual virtue in the main owes both its birth and its growth to teaching"" (Book II, 1).
+     - ""Virtue is a state of character concerned with choice, lying in a mean relative to us, this being determined by a rational principle, and by that principle by which the man of practical wisdom would determine it"" (Book II, 6).
+
+5. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation is the process by which virtues are acquired. It is through repeated actions that individuals develop the habits that constitute moral character.
+   - **Specific Uses**:
+     - ""From this it is also plain that none of the moral virtues arises in us by nature; for nothing that exists by nature can form a habit contrary to its nature"" (Book II, 1).
+     - ""By abstaining from pleasures we become temperate, and it is when we have become so that we are most able to abstain from them"" (Book II, 3).
+
+6. **Moral Virtues**:
+   - **Reason for Selection**: Moral virtues are specific habits that enable individuals to act rightly in various situations. They are the basis for moral responsibility in different contexts.
+   - **Specific Uses**:
+     - ""The virtues we get by first exercising them, as also happens in the case of the arts as well"" (Book II, 1).
+     - ""The excellence of the reason is a thing apart; we must be content to say this much about it, for to describe it precisely is a task greater than our purpose requires"" (Book I, 13).
+
+7. **Pleasure and Pain**:
+   - **Reason for Selection**: Pleasure and pain are central to Aristotle's ethics, as they influence moral actions and the development of virtues. Moral responsibility involves acting in accordance with the right pleasures and pains.
+   - **Specific Uses**:
+     - ""Virtue is concerned with pleasures and pains; it is on account of the pleasure that we do bad things, and on account of the pain that we abstain from noble ones"" (Book II, 3).
+     - ""The man who abstains from bodily pleasures and delights in this very fact is temperate, while the man who is annoyed at it is self-indulgent"" (Book II, 3).
+
+8. **Justice (Dikaiosune)**:
+   - **Reason for Selection**: Justice is a key moral virtue that involves treating others fairly and equitably. It is central to moral responsibility in social and political contexts.
+   - **Specific Uses**:
+     - ""Justice is a kind of mean, but not in the same way as the other virtues, but because it relates to an intermediate amount, while injustice relates to the extremes"" (Book V, 5).
+     - ""The justice in transactions between man and man is a sort of equality indeed, and the injustice a sort of inequality"" (Book V, 4).
+
+9. **Incontinence (Akrasia)**:
+   - **Reason for Selection**: Incontinence refers to the failure to act in accordance with one's knowledge of what is right. It is a form of moral weakness that affects moral responsibility.
+   - **Specific Uses**:
+     - ""Incontinence is not only to be avoided but is also a thing worthy of blame"" (Book VII, 11).
+     - ""The incontinent man is like the people who get drunk quickly and on little wine, i.e., on less than most people"" (Book VII, 11).
+
+10. **Practical Wisdom and Virtue**:
+    - **Reason for Selection**: Practical wisdom and virtue are interdependent. Practical wisdom guides the development of virtues, and virtues enable the exercise of practical wisdom.
+    - **Specific Uses**:
+      - ""It is clear, then, from what has been said, that it is not possible to be good in the strict sense without practical wisdom, nor practically wise without moral virtue"" (Book VI, 13).
+      - ""The man who is to be good must be well trained and habituated, and go on to spend his time in worthy occupations and neither willingly nor unwillingly do bad actions"" (Book X, 9).
+
+These concepts are fundamental to Aristotle's understanding of moral responsibility and provide a framework for analyzing moral actions and character in his ethics.",,,0,Query 3/5,0.0
+0.78,0.95,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility, along with explanations and specific uses of these terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between actions that are voluntary and those that are involuntary, which is crucial for determining moral responsibility.
+   - **Specific Use**: ""Those things, then, are thought involuntary, which take place under compulsion or owing to ignorance; and that is compulsory of which the moving principle is outside, being a principle in which nothing is contributed by the person who is acting or is feeling the passion"" (page_content='BOOK III\n1\nSince virtue is concerned with passions and actions, and on voluntary\npassions and actions praise and blame are bestowed, on those that are\ninvoluntary pardon, and sometimes also pity, to distinguish the volun-\ntary and the involuntary is presumably necessary for those who are\nstudying the nature of virtue, and useful also for legislators with a view\nto the assigning both of honours and of punishments.').
+
+2. **Choice (Prohairesis)**:
+   - **Reason for Selection**: Choice is a fundamental concept in Aristotle's ethics, as it is the origin of action and is linked to moral responsibility.
+   - **Specific Use**: ""The origin of action—its efficient, not its final cause—is choice, and that of choice is desire and reasoning with a view to an end"" (page_content='The origin of action—its efficient, not its final cause—is choice,\nand that of choice is desire and reasoning with a view to an end. This is\nwhy choice cannot exist either without reason and intellect or without a\nmoral state; for good action and its opposite cannot exist without a\ncombination of intellect and character. Intellect itself, however, moves\nnothing, but only the intellect which aims at an end and is practical; for\nthis rules the productive intellect, as well, since every one who makes\nmakes for an end, and that which is made is not an end in the unqualified\nsense (but only an end in a particular relation, and the end of a particu-\nlar operation)—only that which is done is that; for good action is an\nend, and desire aims at this. Hence choice is either desiderative reason\nor ratiocinative desire, and such an origin of action is a man. (It is to\nbe\n\x0cNicomachean Ethics/93\n\nnoted that nothing that is past is an object of choice, e.g., no one chooses\n\nto have sacked Troy; for no one deliberates about the past, but about\nwhat is future and capable of being otherwise, while what is past is not\ncapable of not having taken place; hence Agathon is right in saying\n\nFor this alone is lacking even to God, To make undone things thathave\n\nonce been done.)').
+
+3. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is essential for making the right choices and acting virtuously, which is a key aspect of moral responsibility.
+   - **Specific Use**: ""Practical wisdom is a right rule about such matters. Socrates, then, thought the virtues were rules or rational principles (for he thought they were, all of them, forms of scientific knowledge), while we think they involve a rational principle"" (page_content='The right rule, that is virtue; and practical wisdom is a right rule about\nsuch matters. Socrates, then, thought the virtues were rules or rational\nprinciples (for he thought they were, all of them, forms of scientific\nknowledge), while we think they involve a rational principle.\n\nIt is clear, then, from what has been said, that it is not possible to be\ngood in the strict sense without practical wisdom, nor practically wise\nwithout moral virtue. But in this way we may also refute the dialectical\nargument whereby it might be contended that the virtues exist in separa-\ntion from each other; the same man, it might be said, is not best equipped\nby nature for all the virtues, so that he will have already acquired one\nwhen he has not yet acquired another. This is possible in respect of the\nnatural virtues, but not in respect of those in respect of which a man is\ncalled without qualification good; for with the presence of the one qual-\nity, practical wisdom, will be given all the virtues. And it is plain that,\neven if it were of no practical value, we should have needed it because it\nis the virtue of the part of us in question; plain too that the choice will\nnot be right without practical wisdom any more than without virtue; for\nthe one deter, mines the end and the other makes us do the things that\nlead to the end.').
+
+4. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation is the process by which individuals develop virtues, which is crucial for understanding how moral responsibility is cultivated.
+   - **Specific Use**: ""From this it is also plain that none of the moral virtues arises in us by nature; for nothing that exists by nature can form a habit contrary to its nature"" (page_content='Virtue, then, being of two kinds, intellectual and moral, intellectual vir-\ntue in the main owes both its birth and its growth to teaching (for which\nreason it requires experience and time), while moral virtue comes about\nas a result of habit, whence also its name (ethike) is one that is formed\nby a slight variation from the word ethos (habit). From this it is also\nplain that none of the moral virtues arises in us by nature; for nothing\nthat exists by nature can form a habit contrary to its nature. For in-\nstance the stone which by nature moves downwards cannot be habitu-\nated to move upwards, not even if one tries to train it by throwing it up\n\n\x0cNicomachean Ethics/21\n\nten thousand times; nor can fire be habituated to move downwards, nor\ncan anything else that by nature behaves in one way be trained to be-\nhave in another. Neither by nature, then, nor contrary to nature do the\nvirtues arise in us; rather we are adapted by nature to receive them, and\nare made perfect by habit.').
+
+5. **Moral Virtue (Arete)**:
+   - **Reason for Selection**: Moral virtue is the disposition to act in accordance with reason, which is essential for moral responsibility.
+   - **Specific Use**: ""Virtue, then, being of two kinds, intellectual and moral, intellectual vir-\ntue in the main owes both its birth and its growth to teaching (for which\nreason it requires experience and time), while moral virtue comes about\nas a result of habit, whence also its name (ethike) is one that is formed\nby a slight variation from the word ethos (habit)"" (page_content='Virtue, then, being of two kinds, intellectual and moral, intellectual vir-\ntue in the main owes both its birth and its growth to teaching (for which\nreason it requires experience and time), while moral virtue comes about\nas a result of habit, whence also its name (ethike) is one that is formed\nby a slight variation from the word ethos (habit). From this it is also\nplain that none of the moral virtues arises in us by nature; for nothing\nthat exists by nature can form a habit contrary to its nature. For in-\nstance the stone which by nature moves downwards cannot be habitu-\nated to move upwards, not even if one tries to train it by throwing it up\n\n\x0cNicomachean Ethics/21\n\nten thousand times; nor can fire be habituated to move downwards, nor\ncan anything else that by nature behaves in one way be trained to be-\nhave in another. Neither by nature, then, nor contrary to nature do the\nvirtues arise in us; rather we are adapted by nature to receive them, and\nare made perfect by habit.').
+
+6. **Pleasure and Pain**:
+   - **Reason for Selection**: Aristotle emphasizes the role of pleasure and pain in moral decision-making, which affects moral responsibility.
+   - **Specific Use**: ""That virtue, then, is concerned with pleasures and pains, and that by the acts from which it arises it is both increased and, if they are done differently, destroyed, and that the acts from which it arose are those in which it actualizes itself—let this be taken as said"" (page_content='That virtue, then, is concerned with pleasures and pains, and that\nby the acts from which it arises it is both increased and, if they are done\ndifferently, destroyed, and that the acts from which it arose are those in\nwhich it actualizes itself—let this be taken as said.\n\n4\nThe question might be asked,; what we mean by saying that we must\nbecome just by doing just acts, and temperate by doing temperate acts;\nfor if men do just and temperate acts, they are already just and temper-\nate, exactly as, if they do what is in accordance with the laws of gram-\nmar and of music, they are grammarians and musicians.\n\nOr is this not true even of the arts? It is possible to do something\nthat is in accordance with the laws of grammar, either by chance or at\nthe suggestion of another. A man will be a grammarian, then, only when\nhe has both done something grammatical and done it grammatically;\nand this means doing it in accordance with the grammatical knowledge\nin himself.\n\nAgain, the case of the arts and that of the virtues are not similar; for\nthe products of the arts have their goodness in themselves, so that it is\n\n\x0cNicomachean Ethics/25').
+
+7. **Justice (Dikaiosyne)**:
+   - **Reason for Selection**: Justice is a central virtue that involves treating others fairly, which is a key aspect of moral responsibility.
+   - **Specific Use**: ""Justice is a kind of mean, but not in the same way as the other virtues, but because it relates to an intermediate amount, while injustice relates to the extremes"" (page_content='That virtue, then, is concerned with pleasures and pains, and that\nby the acts from which it arises it is both increased and, if they are done\ndifferently, destroyed, and that the acts from which it arose are those in\nwhich it actualizes itself—let this be taken as said.\n\n4\nThe question might be asked,; what we mean by saying that we must\nbecome just by doing just acts, and temperate by doing temperate acts;\nfor if men do just and temperate acts, they are already just and temper-\nate, exactly as, if they do what is in accordance with the laws of gram-\nmar and of music, they are grammarians and musicians.\n\nOr is this not true even of the arts? It is possible to do something\nthat is in accordance with the laws of grammar, either by chance or at\nthe suggestion of another. A man will be a grammarian, then, only when\nhe has both done something grammatical and done it grammatically;\nand this means doing it in accordance with the grammatical knowledge\nin himself.\n\nAgain, the case of the arts and that of the virtues are not similar; for\nthe products of the arts have their goodness in themselves, so that it is\n\n\x0cNicomachean Ethics/25').
+
+8. **Incontinence (Akrasia)**:
+   - **Reason for Selection**: Incontinence refers to the failure to act according to one's knowledge of what is right, which is relevant to understanding lapses in moral responsibility.
+   - **Specific Use**: ""The self-indulgent man, as was said, is not apt to repent; for he stands by his choice; but incontinent man is likely to repent. This is why the position is not as it was expressed in the formulation of the problem, but the self-indulgent man is incurable and the incontinent man curable; for wickedness is like a disease such as dropsy or consumption, while incontinence is like epilepsy"" (page_content='The self-indulgent man, as was said, is not apt to repent; for he stands\nby his choice; but incontinent man is likely to repent. This is why the\nposition is not as it was expressed in the formulation of the problem, but\nthe self-indulgent man is incurable and the incontinent man curable; for\nwickedness is like a disease such as dropsy or consumption, while in-\ncontinence is like epilepsy; the former is a permanent, the latter an inter-\nmittent badness. And generally incontinence and vice are different in\nkind; vice is unconscious of itself, incontinence is not (of incontinent\nmen themselves, those who become temporarily beside themselves are\nbetter than those who have the rational principle but do not abide by it,\nsince the latter are defeated by a weaker passion, and do not act without\nprevious deliberation like the others); for the incontinent man is like the\npeople who get drunk quickly and on little wine, i.e., on less than most\npeople.').
+
+9. **Virtue of Character (Ethike Arete)**:
+   - **Reason for Selection**: Virtue of character is the disposition to act in accordance with reason, which is essential for moral responsibility.
+   - **Specific Use**: ""Virtue, then, being of two kinds, intellectual and moral, intellectual vir-\ntue in the main owes both its birth and its growth to teaching (for which\nreason it requires experience and time), while moral virtue comes about\nas a result of habit, whence also its name (ethike) is one that is formed\nby a slight variation from the word ethos (habit)"" (page_content='V",,,0,Query 4/5,0.0
+1.0,0.95,50,0.6,🇪🇺 Mistral-API,"Based on the provided text, here are the key concepts describing criteria for moral responsibility in Aristotle's ""Nicomachean Ethics,"" along with explanations and specific uses of these terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those for which an individual is morally responsible, while involuntary actions are not.
+   - **Specific Uses**:
+     - ""Those things, then, are thought involuntary, which take place under compulsion or owing to ignorance; and that is compulsory of which the moving principle is outside, being a principle in which nothing is contributed by the person who is acting or is feeling the passion"" (Book III, 1).
+     - ""But in the case of unjust and just acts alike the injustice or justice may be only incidental; for a man might return a deposit unwill-"" (Book III, 1).
+
+2. **Choice (Prohairesis)**:
+   - **Reason for Selection**: Choice is a critical concept in Aristotle's ethics, as it involves deliberate decision-making and is essential for moral responsibility.
+   - **Specific Uses**:
+     - ""The origin of action—its efficient, not its final cause—is choice, and that of choice is desire and reasoning with a view to an end"" (Book III, 3).
+     - ""For good action and its opposite cannot exist without a combination of intellect and character"" (Book VI, 2).
+
+3. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to make good judgments about what is right and wrong, which is crucial for moral responsibility.
+   - **Specific Uses**:
+     - ""Practical wisdom is a right rule about such matters. Socrates, then, thought the virtues were rules or rational principles"" (Book VI, 13).
+     - ""It is clear, then, from what has been said, that it is not possible to be good in the strict sense without practical wisdom, nor practically wise without moral virtue"" (Book VI, 13).
+
+4. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the disposition to act in accordance with reason and is essential for moral responsibility.
+   - **Specific Uses**:
+     - ""Virtue, then, being of two kinds, intellectual and moral, intellectual virtue in the main owes both its birth and its growth to teaching"" (Book II, 1).
+     - ""Virtue is a state of character concerned with choice, lying in a mean, i.e., the mean relative to us, this being determined by a rational principle, and by that principle by which the man of practical wisdom would determine it"" (Book II, 6).
+
+5. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation refers to the process of developing virtues through repeated actions, which is foundational for moral responsibility.
+   - **Specific Uses**:
+     - ""From this it is also plain that none of the moral virtues arises in us by nature; for nothing that exists by nature can form a habit contrary to its nature"" (Book II, 1).
+     - ""We must take as a sign of states of character the pleasure or pain that ensues on acts; for the man who abstains from bodily pleasures and delights in this very fact is temperate"" (Book III, 3).
+
+6. **Moral Virtues (Ethikai Aretai)**:
+   - **Reason for Selection**: Moral virtues are specific dispositions that enable individuals to act in accordance with reason and are essential for moral responsibility.
+   - **Specific Uses**:
+     - ""The virtues we get by first exercising them, as also happens in the case of the arts as well. For the things we have to learn before we can do them, we learn by doing them"" (Book II, 1).
+     - ""The excellence of the reason is a thing apart; we must be content to say this much about it, for to describe it precisely is a task greater than our purpose requires"" (Book VI, 13).
+
+7. **Passions (Pathē)**:
+   - **Reason for Selection**: Passions are emotional states that can influence moral responsibility, and Aristotle discusses how they should be managed through virtues.
+   - **Specific Uses**:
+     - ""That moral virtue is a mean, then, and in what sense it is so, and that it is a mean between two vices, the one involving excess, the other deficiency, and that it is such because its character is to aim at what is intermediate in passions and in actions, has been sufficiently stated"" (Book II, 6).
+     - ""For the man who abstains from bodily pleasures and delights in this very fact is temperate, while the man who is annoyed at it is self-indulgent"" (Book III, 3).
+
+8. **Justice (Dikaiosyne)**:
+   - **Reason for Selection**: Justice is a key virtue that involves treating others fairly and is central to moral responsibility.
+   - **Specific Uses**:
+     - ""Justice is a kind of mean, but not in the same way as the other virtues, but because it relates to an intermediate amount, while injustice relates to the extremes"" (Book V, 5).
+     - ""The justice in transactions between man and man is a sort of equality indeed, and the injustice a sort of inequality"" (Book V, 4).
+
+9. **Injustice (Adikia)**:
+   - **Reason for Selection**: Injustice is the failure to treat others fairly and is the opposite of justice, making it crucial for understanding moral responsibility.
+   - **Specific Uses**:
+     - ""The injustice in transactions between man and man is a sort of inequality"" (Book V, 4).
+     - ""Injustice is excess and defect, viz. because it is productive of excess and defect-in one’s own case excess of what is in its own nature useful and defect of what is hurtful"" (Book V, 5).
+
+10. **Pleasure and Pain**:
+    - **Reason for Selection**: Pleasure and pain are central to Aristotle's ethics, as they influence actions and are managed through virtues.
+    - **Specific Uses**:
+      - ""For the man who abstains from bodily pleasures and delights in this very fact is temperate, while the man who is annoyed at it is self-indulgent"" (Book III, 3).
+      - ""But most people do not do these, but take refuge in theory and think they are being philosophers and will become good in this way"" (Book X, 9).
+
+These concepts are fundamental to Aristotle's discussion of moral responsibility and are repeatedly emphasized throughout the ""Nicomachean Ethics.""",,,0,Query 5/5,0.0
+0.5,0.1,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Aristotle emphasizes that moral responsibility is closely tied to moral choice, which is a deliberate decision made by an individual. Moral choice is voluntary and involves the agent's rational deliberation.
+   - **Specific Use**: ""Now Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character.""
+
+2. **Voluntary Actions**:
+   - **Reason for Selection**: Voluntary actions are those that are done with knowledge and intention, and thus are subject to moral evaluation. Involuntary actions, done under compulsion or ignorance, are not considered morally responsible.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance.""
+
+3. **Intellect (Nous)**:
+   - **Reason for Selection**: The intellect plays a crucial role in moral responsibility by providing the principles and reasoning that guide moral choice. It is the faculty that apprehends moral truths.
+   - **Specific Use**: ""Of the good man it is true likewise that he does many things for the sake of his friends and his country, even to the extent of dying for them, if need be: for money and honours, and, in short, all the good things which others fight for, he will throw away while eager to secure to himself the καλὸν: he will prefer a brief and great joy to a tame and enduring one, and to live nobly for one year rather than ordinarily for many, and one great and noble action to many trifling ones.""
+
+4. **Habit (Ethos)**:
+   - **Reason for Selection**: Habits are formed through repeated actions and are essential for the development of moral character. They shape an individual's dispositions and tendencies, making them more or less inclined to act virtuously.
+   - **Specific Use**: ""Again, in whatever cases we get things by nature, we get the faculties first and perform the acts of working afterwards; an illustration of which is afforded by the case of our bodily senses, for it was not from having often seen or heard that we got these senses, but just the reverse: we had them and so exercised them, but did not have them because we had exercised them.""
+
+5. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtues are habits that dispose individuals to act in accordance with reason and moral principles. They are essential for moral responsibility because they enable individuals to make the right moral choices.
+   - **Specific Use**: ""Virtue then is ‘a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.’""
+
+6. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the intellectual virtue that enables individuals to make the right moral choices in particular situations. It involves the ability to apply general moral principles to specific cases.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature.""
+
+7. **Self-Control (Enkrateia)**:
+   - **Reason for Selection**: Self-control is the virtue that enables individuals to resist temptations and act in accordance with their moral principles, even when faced with strong desires or emotions.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness): the kind of man, I mean, to let his robe drag in the dirt to avoid the trouble of lifting it.""
+
+8. **Incontinence (Akrasia)**:
+   - **Reason for Selection**: Incontinence refers to the lack of self-control, where individuals know what is right but fail to act on it due to strong desires or emotions. It is a form of moral weakness that affects moral responsibility.
+   - **Specific Use**: ""But the man of Imperfect Self-Control is almost made up of remorse: and so the case is not as we determined it before, but the former is incurable and the latter may be cured: for depravity is like chronic diseases, dropsy and consumption for instance, but Imperfect Self-Control is like acute disorders: the former being a continuous evil, the latter not so.""
+
+9. **Ignorance (Agnoia)**:
+   - **Reason for Selection**: Ignorance can affect moral responsibility by excusing individuals from blame when they act without knowledge of the moral principles involved. However, ignorance of moral principles themselves is not a valid excuse.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness: nor does any ignorance of principle (because for this men are blamed) but ignorance in particular details, wherein consists the action and wherewith it is concerned, for in these there is both compassion and allowance, because he who acts in ignorance of any of them acts in a proper sense involuntarily.""
+
+10. **Passion (Pathos)**:
+    - **Reason for Selection**: Passions are strong emotions that can influence moral choice and action. They can either enhance or hinder moral responsibility, depending on how they are managed.
+    - **Specific Use**: ""Furthermore, to the character of Imperfect Self-Control is opposed that of Self-Control, and to that of Softness that of Endurance: because Endurance consists in continued resistance but Self-Control in actual mastery, and continued resistance and actual mastery are as different as not being conquered is from conquering; and so Self-Control is more choice-worthy than Endurance.""
+
+These concepts are central to Aristotle's understanding of moral responsibility, as they outline the conditions under which individuals can be held accountable for their actions.",,,0,Query 1/5,0.0
+0.5,0.32,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Aristotle frequently discusses moral choice as a crucial element in determining moral responsibility. It is the deliberate decision made by an individual, which is voluntary and reflects their character.
+   - **Specific Use**: ""Now Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character.""
+
+2. **Voluntary Actions**:
+   - **Reason for Selection**: Voluntary actions are those that an individual performs with full knowledge and intention, making them morally responsible for the outcomes.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing.""
+
+3. **Intellect (Nous)**:
+   - **Reason for Selection**: The intellect is responsible for understanding and applying moral principles, which is essential for making morally responsible choices.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action.""
+
+4. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation refers to the process of forming moral habits through repeated actions, which shapes an individual's character and moral responsibility.
+   - **Specific Use**: ""Again, in whatever cases we get things by nature, we get the faculties first and perform the acts of working afterwards; an illustration of which is afforded by the case of our bodily senses, for it was not from having often seen or heard that we got these senses, but just the reverse: we had them and so exercised them, but did not have them because we had exercised them.""
+
+5. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to apply moral principles to specific situations, making it a key criterion for moral responsibility.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature.""
+
+6. **Self-Control (Enkrateia)**:
+   - **Reason for Selection**: Self-control is the ability to regulate one's actions according to moral principles, even in the face of temptations, which is crucial for moral responsibility.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness): the kind of man, I mean, to let his robe drag in the dirt to avoid the trouble of lifting it.""
+
+7. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the habitual disposition to act in accordance with moral principles, making it a fundamental criterion for moral responsibility.
+   - **Specific Use**: ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.'""
+
+8. **Involuntary Actions**:
+   - **Reason for Selection**: Involuntary actions are those performed under compulsion or ignorance, which exempt the individual from moral responsibility.
+   - **Specific Use**: ""But when actions are done, either from fear of greater evils, or from ignorance of the circumstances, they are involuntary.""
+
+9. **Moral Virtues and Vices**:
+   - **Reason for Selection**: The presence of moral virtues or vices in an individual's character determines their moral responsibility for actions.
+   - **Specific Use**: ""The Doctrine of the Mean here takes a form in which it has impressed subsequent thinkers, but which has less importance than is usually ascribed to it.""
+
+10. **Moral Sense (Aisthesis)**:
+    - **Reason for Selection**: The moral sense is the faculty that perceives moral principles and guides moral actions, making it essential for moral responsibility.
+    - **Specific Use**: ""Again, in right of the Feelings we are neither praised nor blamed, (for a man is not commended for being afraid or being angry, nor blamed for being angry merely but for being so in a particular way), but in right of the virtues and vices we are.""
+
+These concepts are central to Aristotle's discussion of moral responsibility, as they outline the criteria by which individuals are held accountable for their actions.",,,0,Query 2/5,0.0
+0.5,0.55,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Voluntary Actions (ἑκούσια πράξεις)**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those that are done with knowledge and intention, and thus, the agent is morally responsible for them.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing; as if a wind were to convey you anywhere, or men having power over your person."" (Book III, Chapter I)
+
+2. **Moral Choice (προαίρεσις)**:
+   - **Reason for Selection**: Moral choice is a deliberate decision made by an agent, which is a crucial criterion for moral responsibility. It involves both intellect and desire.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice; and next, sudden actions we call voluntary but do not ascribe them to Moral Choice."" (Book III, Chapter I)
+
+3. **Intent (βούλησις)**:
+   - **Reason for Selection**: Intent refers to the purpose or goal behind an action. It is essential for determining moral responsibility because it shows the agent's will and deliberation.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i. e. exercised in Moral Action: (I say nothing of its being exercised in production, because this function is originated by the former: for every one who makes makes with a view to somewhat further; and that which is or may be made, is not an End in itself, but only relatively to somewhat else, and belonging to some one: whereas that which is or may be done is an End in itself, because acting well is an End in itself, and this is the object of the Will,)"" (Book VI, Chapter II)
+
+4. **Knowledge (ἐπιστήμη)**:
+   - **Reason for Selection**: Knowledge is crucial for moral responsibility because it enables the agent to understand the moral implications of their actions and make informed decisions.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness: nor does any ignorance of principle (because for this men are blamed) but ignorance in particular details, wherein consists the action and wherewith it is concerned, for in these there is both compassion and allowance, because he who acts in ignorance of any of them acts in a proper sense involuntarily."" (Book III, Chapter I)
+
+5. **Habituation (ἔθος)**:
+   - **Reason for Selection**: Habituation refers to the process of forming moral habits through repeated actions. It is essential for moral responsibility because it shapes the agent's character and dispositions.
+   - **Specific Use**: ""Again, in whatever cases we get things by nature, we get the faculties first and perform the acts of working afterwards; an illustration of which is afforded by the case of our bodily senses, for it was not from having often seen or heard that we got these senses, but just the reverse: we had them and so exercised them, but did not have them because we had exercised them. But the Virtues we get by first performing single acts of working, which, again, is the case of other things, as the arts for instance; for what we have to make when we have learned how, these we learn how to make by making: men come to be builders, for instance, by building; harp-players, by playing on the harp: exactly so, by doing just actions we come to be just; by doing the actions of self-mastery we come to be perfected in self-mastery; and by doing brave actions brave."" (Book II, Chapter I)
+
+6. **Deliberation (βουλεύσις)**:
+   - **Reason for Selection**: Deliberation is the process of reasoning and considering different courses of action. It is a key criterion for moral responsibility because it shows the agent's rational engagement with their choices.
+   - **Specific Use**: ""But nothing which is done and past can be the object of Moral Choice; for instance, no man chooses to have sacked Troy; because, in fact, no one ever deliberates about what is past, but only about that which is future, and which may therefore be influenced, whereas what has been cannot not have been: and so Agathon is right in saying 'Of this alone is Deity bereft, To make undone whatever hath been done.'"" (Book III, Chapter III)
+
+7. **Character (ἦθος)**:
+   - **Reason for Selection**: Character refers to the stable dispositions and virtues of an agent, which are formed through habituation and moral choices. It is a fundamental criterion for moral responsibility because it reflects the agent's moral identity.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i. e. exercised in Moral Action: (I say nothing of its being exercised in production, because this function is originated by the former: for every one who makes makes with a view to somewhat further; and that which is or may be made, is not an End in itself, but only relatively to somewhat else, and belonging to some one: whereas that which is or may be done is an End in itself, because acting well is an End in itself, and this is the object of the Will,) and so Moral Choice is either Intellect put in a position of Will-ing, or Appetition subjected to an Intellectual Process. And such a Cause is Man."" (Book VI, Chapter II)
+
+8. **Practical Wisdom (φρόνησις)**:
+   - **Reason for Selection**: Practical wisdom is the ability to make good judgments about what is right and good in particular situations. It is essential for moral responsibility because it guides the agent's actions and choices.
+   - **Specific Use**: ""Now as there are two parts of the Soul which have Reason, it must be the Excellence of the Opinionative [which we called before calculative or deliberative], because both Opinion and Practical Wisdom are concerned with particulars, and both are about what is good and bad for man."" (Book VI, Chapter V)
+
+9. **Virtue (ἀρετή)**:
+   - **Reason for Selection**: Virtue is a habitual disposition to act in accordance with reason and moral principles. It is a crucial criterion for moral responsibility because it reflects the agent's moral excellence and commitment to the good.
+   - **Specific Use**: ""Virtue then is “a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.” It is a middle state between too faulty ones, in the way of excess on one side and of defect on the other: and it is so moreover, because the faulty states on one side fall short of, and those on the other exceed, what is right, both in the case of the feelings and the actions; but Virtue finds, and when found adopts, the mean."" (Book II, Chapter VI)
+
+10. **Involuntary Actions (ἀκούσια πράξεις)**:
+    - **Reason for Selection**: Involuntary actions are those done under compulsion or due to ignorance. They are not considered morally responsible because the agent lacks knowledge or intention.
+    - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing; as if a wind were to convey you anywhere, or men having power over your person."" (Book III, Chapter I)
+
+These concepts are central to Aristotle's discussion of moral responsibility and are used to analyze and evaluate the moral character and actions of agents.",,,0,Query 3/5,0.0
+0.5,0.77,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (προαίρεσις - prohairesis)**:
+   - **Reason for Selection**: Moral choice is central to Aristotle's ethics as it represents the deliberate decision-making process that leads to actions. It is the key criterion for moral responsibility because it involves the agent's rational deliberation and intention.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice.""
+
+2. **Voluntary (ἑκούσιον - hekousion)**:
+   - **Reason for Selection**: Voluntary actions are those that are performed with knowledge and intention, making the agent responsible for their outcomes.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing.""
+
+3. **Involuntary (ἀκούσιον - akousion)**:
+   - **Reason for Selection**: Involuntary actions are those performed under compulsion or ignorance, which can mitigate or exclude moral responsibility.
+   - **Specific Use**: ""But when actions are done, either from fear of greater evils, or from ignorance of particular facts, wherewith it is concerned, for in these there is both compassion and allowance, because he who acts in ignorance of any of them acts in a proper sense involuntarily.""
+
+4. **Ignorance (ἀγνοία - agnoia)**:
+   - **Reason for Selection**: Ignorance can affect moral responsibility, especially when it pertains to the particulars of an action rather than general principles.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness.""
+
+5. **Deliberation (βούλησις - boulesis)**:
+   - **Reason for Selection**: Deliberation is the process of reasoning about the means to achieve an end, which is crucial for moral choice and responsibility.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i. e. exercised in Moral Action: (I say nothing of its being exercised in production, because this function is originated by the former: for every one who makes makes with a view to somewhat further; and that which is or may be made, is not an End in itself, but only relatively to somewhat else, and belonging to some one.""
+
+6. **Intention (βούλησις - boulesis)**:
+   - **Reason for Selection**: Intention refers to the agent's purpose or aim in performing an action, which is essential for determining moral responsibility.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i. e. exercised in Moral Action: (I say nothing of its being exercised in production, because this function is originated by the former: for every one who makes makes with a view to somewhat further; and that which is or may be made, is not an End in itself, but only relatively to somewhat else, and belonging to some one.""
+
+7. **Knowledge (ἐπιστήμη - episteme)**:
+   - **Reason for Selection**: Knowledge of the moral principles and the particulars of an action is necessary for moral responsibility.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness.""
+
+8. **Habituation (ἔθος - ethos)**:
+   - **Reason for Selection**: Habituation refers to the process of forming moral habits through repeated actions, which shapes the agent's character and moral responsibility.
+   - **Specific Use**: ""And so too then is it with the Virtues: for by acting in the various relations in which we are thrown with our fellow men, we come to be, some just, some unjust: and by acting in dangerous positions and being habituated to feel fear or confidence, we come to be, some brave, others cowards.""
+
+9. **Character (ἦθος - ethos)**:
+   - **Reason for Selection**: Character is the result of habituation and moral choice, determining the agent's disposition to act in certain ways.
+   - **Specific Use**: ""The _Ethics_ is addressed to students who are presumed both to have enough general education to appreciate these points, and also to have a solid foundation of good habits.""
+
+10. **Practical Wisdom (φρόνησις - phronesis)**:
+    - **Reason for Selection**: Practical wisdom is the intellectual virtue that enables the agent to make correct moral choices by applying general moral principles to specific situations.
+    - **Specific Use**: ""Now as there are two parts of the Soul which have Reason, it must be the Excellence of the Opinionative [which we called before calculative or deliberative], because both Opinion and Practical Wisdom are.""
+
+These concepts are fundamental to Aristotle's theory of moral responsibility, as they outline the conditions under which an agent can be held responsible for their actions.",,,0,Query 4/5,0.0
+0.5,0.99,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Aristotle frequently uses the term ""moral choice"" to describe the deliberate selection of actions based on reason and character. It is central to his discussion of moral responsibility.
+   - **Specific Use**: ""Now Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character."" (Book III, Chapter 3)
+
+2. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those done with knowledge and intention, while involuntary actions are coerced or done in ignorance.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance."" (Book III, Chapter 1)
+
+3. **Intellect (Nous)**:
+   - **Reason for Selection**: The intellect is crucial for moral responsibility as it guides moral choice and action. It is the faculty that apprehends moral principles and directs the will.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action."" (Book VI, Chapter 2)
+
+4. **Habit (Ethos)**:
+   - **Reason for Selection**: Habits are formed through repeated actions and are essential for the development of moral character. They influence how individuals act and make moral choices.
+   - **Specific Use**: ""By doing just actions we come to be just; by doing the actions of self-mastery we come to be perfected in self-mastery; and by doing brave actions brave."" (Book II, Chapter 1)
+
+5. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtues are habits that dispose individuals to act in accordance with reason and moral principles. They are essential for moral responsibility and character.
+   - **Specific Use**: ""Virtue then is ‘a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.’"" (Book II, Chapter 6)
+
+6. **Self-Control (Enkrateia)**:
+   - **Reason for Selection**: Self-control is the ability to regulate one's actions and desires in accordance with reason. It is a key aspect of moral responsibility and character.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious."" (Book VII, Chapter 8)
+
+7. **Ignorance (Agnoia)**:
+   - **Reason for Selection**: Ignorance can mitigate moral responsibility, especially if it pertains to the specifics of an action rather than the general moral principles.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness."" (Book III, Chapter 5)
+
+8. **Passion (Pathos)**:
+   - **Reason for Selection**: Passions, such as anger or desire, can influence actions and moral choices. Understanding their role is crucial for assessing moral responsibility.
+   - **Specific Use**: ""Again, there is a character liable to be taken off his feet in defiance of Right Reason because of passion; whom passion so far masters as to prevent his acting in accordance with Right Reason."" (Book VII, Chapter 8)
+
+9. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to apply moral principles to specific situations. It is essential for making morally responsible choices.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature."" (Book VI, Chapter 9)
+
+10. **Moral Principle (Logos)**:
+    - **Reason for Selection**: Moral principles guide actions and choices. Understanding and adhering to these principles is fundamental to moral responsibility.
+    - **Specific Use**: ""But the rules prescribe no mechanical uniformity: each within its limits permits variety, and the exactly right amount adopted to the requirements of the individual situation (and every actual situation is individual) must be determined by the intuition of the moment."" (Book II, Chapter 2)
+
+These concepts are central to Aristotle's discussion of moral responsibility and are repeatedly used to explain how individuals make moral choices and are held accountable for their actions.",,,0,Query 5/5,0.0
+0.5,0.95,1,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those for which the agent is responsible, while involuntary actions are not.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing; as if a wind were to convey you anywhere, or men having power over your person."" (Book III, Chapter I)
+
+2. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Moral choice is central to Aristotle's ethics because it represents the deliberate selection of actions based on reason and character.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice; and next, sudden actions we call voluntary but do not ascribe them to Moral Choice."" (Book III, Chapter I)
+
+3. **Self-Control (Enkrateia) and Lack of Self-Control (Akrasia)**:
+   - **Reason for Selection**: These concepts are crucial for understanding how moral responsibility is affected by the ability to control one's actions and desires.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness): the kind of man, I mean, to let his robe drag in the dirt to avoid the trouble of lifting it."" (Book VII, Chapter VIII)
+
+4. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the disposition to act in accordance with reason and is essential for moral responsibility.
+   - **Specific Use**: ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.' It is a middle state between too faulty ones, in the way of excess on one side and of defect on the other: and it is so moreover, because the faulty states on one side fall short of, and those on the other exceed, what is right, both in the case of the feelings and the actions; but Virtue finds, and when found adopts, the mean."" (Book II, Chapter VI)
+
+5. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to make good decisions and is necessary for moral responsibility.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature."" (Book VI, Chapter IX)
+
+6. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation is the process by which virtues are formed, making it a key concept for understanding the development of moral responsibility.
+   - **Specific Use**: ""By the way, a person might also enquire, why a boy may be made a mathematician but not Scientific or a natural philosopher. Is not this the reason? that mathematics are taken in by the process of abstraction, but the principles of Science and natural philosophy must be gained by experiment; and the latter young men talk of but do not realise, while the nature of the former is plain and clear."" (Book VI, Chapter IX)
+
+7. **Ignorance (Agnoia)**:
+   - **Reason for Selection**: Ignorance can affect moral responsibility by excusing actions done out of lack of knowledge.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness: nor does any ignorance of principle (because for this men are blamed) but ignorance in particular details, wherein consists the action and wherewith it is concerned, for in these there is both compassion and allowance, because he who acts in ignorance of any of them acts in a proper sense involuntarily."" (Book III, Chapter I)
+
+8. **Passion (Pathos)**:
+   - **Reason for Selection**: Passions can influence moral responsibility by affecting the ability to act according to reason.
+   - **Specific Use**: ""Again, there is a character liable to be taken off his feet in defiance of Right Reason because of passion; whom passion so far masters as to prevent his acting in accordance with Right Reason, but not so far as to make him be convinced that it is his proper line to follow after such pleasures without limit: this character is the man of Imperfect Self-Control, better than he who is utterly destitute of it, and not a bad man simply and without qualification: because in him the highest and best part, i.e. principle, is preserved."" (Book VII, Chapter VIII)
+
+9. **Deliberation (Boulēsis)**:
+   - **Reason for Selection**: Deliberation is the process of reasoning about the means to achieve a goal, which is essential for moral responsibility.
+   - **Specific Use**: ""So it seems, as has been said, that Man is the originator of his actions; and Deliberation has for its object whatever may be done through one’s own instrumentality, and the actions are with a view to other things; and so it is, not the End, but the Means to Ends on which Deliberation is employed."" (Book III, Chapter III)
+
+10. **Moral Virtues and Vices**:
+    - **Reason for Selection**: Moral virtues and vices are the dispositions that determine moral responsibility.
+    - **Specific Use**: ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.' It is a middle state between too faulty ones, in the way of excess on one side and of defect on the other: and it is so moreover, because the faulty states on one side fall short of, and those on the other exceed, what is right, both in the case of the feelings and the actions; but Virtue finds, and when found adopts, the mean."" (Book II, Chapter VI)
+
+These concepts are fundamental to Aristotle's understanding of moral responsibility and are repeatedly discussed and analyzed throughout his ethical works.",,,0,Query 1/5,0.0
+0.5,0.95,25,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Aristotle emphasizes that moral responsibility is closely tied to moral choice, which is a deliberate decision made by an individual. Moral choice is voluntary and involves the agent's rational deliberation.
+   - **Specific Use**: ""Now Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character.""
+
+2. **Voluntary Actions**:
+   - **Reason for Selection**: Voluntary actions are those that are performed with knowledge and intention, making the agent morally responsible for their outcomes.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing.""
+
+3. **Intellect (Nous)**:
+   - **Reason for Selection**: The intellect plays a crucial role in moral responsibility by providing the principles and reasoning necessary for moral choice.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action.""
+
+4. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation refers to the process of forming moral habits through repeated actions, which shapes an individual's character and moral responsibility.
+   - **Specific Use**: ""Again, in whatever cases we get things by nature, we get the faculties first and perform the acts of working afterwards; an illustration of which is afforded by the case of our bodily senses, for it was not from having often seen or heard that we got these senses, but just the reverse: we had them and so exercised them, but did not have them because we had exercised them. But the Virtues we get by first performing single acts of working, which, again, is the case of other things, as the arts for instance.""
+
+5. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to apply moral principles to specific situations, making it essential for moral responsibility.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature.""
+
+6. **Self-Control (Enkrateia)**:
+   - **Reason for Selection**: Self-control is the ability to regulate one's actions according to moral principles, even in the face of temptations, making it a key aspect of moral responsibility.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness): the kind of man, I mean, to let his robe drag in the dirt to avoid the trouble of lifting it.""
+
+7. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the disposition to act in accordance with moral principles, making it fundamental to moral responsibility.
+   - **Specific Use**: ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.'""
+
+8. **Involuntary Actions**:
+   - **Reason for Selection**: Involuntary actions are those performed under compulsion or ignorance, which can mitigate moral responsibility.
+   - **Specific Use**: ""But when actions are done, either from fear of greater evils, or from ignorance of the particulars, the doer is not held responsible, since both the fear and the ignorance are thought to be causes of the actions.""
+
+9. **Deliberation (Boulēsis)**:
+   - **Reason for Selection**: Deliberation is the process of reasoning about the means to achieve a moral end, which is essential for moral responsibility.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action: (I say nothing of its being exercised in production, because this function is originated by the former: for every one who makes makes with a view to somewhat further; and that which is or may be made, is not an End in itself, but only relatively to somewhat else, and belonging to some one.""
+
+10. **Moral Character (Ethos)**:
+    - **Reason for Selection**: Moral character is the result of habituation and virtue, determining an individual's moral responsibility.
+    - **Specific Use**: ""But it must not be supposed that every action or every feeling is capable of subsisting in this mean state, because some there are which are so named as immediately to convey the notion of badness, as malevolence, shamelessness, envy; or, to instance in actions, adultery, theft, homicide; for all these and suchlike are blamed because they are in themselves bad, not the having too much or too little of them.""
+
+These concepts are central to Aristotle's understanding of moral responsibility, as they describe the criteria by which individuals are held accountable for their actions.",,,0,Query 2/5,0.0
+0.5,0.95,50,0.6,🇪🇺 Mistral-API,"Based on the provided context, here is a list of concepts describing criteria for moral responsibility in the uploaded document, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Moral choice is a central concept in Aristotle's ethics, representing the deliberate decision to act in a certain way. It is closely tied to moral responsibility because it indicates the agent's intentionality and control over their actions.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice; and next, sudden actions we call voluntary but do not ascribe them to Moral Choice.""
+
+2. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: The distinction between voluntary and involuntary actions is crucial for determining moral responsibility. Voluntary actions are those that the agent has control over and can be held responsible for, while involuntary actions are beyond the agent's control.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing.""
+
+3. **Ignorance (Agnoia)**:
+   - **Reason for Selection**: Ignorance can mitigate or eliminate moral responsibility, depending on the type and extent of the ignorance. Aristotle distinguishes between different kinds of ignorance to assess moral responsibility.
+   - **Specific Use**: ""Again, every bad man is ignorant what he ought to do and what to leave undone, and by reason of such error men become unjust and wholly evil.""
+
+4. **Passion (Pathos)**:
+   - **Reason for Selection**: Passions, such as anger or desire, can influence moral choice and action. Understanding how passions affect moral responsibility is essential for evaluating the agent's control over their actions.
+   - **Specific Use**: ""Again, there is a character liable to be taken off his feet in defiance of Right Reason because of passion; whom passion so far masters as to prevent his acting in accordance with Right Reason, but not so far as to make him be convinced that it is his proper line to follow after such pleasures without limit.""
+
+5. **Self-Control (Enkrateia) and Lack of Self-Control (Akrasia)**:
+   - **Reason for Selection**: Self-control and lack of self-control are important for assessing moral responsibility, as they indicate the agent's ability to regulate their actions in accordance with reason.
+   - **Specific Use**: ""Again, the man utterly destitute of Self-Control, as was observed before, is not given to remorse: for it is part of his character that he abides by his moral choice: but the man of Imperfect Self-Control is almost made up of remorse.""
+
+6. **Habit (Ethos)**:
+   - **Reason for Selection**: Habits play a significant role in shaping moral character and influencing moral responsibility. Good habits (virtues) and bad habits (vices) determine how an agent acts and can be held responsible for their actions.
+   - **Specific Use**: ""But the Virtues we get by first performing single acts of working, which, again, is the case of other things, as the arts for instance; for what we have to make when we have learned how, these we learn how to make by making.""
+
+7. **Reason (Logos)**:
+   - **Reason for Selection**: Reason is the faculty that guides moral choice and action. The ability to reason and act according to reason is essential for moral responsibility.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i. e. exercised in Moral Action.""
+
+8. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtues are habits that enable an agent to act in accordance with reason and achieve the good. They are essential for moral responsibility because they represent the agent's character and intentionality.
+   - **Specific Use**: ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.'""
+
+9. **Vice (Kakia)**:
+   - **Reason for Selection**: Vices are habits that lead an agent to act contrary to reason and the good. They are important for assessing moral responsibility because they indicate the agent's character and intentionality.
+   - **Specific Use**: ""And it is not thought that choosing and opining best always go together, but that some opine the better course and yet by reason of viciousness choose not the things which they should.""
+
+10. **Pleasure and Pain (Hedone and Lupe)**:
+    - **Reason for Selection**: Pleasure and pain can influence moral choice and action. Understanding how they affect moral responsibility is essential for evaluating the agent's control over their actions.
+    - **Specific Use**: ""Let us then be understood to have stated, that Virtue has for its object-matter pleasures and pains, and that it is either increased or marred by the same circumstances (differently used) by which it is originally generated, and that it exerts itself on the same circumstances out of which it was generated.""
+
+These concepts are fundamental to Aristotle's ethics and provide a framework for understanding moral responsibility in his philosophy.",,,0,Query 3/5,0.0
+0.5,0.95,75,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Aristotle emphasizes that moral responsibility is closely tied to moral choice, which is a deliberate decision made by an individual. Moral choice is voluntary and involves the agent's will and deliberation.
+   - **Specific Use**: ""Now Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character.""
+
+2. **Voluntary Actions**:
+   - **Reason for Selection**: Voluntary actions are those that an individual performs with knowledge and intention, making them a key criterion for moral responsibility.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing.""
+
+3. **Intellect (Nous)**:
+   - **Reason for Selection**: The intellect plays a crucial role in moral responsibility by providing the knowledge and understanding necessary for making moral choices.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action.""
+
+4. **Habits (Ethos)**:
+   - **Reason for Selection**: Habits are formed through repeated actions and are essential for developing moral character, which is a basis for moral responsibility.
+   - **Specific Use**: ""And so too then is it with the Virtues: for by acting in the various relations in which we are thrown with our fellow men, we come to be, some just, some unjust: and by acting in dangerous positions and being habituated to feel fear or confidence, we come to be, some brave, others cowards.""
+
+5. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to apply moral principles to specific situations, making it a critical component of moral responsibility.
+   - **Specific Use**: ""Now as there are two parts of the Soul which have Reason, it must be the Excellence of the Opinionative [which we called before calculative or deliberative], because both Opinion and Practical Wisdom are.""
+
+6. **Self-Control (Enkrateia)**:
+   - **Reason for Selection**: Self-control is the ability to regulate one's actions and emotions in accordance with moral principles, making it an important aspect of moral responsibility.
+   - **Specific Use**: ""Furthermore, to the character of Imperfect Self-Control is opposed that of Self-Control, and to that of Softness that of Endurance: because Endurance consists in continued resistance but Self-Control in actual mastery, and continued resistance and actual mastery are as different as not being conquered is from conquering.""
+
+7. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtues are habits that enable individuals to act in accordance with moral principles, making them essential for moral responsibility.
+   - **Specific Use**: ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.'""
+
+8. **Ignorance (Agnoia)**:
+   - **Reason for Selection**: Ignorance can mitigate moral responsibility, especially when it pertains to specific details of an action rather than general moral principles.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness.""
+
+9. **Passion (Pathos)**:
+   - **Reason for Selection**: Passions can influence actions and may affect moral responsibility, especially when they lead to actions that are not in accordance with moral principles.
+   - **Specific Use**: ""Again, there is a character liable to be taken off his feet in defiance of Right Reason because of passion; whom passion so far masters as to prevent his acting in accordance with Right Reason, but not so far as to make him be convinced that it is his proper line to follow after such pleasures without limit.""
+
+10. **Deliberation (Boulēsis)**:
+    - **Reason for Selection**: Deliberation is the process of considering different courses of action and choosing the one that aligns with moral principles, making it a key aspect of moral responsibility.
+    - **Specific Use**: ""But when actions are done, either from fear of greater evils, or from ignorance of the nature of the acts, there is something to be said for thinking them involuntary.""
+
+11. **Moral Principle (Logos)**:
+    - **Reason for Selection**: Moral principles guide actions and are essential for determining moral responsibility.
+    - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action.""
+
+12. **Character (Ethos)**:
+    - **Reason for Selection**: Character is the sum of an individual's habits and dispositions, which determine how they act and are held morally responsible.
+    - **Specific Use**: ""And so too then is it with the Virtues: for by acting in the various relations in which we are thrown with our fellow men, we come to be, some just, some unjust: and by acting in dangerous positions and being habituated to feel fear or confidence, we come to be, some brave, others cowards.""
+
+These concepts are central to Aristotle's discussion of moral responsibility and are repeatedly emphasized throughout the text.",,,0,Query 4/5,0.0
+0.5,0.95,100,0.6,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Aristotle frequently discusses moral choice as a crucial element in determining moral responsibility. It is the deliberate selection of actions based on reason and character.
+   - **Specific Use**: ""Now Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character.""
+
+2. **Voluntary Actions**:
+   - **Reason for Selection**: Voluntary actions are those performed with knowledge and intention, which are essential for moral responsibility.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing.""
+
+3. **Intellect (Nous)**:
+   - **Reason for Selection**: The intellect is crucial for making moral choices and understanding the principles of right action.
+   - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action.""
+
+4. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation refers to the process of forming moral character through repeated actions, which is fundamental to moral responsibility.
+   - **Specific Use**: ""Again, in whatever cases we get things by nature, we get the faculties first and perform the acts of working afterwards; an illustration of which is afforded by the case of our bodily senses, for it was not from having often seen or heard that we got these senses, but just the reverse: we had them and so exercised them, but did not have them because we had exercised them.""
+
+5. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the disposition to act in accordance with reason and moral principles, making it a key criterion for moral responsibility.
+   - **Specific Use**: ""Virtue then is a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.""
+
+6. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to apply moral principles to specific situations, which is essential for making morally responsible decisions.
+   - **Specific Use**: ""Practical Wisdom and Excellence of the Moral character are very closely united; since the Principles of Practical Wisdom are in accordance with the Moral Virtues and these are right when they accord with Practical Wisdom.""
+
+7. **Self-Control (Enkrateia)**:
+   - **Reason for Selection**: Self-control is the ability to regulate one's actions in accordance with moral principles, even in the face of temptations.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness): the kind of man, I mean, to let his robe drag in the dirt to avoid the trouble of lifting it.""
+
+8. **Ignorance (Agnoia)**:
+   - **Reason for Selection**: Ignorance, particularly of moral principles, can exempt one from moral responsibility.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness.""
+
+9. **Passion (Pathos)**:
+   - **Reason for Selection**: Passions can influence actions and are considered in determining moral responsibility.
+   - **Specific Use**: ""Again, there is a character liable to be taken off his feet in defiance of Right Reason because of passion; whom passion so far masters as to prevent his acting in accordance with Right Reason, but not so far as to make him be convinced that it is his proper line to follow after such pleasures without limit.""
+
+10. **Deliberation (Boulēsis)**:
+    - **Reason for Selection**: Deliberation is the process of considering the means to achieve a moral end, which is integral to moral responsibility.
+    - **Specific Use**: ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action: (I say nothing of its being exercised in production, because this function is originated by the former: for every one who makes makes with a view to somewhat further; and that which is or may be made, is not an End in itself, but only relatively to somewhat else, and belonging to some one: whereas that which is or may be done is an End in itself, because acting well is an End in itself, and this is the object of the Will,) and so Moral Choice is either Intellect put in a position of Will-ing, or Appetition subjected to an Intellectual Process.""
+
+These concepts are central to Aristotle's discussion of moral responsibility, as they address the criteria for making morally responsible decisions and the factors that influence moral character and action.",,,0,Query 5/5,0.0
+0.5,0.95,50,0.0,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Explanation**: Aristotle distinguishes between actions that are voluntary (done with knowledge and choice) and involuntary (done under compulsion or ignorance). This distinction is crucial for determining moral responsibility.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing.""
+
+2. **Moral Choice (Prohairesis)**:
+   - **Explanation**: Moral choice is a deliberate decision made by an individual, involving both intellect and desire. It is a key criterion for moral responsibility because it indicates the agent's intentionality.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice.""
+
+3. **Habituation and Virtue**:
+   - **Explanation**: Virtues are habits formed through repeated actions and choices. Moral responsibility is linked to the development of virtuous habits, which reflect an individual's character.
+   - **Specific Use**: ""By doing just actions we come to be just; by doing the actions of self-mastery we come to be perfected in self-mastery; and by doing brave actions brave.""
+
+4. **Intellect and Will**:
+   - **Explanation**: The intellect (reason) and the will (desire) are interconnected in moral action. Moral responsibility requires the alignment of reason and desire towards virtuous ends.
+   - **Specific Use**: ""What in the Intellectual operation is Affirmation and Negation that in the Will is Pursuit and Avoidance, And so, since Moral Virtue is a State apt to exercise Moral Choice and Moral Choice is Will consequent on deliberation, the Reason must be true and the Will right, to constitute good Moral Choice.""
+
+5. **Deliberation**:
+   - **Explanation**: Deliberation is the process of reasoning about the means to achieve a chosen end. It is a necessary component of moral responsibility because it involves the agent's rational consideration of their actions.
+   - **Specific Use**: ""Deliberation has for its object whatever may be done through one’s own instrumentality, and the actions are with a view to other things; and so it is, not the End, but the Means to Ends on which Deliberation is employed.""
+
+6. **Practical Wisdom (Phronesis)**:
+   - **Explanation**: Practical wisdom is the ability to make good judgments about what is right and good in particular situations. It is essential for moral responsibility because it guides the agent's actions towards virtuous ends.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature.""
+
+7. **Self-Control (Enkrateia) and Akrasia (Incontinence)**:
+   - **Explanation**: Self-control is the ability to resist temptations and act according to reason, while akrasia is the lack of self-control. These concepts are relevant to moral responsibility because they indicate the agent's ability to follow their moral judgments.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness).""
+
+8. **Virtue and Vice**:
+   - **Explanation**: Virtues are positive character traits that enable individuals to act well, while vices are negative traits that lead to harmful actions. Moral responsibility is assessed based on the agent's virtues and vices.
+   - **Specific Use**: ""Virtue then is a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.""
+
+9. **Moral Sense**:
+   - **Explanation**: The moral sense is the intuitive understanding of what is right and wrong in specific situations. It plays a role in moral responsibility by guiding the agent's actions in complex or ambiguous circumstances.
+   - **Specific Use**: ""At all events thus much is plain, that the mean state is in all things praiseworthy, and that practically we must deflect sometimes towards excess sometimes towards defect, because this will be the easiest method of hitting on the mean, that is, on what is right.""
+
+10. **Equity (Epikeia)**:
+    - **Explanation**: Equity is the ability to apply moral principles flexibly and fairly in specific cases, going beyond strict adherence to the law. It is relevant to moral responsibility because it shows the agent's judgment and fairness.
+    - **Specific Use**: ""This is the reason why not all things are according to law, because there are things about which it is simply impossible to lay down a law, and so we want special enactments for particular cases.""
+
+These concepts are central to Aristotle's understanding of moral responsibility, as they describe the criteria by which individuals are judged to be morally responsible for their actions.",,,0,Query 1/5,0.0
+0.5,0.95,50,0.25,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those for which the agent is responsible, while involuntary actions are not.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing; as if a wind were to convey you anywhere, or men having power over your person.""
+
+2. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Moral choice is central to Aristotle's ethics because it represents the deliberate selection of actions based on reason and character.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice.""
+
+3. **Habituation and Virtue**:
+   - **Reason for Selection**: Habituation is the process by which virtues are formed, making it crucial for understanding how individuals become morally responsible agents.
+   - **Specific Use**: ""Again, in whatever cases we get things by nature, we get the faculties first and perform the acts of working afterwards; an illustration of which is afforded by the case of our bodily senses, for it was not from having often seen or heard that we got these senses, but just the reverse: we had them and so exercised them, but did not have them because we had exercised them. But the Virtues we get by first performing single acts of working, which, again, is the case of other things, as the arts for instance.""
+
+4. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the intellectual virtue that enables individuals to make good moral choices and act accordingly.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature.""
+
+5. **Self-Control (Enkrateia) and Incontinence (Akrasia)**:
+   - **Reason for Selection**: These concepts are important for understanding how individuals struggle with moral responsibility, particularly in situations where they fail to act according to their knowledge of the good.
+   - **Specific Use**: ""Again, the man utterly destitute of Self-Control, as was observed before, is not given to remorse: for it is part of his character that he abides by his moral choice: but the man of Imperfect Self-Control is almost made up of remorse: and so the case is not as we determined it before, but the former is incurable and the latter may be cured.""
+
+6. **Deliberation (Boulēsis)**:
+   - **Reason for Selection**: Deliberation is the process by which individuals consider the means to achieve their ends, which is essential for making morally responsible decisions.
+   - **Specific Use**: ""So it seems, as has been said, that Man is the originator of his actions; and Deliberation has for its object whatever may be done through one’s own instrumentality, and the actions are with a view to other things; and so it is, not the End, but the Means to Ends on which Deliberation is employed.""
+
+7. **Moral Virtues and Vices**:
+   - **Reason for Selection**: Moral virtues and vices are the dispositions that guide individuals' actions and determine their moral responsibility.
+   - **Specific Use**: ""Virtue then is “a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.”""
+
+8. **Ignorance and Responsibility**:
+   - **Reason for Selection**: Aristotle discusses different types of ignorance to determine when individuals are morally responsible for their actions.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness.""
+
+9. **Moral Principles and Rules**:
+   - **Reason for Selection**: Moral principles and rules provide the guidelines for moral action and are essential for understanding how individuals exercise moral responsibility.
+   - **Specific Use**: ""The rule prescribes the control and regulation within limits of the agent’s natural impulses to act and feel thus and thus.""
+
+10. **Moral Sense (Aisthesis)**:
+    - **Reason for Selection**: The moral sense is the faculty that enables individuals to perceive moral truths and act accordingly, which is crucial for moral responsibility.
+    - **Specific Use**: ""It is not thought that choosing and opining best always go together, but that some opine the better course and yet by reason of viciousness choose not the things which they should.""
+
+These concepts are fundamental to Aristotle's theory of moral responsibility, as they outline the criteria by which individuals are held accountable for their actions.",,,0,Query 2/5,0.0
+0.5,0.95,50,0.5,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Selection Reason**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those for which the agent is responsible, while involuntary actions are not.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing."" (Book III, Chapter I)
+
+2. **Moral Choice (Prohairesis)**:
+   - **Selection Reason**: Moral choice is a deliberate decision that reflects the agent's character and is a key criterion for moral responsibility.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice."" (Book III, Chapter I)
+
+3. **Knowledge and Ignorance**:
+   - **Selection Reason**: Knowledge of the moral rule is essential for moral responsibility. Ignorance can extenuate responsibility but only in specific cases.
+   - **Specific Use**: ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness."" (Book III, Chapter V)
+
+4. **Passion and Emotion**:
+   - **Selection Reason**: Passions and emotions can affect moral responsibility by influencing actions. However, they do not excuse moral responsibility entirely.
+   - **Specific Use**: ""Again, there is a character liable to be taken off his feet in defiance of Right Reason because of passion; whom passion so far masters as to prevent his acting in accordance with Right Reason, but not so far as to make him be convinced that it is his proper line to follow after such pleasures without limit."" (Book VII, Chapter VIII)
+
+5. **Habituation and Virtue**:
+   - **Selection Reason**: Habituation and the development of virtues are crucial for moral responsibility as they shape the agent's character.
+   - **Specific Use**: ""Again, in whatever cases we get things by nature, we get the faculties first and perform the acts of working afterwards; an illustration of which is afforded by the case of our bodily senses, for it was not from having often seen or heard that we got these senses, but just the reverse: we had them and so exercised them, but did not have them because we had exercised them. But the Virtues we get by first performing single acts of working."" (Book II, Chapter I)
+
+6. **Deliberation**:
+   - **Selection Reason**: Deliberation is the process of reasoning about the means to achieve a moral end, and it is essential for moral responsibility.
+   - **Specific Use**: ""Deliberation is a process of inquiry, and inquiry is a search, a search either for the near or for the remote, of what is in our power; and we think power can extend to acts that are our own."" (Book III, Chapter III)
+
+7. **Self-Control (Enkrateia) and Akrasia (Incontinence)**:
+   - **Selection Reason**: Self-control and incontinence are states that affect moral responsibility by determining the agent's ability to act according to moral principles.
+   - **Specific Use**: ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness): the kind of man, I mean, to let his robe drag in the dirt to avoid the trouble of lifting it."" (Book VII, Chapter VI)
+
+8. **Practical Wisdom (Phronesis)**:
+   - **Selection Reason**: Practical wisdom is the ability to make good judgments about what is right and good, and it is necessary for moral responsibility.
+   - **Specific Use**: ""Practical Wisdom is concerned with things that are good or bad for man; it is a rational quality, concerned with action and contingent matters."" (Book VI, Chapter V)
+
+9. **Moral Virtues and Vices**:
+   - **Selection Reason**: Moral virtues and vices are habits that determine the agent's character and moral responsibility.
+   - **Specific Use**: ""Virtue then is a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine."" (Book II, Chapter VI)
+
+10. **Justice (Dikaiosyne)**:
+    - **Selection Reason**: Justice is a moral virtue that involves treating others fairly and is a key criterion for moral responsibility in social interactions.
+    - **Specific Use**: ""Justice is the moral state in virtue of which the just man is said to have the aptitude for practising the Just in the way of moral choice, and for making division between, himself and another, or between two other men, not so as to give to himself the greater and to his neighbour the less share of what is choice-worthy and contrariwise of what is hurtful, but what is proportionably equal, and in like manner when adjudging the rights of two other men."" (Book V, Chapter X)
+
+These concepts are central to Aristotle's discussion of moral responsibility and are used to analyze the conditions under which an agent can be held responsible for their actions.",,,0,Query 3/5,0.0
+0.5,0.95,50,0.75,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's ethics, along with explanations and specific uses of those terms:
+
+1. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those that are done with knowledge and intention, making the agent morally responsible.
+   - **Specific Use**: ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance. An action is, properly speaking, compulsory, when the origination is external to the agent, being such that in it the agent (perhaps we may more properly say the patient) contributes nothing; as if a wind were to convey you anywhere, or men having power over your person."" (Book III, Chapter I)
+
+2. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Moral choice is central to Aristotle's ethics because it involves the deliberate selection of actions based on reason and character.
+   - **Specific Use**: ""Now Moral Choice is plainly voluntary, but the two are not co-extensive, voluntary being the more comprehensive term; for first, children and all other animals share in voluntary action but not in Moral Choice; and next, sudden actions we call voluntary but do not ascribe them to Moral Choice."" (Book III, Chapter I)
+
+3. **Intellect and Will**:
+   - **Reason for Selection**: The interaction between intellect and will is crucial for understanding how moral responsibility is formed and exercised.
+   - **Specific Use**: ""What in the Intellectual operation is Affirmation and Negation that in the Will is Pursuit and Avoidance, And so, since Moral Virtue is a State apt to exercise Moral Choice and Moral Choice is Will consequent on deliberation, the Reason must be true and the Will right, to constitute good Moral Choice, and what the Reason affirms the Will must pursue."" (Context)
+
+4. **Habituation and Virtue**:
+   - **Reason for Selection**: Habituation is the process by which virtues are formed, making individuals morally responsible for their actions.
+   - **Specific Use**: ""By doing just actions we come to be just; by doing the actions of self-mastery we come to be perfected in self-mastery; and by doing brave actions brave."" (Book II, Chapter I)
+
+5. **Self-Control (Enkrateia) and Incontinence (Akrasia)**:
+   - **Reason for Selection**: These concepts describe the struggle between reason and desire, which is essential for understanding moral responsibility.
+   - **Specific Use**: ""The man of Imperfect Self-Control is of such a character as to follow bodily pleasures in excess and in defiance of Right Reason, without acting on any deliberate conviction, whereas the man utterly destitute of Self-Control does act upon a conviction which rests on his natural inclination to follow after these pleasures."" (Book VII, Chapter VIII)
+
+6. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to make good judgments about what is right and wrong, which is fundamental to moral responsibility.
+   - **Specific Use**: ""Practical Wisdom is not Knowledge is plain, for it has to do with the ultimate issue, as has been said, because every object of action is of this nature."" (Book VI, Chapter IX)
+
+7. **Virtue and Vice**:
+   - **Reason for Selection**: Virtues and vices are the dispositions that make individuals morally responsible for their actions.
+   - **Specific Use**: ""Virtue then is a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine."" (Book II, Chapter VI)
+
+8. **Deliberation**:
+   - **Reason for Selection**: Deliberation is the process of reasoning about the means to achieve moral ends, which is essential for moral responsibility.
+   - **Specific Use**: ""Deliberation has for its object whatever may be done through one’s own instrumentality, and the actions are with a view to other things; and so it is, not the End, but the Means to Ends on which Deliberation is employed."" (Book III, Chapter III)
+
+9. **Responsibility for Feelings and Actions**:
+   - **Reason for Selection**: Aristotle emphasizes that individuals are responsible for their feelings and actions, which are shaped by their character.
+   - **Specific Use**: ""Virtue is concerned with the regulation of feelings and actions, and praise and blame arise upon such as are voluntary, while for the involuntary allowance is made, and sometimes compassion is excited."" (Book III, Chapter I)
+
+10. **Moral Sense**:
+    - **Reason for Selection**: The moral sense is the faculty that judges particular actions as right or wrong, which is crucial for moral responsibility.
+    - **Specific Use**: ""It is not enough, however, to state this in general terms, we must also apply it to particular instances, because in treatises on moral conduct general statements have an air of vagueness, but those which go into detail one of greater reality: for the actions after all must be in detail, and the general statements, to be worth anything, must hold good here."" (Book VII, Chapter VII)
+
+These concepts are central to Aristotle's ethics and provide a framework for understanding moral responsibility in his philosophy.",,,0,Query 4/5,0.0
+0.5,0.95,50,1.0,🇪🇺 Mistral-API,"Based on the provided context, here are the key concepts describing criteria for moral responsibility in Aristotle's work, along with explanations and specific uses:
+
+1. **Moral Choice (Prohairesis)**:
+   - **Reason for Selection**: Aristotle frequently discusses moral choice as a crucial element in determining moral responsibility. It is the deliberate decision made by an individual, which reflects their character and intentions.
+   - **Specific Uses**:
+     - ""Now Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character."" (Book III, Chapter III)
+     - ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action."" (Book VI, Chapter II)
+
+2. **Voluntary and Involuntary Actions**:
+   - **Reason for Selection**: Aristotle distinguishes between voluntary and involuntary actions to determine moral responsibility. Voluntary actions are those done with knowledge and intention, making the agent responsible.
+   - **Specific Uses**:
+     - ""Now since Virtue is concerned with the regulation of feelings and actions, and praise and blame arise upon such as are voluntary, while for the involuntary allowance is made, and sometimes compassion is excited, it is perhaps a necessary task for those who are investigating the nature of Virtue to draw out the distinction between what is voluntary and what involuntary."" (Book III, Chapter I)
+     - ""Involuntary actions then are thought to be of two kinds, being done neither on compulsion, or by reason of ignorance."" (Book III, Chapter I)
+
+3. **Self-Control (Enkrateia) and Lack of Self-Control (Akrasia)**:
+   - **Reason for Selection**: These concepts are used to discuss the struggle between reason and desire, which is central to moral responsibility. Self-control involves acting according to reason despite desires, while lack of self-control involves yielding to desires against reason.
+   - **Specific Uses**:
+     - ""Again, he who fails when exposed to those temptations against which the common run of men hold out, and are well able to do so, is Soft and Luxurious (Luxury being a kind of Softness): the kind of man, I mean, to let his robe drag in the dirt to avoid the trouble of lifting it."" (Book VII, Chapter VI)
+     - ""But, of the different forms of Imperfect Self-Control, those are better who are carried off their feet by a sudden access of temptation than they who have Reason but do not abide by it."" (Book VII, Chapter VI)
+
+4. **Habituation (Ethos)**:
+   - **Reason for Selection**: Habituation refers to the process of forming moral habits through repeated actions. It is essential for developing moral character and responsibility.
+   - **Specific Uses**:
+     - ""By doing just actions we come to be just; by doing the actions of self-mastery we come to be perfected in self-mastery; and by doing brave actions brave."" (Book II, Chapter I)
+     - ""So too then is it with the Virtues: for by acting in the various relations in which we are thrown with our fellow men, we come to be, some just, some unjust."" (Book II, Chapter I)
+
+5. **Practical Wisdom (Phronesis)**:
+   - **Reason for Selection**: Practical wisdom is the ability to make good judgments in practical matters, which is essential for moral responsibility. It involves understanding the particular circumstances and acting accordingly.
+   - **Specific Uses**:
+     - ""And as the poet has it, 'Men may be bad in many ways, But good in one alone.' "" (Book II, Chapter VI)
+     - ""But it must not be supposed that every action or every feeling is capable of subsisting in this mean state, because some there are which are so named as immediately to convey the notion of badness, as malevolence, shamelessness, envy; or, to instance in actions, adultery, theft, homicide; for all these and suchlike are blamed because they are in themselves bad, not the having too much or too little of them."" (Book II, Chapter VI)
+
+6. **Virtue (Arete)**:
+   - **Reason for Selection**: Virtue is the excellence of character that enables individuals to act morally. It is the result of habituation and practical wisdom, making it a key criterion for moral responsibility.
+   - **Specific Uses**:
+     - ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.'"" (Book II, Chapter VI)
+     - ""But it must not be supposed that every action or every feeling is capable of subsisting in this mean state, because some there are which are so named as immediately to convey the notion of badness, as malevolence, shamelessness, envy; or, to instance in actions, adultery, theft, homicide; for all these and suchlike are blamed because they are in themselves bad, not the having too much or too little of them."" (Book II, Chapter VI)
+
+7. **Deliberation (Boulēsis)**:
+   - **Reason for Selection**: Deliberation is the process of considering and evaluating different courses of action, which is crucial for making morally responsible decisions.
+   - **Specific Uses**:
+     - ""Now the starting-point of moral action is Moral Choice, (I mean, what actually sets it in motion, not the final cause), and of Moral Choice, Appetition, and Reason directed to a certain result: and thus Moral Choice is neither independent of intellect, i.e. intellectual operation, nor of a certain moral state: for right or wrong action cannot be, independently of operation of the Intellect, and moral character."" (Book III, Chapter III)
+     - ""But operation of the Intellect by itself moves nothing, only when directed to a certain result, i.e. exercised in Moral Action."" (Book VI, Chapter II)
+
+8. **Ignorance (Agnoia)**:
+   - **Reason for Selection**: Ignorance, particularly ignorance of the particular circumstances, can mitigate moral responsibility. However, ignorance of the moral principles themselves is not a valid excuse.
+   - **Specific Uses**:
+     - ""Again, we do not usually apply the term involuntary when a man is ignorant of his own true interest; because ignorance which affects moral choice constitutes depravity but not involuntariness: nor does any ignorance of principle (because for this men are blamed) but ignorance in particular details, wherein consists the action and wherewith it is concerned, for in these there is both compassion and allowance, because he who acts in ignorance of any of them acts in a proper sense involuntarily."" (Book III, Chapter V)
+     - ""But surely in respect of those whose motive to Friendship is utility or pleasure there can be nothing wrong in breaking up the connection when they no longer have those qualities; because they were friends [not of one another, but] of those qualities: and, these having failed, it is only reasonable to expect that they should cease to entertain the sentiment."" (Book VIII, Chapter VII)
+
+9. **Passion (Pathos)**:
+   - **Reason for Selection**: Passions, such as anger or desire, can influence moral actions. Understanding how passions affect moral choices is essential for assessing moral responsibility.
+   - **Specific Uses**:
+     - ""But, of the different forms of Imperfect Self-Control, those are better who are carried off their feet by a sudden access of temptation than they who have Reason but do not abide by it; these last being overcome by passion less in degree, and not wholly without premeditation as are the others: for the man of Imperfect Self-Control is like those who are soon intoxicated and by little wine and less than the common run of men."" (Book VII, Chapter VI)
+     - ""Again, the man utterly destitute of Self-Control, as was observed before, is not given to remorse: for it is part of his character that he abides by his moral choice: but the man of Imperfect Self-Control is almost made up of remorse: and so the case is not as we determined it before, but the former is incurable and the latter may be cured: for depravity is like chronic diseases, dropsy and consumption for instance, but Imperfect Self-Control is like acute disorders: the former being a continuous evil, the latter not so."" (Book VII, Chapter VI)
+
+10. **Moral Virtues and Vices**:
+    - **Reason for Selection**: Moral virtues and vices are the qualities that determine an individual's moral character and responsibility. They are the result of habituation and practical wisdom.
+    - **Specific Uses**:
+      - ""Virtue then is 'a state apt to exercise deliberate choice, being in the relative mean, determined by reason, and as the man of practical wisdom would determine.'"" (Book II, Chapter VI)
+      - ""And so, viewing it in respect of its essence and definition, Virtue is a mean state; but in reference to the chief good and to excellence it is the highest state possible."" (Book II, Chapter VI)
+
+These concepts are central to Aristotle's discussion of moral responsibility, as they address the key elements of moral agency, including the role of reason, desire, habit, and judgment in moral actions.",,,0,Query 5/5,0.0

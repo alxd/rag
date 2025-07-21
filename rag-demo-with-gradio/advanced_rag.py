@@ -3,7 +3,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import datetime
 import functools
 import traceback
-from typing import List, Optional, Any, Dict
+from typing import List, Optional, Any, Dict, Tuple
 import csv
 import pandas as pd
 import tempfile
@@ -105,10 +105,11 @@ def process_batch_query(query, model_choice, max_tokens, param_configs, slider_v
                         })
     
     # Format results with CSV file links
-    formatted_results = format_batch_result_files(results, job_id)
+    formatted_results, csv_path = format_batch_result_files(results, job_id)
     
     return (
         formatted_results,
+        csv_path,
         f"Job ID: {job_id}",
         f"Input tokens: {count_tokens(query)}",
         f"Output tokens: {sum(count_tokens(r['Response']) for r in results)}"
@@ -118,10 +119,10 @@ def process_batch_query_async(query, model_choice, max_tokens, param_configs, sl
     """Asynchronous version of batch query processing"""
     global last_job_id
     if not query:
-        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+        return "Please enter a non-empty query", None, "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
     
     if not hasattr(rag_chain, 'elevated_rag_chain') or not rag_chain.raw_data:
-        return "Please load files first.", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+        return "Please load files first.", None, "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
     
     job_id = str(uuid.uuid4())
     debug_print(f"Starting async batch job {job_id} for query: {query}")
@@ -154,7 +155,8 @@ def process_batch_query_async(query, model_choice, max_tokens, param_configs, sl
     return (
         f"Batch query submitted and processing in the background (Job ID: {job_id}).\n\n"
         f"Use 'Check Job Status' tab with this ID to get results.",
-        f"Job ID: {job_id}",
+        None,  # No CSV file initially
+        "",  # Empty context initially
         f"Input tokens: {count_tokens(query)}",
         "Output tokens: pending",
         job_id,  # Return job_id to update the job_id_input component
@@ -286,16 +288,16 @@ last_job_id = None
 # Add these missing async processing functions
 
 def process_in_background(job_id, function, args):
-    """Process a function in the background and store results"""
+    """Process a function in the background and store its result"""
     try:
         debug_print(f"Processing job {job_id} in background")
         result = function(*args)
         results_queue.put((job_id, result))
         debug_print(f"Job {job_id} completed and added to results queue")
     except Exception as e:
-        debug_print(f"Error in background job {job_id}: {str(e)}")
-        error_result = (f"Error processing job: {str(e)}", "", "", "")
-        results_queue.put((job_id, error_result))
+        error_msg = f"Error processing job {job_id}: {str(e)}"
+        debug_print(error_msg)
+        results_queue.put((job_id, (error_msg, None, "", "Input tokens: 0", "Output tokens: 0")))
 
 def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p, top_k, max_tokens_slider):
     """Asynchronous version of load_pdfs_updated to prevent timeouts"""
@@ -339,48 +341,34 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
     )
 
 def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_p, top_k, bm25_weight, use_history):
-    """Asynchronous version of submit_query_updated to prevent timeouts"""
-    global last_job_id
-    if not query:
-        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
-    global slider_max_tokens 
-    slider_max_tokens = max_tokens_slider    
-    
-    job_id = str(uuid.uuid4())
-    debug_print(f"Starting async job {job_id} for query: {query}")
-    
-    # Update model if specified
-    if model_choice and rag_chain and rag_chain.llm_choice != model_choice:
-        debug_print(f"Updating model to {model_choice} for this query")
-        rag_chain.update_llm_pipeline(model_choice, temperature, top_p, top_k,
-                                     rag_chain.prompt_template, bm25_weight)
-    
-    # Start background thread
-    threading.Thread(
-        target=process_in_background,
-        args=(job_id, submit_query_updated, [query, temperature, top_p, top_k, bm25_weight, use_history])
-    ).start()
-    
-    jobs[job_id] = {
-        "status": "processing", 
-        "type": "query",
-        "start_time": time.time(),
-        "query": query,
-        "model": rag_chain.llm_choice if hasattr(rag_chain, 'llm_choice') else "Unknown"
-    }
-    
-    last_job_id = job_id
-    
-    return (
-        f"Query submitted and processing in the background (Job ID: {job_id}).\n\n"
-        f"Use 'Check Job Status' tab with this ID to get results.",
-        f"Job ID: {job_id}",
-        f"Input tokens: {count_tokens(query)}",
-        "Output tokens: pending",
-        job_id,  # Return job_id to update the job_id_input component
-        query,  # Return query to update the job_query_display component
-        get_job_list()  # Return updated job list
-    )
+    """Submit a query asynchronously"""
+    try:
+        # ... existing code ...
+        if not use_history:
+            rag_chain.conversation_history = []
+            debug_print("Conversation history cleared")
+        
+        result = rag_chain.chain({"question": query})
+        response = result["answer"]
+        context = rag_chain.get_current_context()
+        
+        # Format the response
+        formatted_response = format_response(response)
+        
+        # Get token counts
+        input_tokens = count_tokens(query + context)
+        output_tokens = count_tokens(response)
+        
+        return (
+            formatted_response,
+            context,
+            f"Input tokens: {input_tokens}",
+            f"Output tokens: {output_tokens}"
+        )
+    except Exception as e:
+        error_msg = f"Error processing query: {str(e)}"
+        debug_print(error_msg)
+        return error_msg, "", "Input tokens: 0", "Output tokens: 0"
 
 def update_ui_with_last_job_id():
     # This function doesn't need to do anything anymore
@@ -446,8 +434,9 @@ def sync_model_dropdown(value):
 
 # Function to check job status
 def check_job_status(job_id):
+    """Check the status of a job and return its results"""
     if not job_id:
-        return "Please enter a job ID", "", "", "", ""
+        return "Please enter a job ID", None, "", "", "", ""
     
     # Process any completed jobs in the queue
     try:
@@ -461,36 +450,23 @@ def check_job_status(job_id):
     except queue.Empty:
         pass
     
-    # Check if the requested job exists
     if job_id not in jobs:
-        return "Job not found. Please check the ID and try again.", "", "", "", ""
+        return "Job not found", None, "", "", "", ""
     
     job = jobs[job_id]
-    job_query = job.get("query", "No query available for this job")
+    job_query = job.get("query", "No query for this job")
     
     # If job is still processing
     if job["status"] == "processing":
-        elapsed_time = time.time() - job["start_time"]
-        job_type = job.get("type", "unknown")
-        
-        if job_type == "load_files":
-            return (
-                f"Files are still being processed (elapsed: {elapsed_time:.1f}s).\n\n"
-                f"Try checking again in a few seconds.",
-                f"Job ID: {job_id}",
-                f"Status: Processing",
-                "",
-                job_query
-            )
-        else:  # query job
-            return (
-                f"Query is still being processed (elapsed: {elapsed_time:.1f}s).\n\n"
-                f"Try checking again in a few seconds.",
-                f"Job ID: {job_id}",
-                f"Input tokens: {count_tokens(job.get('query', ''))}",
-                "Output tokens: pending",
-                job_query
-            )
+        elapsed = time.time() - job["start_time"]
+        return (
+            f"Job is still processing... (elapsed time: {elapsed:.1f}s)",
+            None,
+            "",
+            "",
+            "",
+            job_query
+        )
     
     # If job is completed
     if job["status"] == "completed":
@@ -500,22 +476,24 @@ def check_job_status(job_id):
         if job.get("type") == "load_files":
             return (
                 f"{result[0]}\n\nProcessing time: {processing_time:.1f}s",
+                None,
                 result[1],
-                result[2],
+                "",
                 "",
                 job_query
             )
         else:  # query job
             return (
                 f"{result[0]}\n\nProcessing time: {processing_time:.1f}s",
-                result[1],
+                result[1],  # CSV file path
                 result[2],
                 result[3],
+                result[4],
                 job_query
             )
     
     # Fallback for unknown status
-    return f"Job status: {job['status']}", "", "", "", job_query
+    return f"Job status: {job['status']}", None, "", "", "", job_query
 
 # Function to clean up old jobs
 def cleanup_old_jobs():
@@ -1226,93 +1204,65 @@ def update_model(new_model: str):
 
 # Update submit_query_updated to better handle context limitation
 def submit_query_updated(query, temperature, top_p, top_k, bm25_weight, use_history=True):
-    debug_print(f"Processing query: {query}")
-    if not query:
-        debug_print("Empty query received")
-        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
-    
-    if not hasattr(rag_chain, 'elevated_rag_chain') or not rag_chain.raw_data:
-        debug_print("RAG chain not initialized")
-        return "Please load files first.", "", "Input tokens: 0", "Output tokens: 0"
-    
+    """Submit a query and return the response"""
     try:
-        # Update all parameters for this query
-        rag_chain.temperature = temperature
-        rag_chain.top_p = top_p
-        rag_chain.top_k = top_k
-        rag_chain.bm25_weight = bm25_weight
-        rag_chain.faiss_weight = 1.0 - bm25_weight
+        if not query:
+            return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
         
-        # Update the ensemble retriever weights
-        rag_chain.ensemble_retriever = EnsembleRetriever(
-            retrievers=[rag_chain.bm25_retriever, rag_chain.faiss_retriever],
-            weights=[rag_chain.bm25_weight, rag_chain.faiss_weight]
-        )
+        # Clear conversation history if checkbox is unchecked
+        if not use_history:
+            rag_chain.conversation_history = []
+            debug_print("Conversation history cleared")
         
-        # Determine max context size based on model
-        model_name = rag_chain.llm_choice.lower()
-        max_context_tokens = 32000 if "mistral" in model_name else 4096
+        result = rag_chain.chain({"question": query})
+        response = result["answer"]
+        context = rag_chain.get_current_context()
         
-        # Reserve 20% of tokens for the question and response generation
-        reserved_tokens = int(max_context_tokens * 0.2)
-        max_context_tokens -= reserved_tokens
+        # Format the response
+        formatted_response = format_response(response)
         
-        # Collect conversation history (last 2 only to save tokens) if enabled
-        if use_history and rag_chain.conversation_history:
-            recent_history = rag_chain.conversation_history[-2:]
-            history_text = "\n".join([f"Q: {conv['query']}\nA: {conv['response'][:300]}..." 
-                                     for conv in recent_history])
-        else:
-            history_text = ""
-        
-        # Get history token count
-        history_tokens = count_tokens(history_text)
-        
-        # Adjust context tokens based on history size
-        context_tokens = max_context_tokens - history_tokens
-        
-        # Ensure we have some minimum context
-        context_tokens = max(context_tokens, 1000)
-        
-        # Truncate context if needed
-        context = truncate_prompt(rag_chain.context, max_tokens=context_tokens)
-        
-        debug_print(f"Using model: {model_name}, context tokens: {count_tokens(context)}, history tokens: {history_tokens}")
-        
-        prompt_variables = {
-            "conversation_history": history_text,
-            "context": context,
-            "question": query
-        }
-        
-        debug_print("Invoking RAG chain")
-        response = rag_chain.elevated_rag_chain.invoke({"question": query})
-        
-        # Store only a reasonable amount of the response in history if enabled
-        if use_history:
-            trimmed_response = response[:1000] + ("..." if len(response) > 1000 else "")
-            rag_chain.conversation_history.append({"query": query, "response": trimmed_response})
-        
-        input_token_count = count_tokens(query)
-        output_token_count = count_tokens(response)
-        
-        debug_print(f"Query processed successfully. Output tokens: {output_token_count}")
+        # Get token counts
+        input_tokens = count_tokens(query + context)
+        output_tokens = count_tokens(response)
         
         return (
-            response,
-            rag_chain.get_current_context(),
-            f"Input tokens: {input_token_count}",
-            f"Output tokens: {output_token_count}"
+            formatted_response,
+            context,
+            f"Input tokens: {input_tokens}",
+            f"Output tokens: {output_tokens}"
         )
     except Exception as e:
-        error_msg = traceback.format_exc()
-        debug_print(f"LLM error: {error_msg}")
-        return (
-            f"Query error: {str(e)}\n\nTry using a smaller document or simplifying your query.",
-            "",
-            "Input tokens: 0",
-            "Output tokens: 0"
-        )
+        error_msg = f"Error processing query: {str(e)}"
+        debug_print(error_msg)
+        return error_msg, "", "Input tokens: 0", "Output tokens: 0"
+
+def format_response(response: str) -> str:
+    """Format the response to include model info and main answer"""
+    try:
+        # Split response into components
+        parts = response.split("\n\n")
+        
+        # Extract main answer (usually the first part)
+        main_answer = parts[0].strip()
+        
+        # Extract model info if present
+        model_info = ""
+        for part in parts:
+            if "Model:" in part:
+                model_info = part.strip()
+                break
+        
+        # Format the response
+        formatted = []
+        if model_info:
+            formatted.append(model_info)
+        formatted.append("\nAnswer:")
+        formatted.append(main_answer)
+        
+        return "\n".join(formatted)
+    except Exception as e:
+        debug_print(f"Error formatting response: {str(e)}")
+        return response
 
 def reset_app_updated():
     global rag_chain
@@ -1726,6 +1676,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                     placeholder="Retrieved context will appear here",
                     lines=6
                 )
+                batch_csv_download = gr.File(label="Download Results CSV")
             
             with gr.Row():
                 batch_input_tokens = gr.Markdown("Input tokens: 0")
@@ -1933,6 +1884,7 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         ],
         outputs=[
             batch_query_response,
+            batch_csv_download,
             batch_query_context,
             batch_input_tokens,
             batch_output_tokens,
@@ -2042,24 +1994,13 @@ def create_csv_from_batch_results(results: List[Dict], job_id: str) -> str:
     
     return csv_path
 
-def format_batch_result_files(results: List[Dict], job_id: str) -> str:
+def format_batch_result_files(results: List[Dict], job_id: str) -> Tuple[str, str]:
     """Format batch results with links to CSV files"""
     # Create CSV file
     csv_path = create_csv_from_batch_results(results, job_id)
     
-    # Get list of all CSV files for this job
-    csv_dir = os.path.join(tempfile.gettempdir(), "rag_batch_results")
-    job_csv_files = glob.glob(os.path.join(csv_dir, f"batch_results_{job_id}_*.csv"))
-    
-    # Format the results with links to all CSV files
+    # Format the results
     formatted_results = "### Batch Query Results\n\n"
-    
-    # Add links to all CSV files
-    formatted_results += "#### Download Results\n"
-    for csv_file in sorted(job_csv_files, reverse=True):
-        filename = os.path.basename(csv_file)
-        formatted_results += f"- [Download {filename}](file/{csv_file})\n"
-    formatted_results += "\n"
     
     # Add the actual results
     for result in results:
@@ -2068,7 +2009,7 @@ def format_batch_result_files(results: List[Dict], job_id: str) -> str:
         formatted_results += f"{result['Response']}\n\n"
         formatted_results += "---\n\n"
     
-    return formatted_results
+    return formatted_results, csv_path
 
 if __name__ == "__main__":
     debug_print("Launching Gradio interface.")
