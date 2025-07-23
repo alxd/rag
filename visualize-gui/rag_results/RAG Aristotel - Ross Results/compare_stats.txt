@@ -1,0 +1,110 @@
+Concepts Overview
+================
+Total unique concepts: 63
+
+All Concepts:
+Character (Ethos)
+Choice (Prohairesis)
+Choice and Deliberation
+Compulsion and External Factors
+Compulsion and Necessity
+Friendship (Philia)
+Friendship and Community
+Habit (Ethos)
+Habit and Education
+Habituation (Ethos)
+Habituation and Character
+Habituation and Character Formation
+Habituation and Moral Development
+Incontinence (Akrasia)
+Incontinence (Akrasia) and Continence (Enkrateia)
+Intentions and Motives
+Involuntary Action (Akouasia)
+Involuntary Action (Involuntariness)
+Justice (Dikaiosyne)
+Justice (Dikaiosynē)
+Justice and Injustice
+Knowledge (Epistēmē)
+Knowledge and Ignorance
+Law (Nomos)
+Law and Convention
+Law and Justice
+Law and Legal Justice
+Law and Social Responsibility
+Mean (Mesotes)
+Moral Luck
+Moral Luck (Tyche)
+Moral Luck and External Factors
+Moral Responsibility and the State
+Moral Responsibility in Friendship and Justice
+Moral Virtue (Arete)
+Moral Virtue (Ethike Arete)
+Moral Virtue and Practical Wisdom (Phronesis)
+Moral Virtue and Vice
+Moral Virtue as a Mean
+Natural Virtue vs True Virtue
+Passions (Pathē)
+Passions and Character (Ethos)
+Passions and Emotions
+Pleasure and Pain
+Pleasure and Pain (Hedone and Lupe)
+Pleasure and Pain as Moral Indicators
+Pleasure and Pain in Moral Action
+Practical Wisdom (Phronesis)
+Punishment and Blame
+Punishment and Compulsion
+Punishment and Correction
+Punishment and Justice
+Punishment and Praise
+Punishment and Reward
+Self-Control (Enkrateia) and Incontinence (Akrasia)
+Self-Control and Incontinence
+Self-Control and Incontinence (Akrasia)
+Self-Love (Philautia)
+Virtue (Arete)
+Virtue and Vice
+Voluntary Action (Voluntariness)
+Voluntary and Involuntary Actions
+Voluntary vs Involuntary Actions
+
+Concepts per block:
+Temperature (0-4): 28 concepts
+Character (Ethos), Choice (Prohairesis), Friendship and Community, Habit and Education, Habituation (Ethos), Incontinence (Akrasia) and Continence (Enkrateia), Justice (Dikaiosyne), Justice and Injustice, Knowledge (Epistēmē), Law and Convention, Mean (Mesotes), Moral Luck (Tyche), Moral Responsibility and the State, Moral Virtue (Arete), Moral Virtue as a Mean, Pleasure and Pain, Pleasure and Pain in Moral Action, Practical Wisdom (Phronesis), Punishment and Compulsion, Punishment and Praise, Punishment and Reward, Self-Control (Enkrateia) and Incontinence (Akrasia), Self-Control and Incontinence, Self-Love (Philautia), Virtue (Arete), Virtue and Vice, Voluntary Action (Voluntariness), Voluntary and Involuntary Actions
+Top-p (5-9): 30 concepts
+Choice (Prohairesis), Compulsion and Necessity, Friendship (Philia), Habituation (Ethos), Habituation and Moral Development, Incontinence (Akrasia), Incontinence (Akrasia) and Continence (Enkrateia), Involuntary Action (Akouasia), Justice (Dikaiosyne), Justice and Injustice, Knowledge and Ignorance, Law and Justice, Law and Legal Justice, Mean (Mesotes), Moral Luck and External Factors, Moral Responsibility in Friendship and Justice, Moral Virtue (Arete), Moral Virtue (Ethike Arete), Moral Virtue and Practical Wisdom (Phronesis), Passions and Character (Ethos), Pleasure and Pain, Pleasure and Pain (Hedone and Lupe), Pleasure and Pain as Moral Indicators, Practical Wisdom (Phronesis), Punishment and Praise, Self-Control and Incontinence, Virtue (Arete), Voluntary Action (Voluntariness), Voluntary and Involuntary Actions, Voluntary vs Involuntary Actions
+Top-k (10-14): 29 concepts
+Choice (Prohairesis), Choice and Deliberation, Compulsion and External Factors, Friendship (Philia), Habit (Ethos), Habituation (Ethos), Habituation and Character, Incontinence (Akrasia) and Continence (Enkrateia), Intentions and Motives, Justice (Dikaiosynē), Justice and Injustice, Knowledge and Ignorance, Law and Convention, Law and Justice, Moral Luck, Moral Virtue (Arete), Natural Virtue vs True Virtue, Passions (Pathē), Passions and Emotions, Pleasure and Pain, Practical Wisdom (Phronesis), Punishment and Blame, Punishment and Correction, Punishment and Justice, Self-Control and Incontinence, Self-Control and Incontinence (Akrasia), Virtue and Vice, Voluntary and Involuntary Actions, Voluntary vs Involuntary Actions
+BM25 Weight (15-19): 25 concepts
+Choice (Prohairesis), Compulsion and Necessity, Friendship (Philia), Habituation (Ethos), Habituation and Character Formation, Incontinence (Akrasia) and Continence (Enkrateia), Involuntary Action (Involuntariness), Justice (Dikaiosyne), Justice and Injustice, Law (Nomos), Law and Justice, Law and Legal Justice, Law and Social Responsibility, Moral Luck, Moral Virtue (Arete), Moral Virtue and Vice, Pleasure and Pain, Pleasure and Pain as Moral Indicators, Practical Wisdom (Phronesis), Self-Control (Enkrateia) and Incontinence (Akrasia), Self-Control and Incontinence, Virtue and Vice, Voluntary Action (Voluntariness), Voluntary and Involuntary Actions, Voluntary vs Involuntary Actions
+
+Color Groups:
+Color #800000: 6 concepts
+Character (Ethos), Habit (Ethos), Habituation (Ethos), Habituation and Character, Habituation and Character Formation, Passions and Character (Ethos)
+Color #FF8C00: 2 concepts
+Choice (Prohairesis), Choice and Deliberation
+Color #228B22: 34 concepts
+Compulsion and External Factors, Compulsion and Necessity, Friendship and Community, Habit and Education, Habituation and Moral Development, Incontinence (Akrasia) and Continence (Enkrateia), Intentions and Motives, Justice and Injustice, Knowledge and Ignorance, Law and Convention, Law and Justice, Law and Legal Justice, Law and Social Responsibility, Moral Luck and External Factors, Moral Responsibility and the State, Moral Responsibility in Friendship and Justice, Moral Virtue and Practical Wisdom (Phronesis), Moral Virtue and Vice, Passions and Emotions, Pleasure and Pain, Pleasure and Pain (Hedone and Lupe), Pleasure and Pain as Moral Indicators, Pleasure and Pain in Moral Action, Punishment and Blame, Punishment and Compulsion, Punishment and Correction, Punishment and Justice, Punishment and Praise, Punishment and Reward, Self-Control (Enkrateia) and Incontinence (Akrasia), Self-Control and Incontinence, Self-Control and Incontinence (Akrasia), Virtue and Vice, Voluntary and Involuntary Actions
+Color #8B008B: 1 concepts
+Friendship (Philia)
+Color #A0522D: 1 concepts
+Incontinence (Akrasia)
+Color #2E8B57: 4 concepts
+Involuntary Action (Akouasia), Involuntary Action (Involuntariness), Voluntary Action (Voluntariness), Voluntary vs Involuntary Actions
+Color #9932CC: 2 concepts
+Justice (Dikaiosyne), Justice (Dikaiosynē)
+Color #FFD700: 1 concepts
+Knowledge (Epistēmē)
+Color #556B2F: 1 concepts
+Law (Nomos)
+Color #C71585: 2 concepts
+Mean (Mesotes), Moral Virtue as a Mean
+Color #8B4513: 4 concepts
+Moral Luck, Moral Luck (Tyche), Moral Virtue (Arete), Moral Virtue (Ethike Arete)
+Color #20B2AA: 2 concepts
+Natural Virtue vs True Virtue, Virtue (Arete)
+Color #B22222: 1 concepts
+Passions (Pathē)
+Color #FF4500: 1 concepts
+Practical Wisdom (Phronesis)
+Color #6A5ACD: 1 concepts
+Self-Love (Philautia)

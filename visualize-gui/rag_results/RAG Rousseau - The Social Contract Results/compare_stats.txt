@@ -1,0 +1,112 @@
+Concepts Overview
+================
+Total unique concepts: 53
+
+All Concepts:
+Autonomy
+Autonomy (Autonomie)
+Autonomy of the Will (Autonomie de la Volonté)
+Civil Liberty
+Common Good (Bien Commun)
+Compassion
+Compassion (Pitié)
+Compulsion to Be Free (Forcer d'Être Libre)
+Conscience (Conscience)
+Consent
+Corruption (Corruption)
+Duty
+Duty (Devoir)
+Duty and Obligation
+Equality
+Equality (Égalité)
+Freedom
+Freedom (Liberté)
+General Will
+General Will (Volonté Générale)
+Justice
+Justice (Justice)
+Justice and Injustice
+Law
+Legitimacy of Laws (Légitimité des Lois)
+Moral Autonomy
+Moral Corruption (Corruption Morale)
+Moral Degradation (Dégénérescence Morale)
+Moral Education
+Moral Education (Éducation Morale)
+Moral Equality (Égalité Morale)
+Moral Liberty
+Moral Liberty (Liberté Morale)
+Moral Person
+Moral Person (Personne Morale)
+Moral Responsibility (Responsabilité Morale)
+Natural Compassion
+Natural Compassion (Pitié Naturelle)
+Natural Law
+Natural Law (Droit Naturel)
+Natural Liberty (Liberté Naturelle)
+Public Good
+Public Good (Bien Commun)
+Public Morality (Morale Publique)
+Public Opinion
+Public Opinion (Opinion Publique)
+Public Opinion and Morality
+Punishment (Punition)
+Self-Preservation (Conservation de Soi)
+Social Contract
+Social Contract (Contrat Social)
+Virtue
+Virtue (Vertu)
+
+Concepts per block:
+Temperature (0-4): 21 concepts
+Autonomy (Autonomie), Autonomy of the Will (Autonomie de la Volonté), Compassion (Pitié), Corruption (Corruption), Duty (Devoir), Equality (Égalité), General Will (Volonté Générale), Justice (Justice), Legitimacy of Laws (Légitimité des Lois), Moral Education (Éducation Morale), Moral Equality (Égalité Morale), Moral Liberty (Liberté Morale), Moral Person (Personne Morale), Natural Compassion (Pitié Naturelle), Natural Law (Droit Naturel), Public Good (Bien Commun), Public Opinion (Opinion Publique), Punishment (Punition), Self-Preservation (Conservation de Soi), Social Contract (Contrat Social), Virtue (Vertu)
+Top-p (5-9): 28 concepts
+Autonomy, Autonomy (Autonomie), Civil Liberty, Compulsion to Be Free (Forcer d'Être Libre), Consent, Duty, Duty (Devoir), Equality, Equality (Égalité), General Will, General Will (Volonté Générale), Justice, Justice (Justice), Law, Moral Degradation (Dégénérescence Morale), Moral Education (Éducation Morale), Moral Equality (Égalité Morale), Moral Liberty, Moral Liberty (Liberté Morale), Moral Person, Moral Person (Personne Morale), Natural Compassion (Pitié Naturelle), Public Good, Public Opinion, Public Opinion (Opinion Publique), Social Contract (Contrat Social), Virtue, Virtue (Vertu)
+Top-k (10-14): 33 concepts
+Autonomy (Autonomie), Compassion, Conscience (Conscience), Duty, Duty (Devoir), Duty and Obligation, Equality, Equality (Égalité), Freedom (Liberté), General Will, General Will (Volonté Générale), Justice, Justice (Justice), Justice and Injustice, Moral Autonomy, Moral Education (Éducation Morale), Moral Equality (Égalité Morale), Moral Liberty, Moral Liberty (Liberté Morale), Moral Responsibility (Responsabilité Morale), Natural Compassion, Natural Compassion (Pitié Naturelle), Natural Law, Natural Law (Droit Naturel), Public Morality (Morale Publique), Public Opinion, Public Opinion (Opinion Publique), Public Opinion and Morality, Punishment (Punition), Social Contract, Social Contract (Contrat Social), Virtue, Virtue (Vertu)
+BM25 Weight (15-19): 30 concepts
+Autonomy (Autonomie), Common Good (Bien Commun), Compassion (Pitié), Conscience (Conscience), Duty, Duty (Devoir), Equality, Equality (Égalité), Freedom, General Will, General Will (Volonté Générale), Justice, Justice (Justice), Moral Corruption (Corruption Morale), Moral Education, Moral Education (Éducation Morale), Moral Equality (Égalité Morale), Moral Liberty, Moral Liberty (Liberté Morale), Moral Responsibility (Responsabilité Morale), Natural Compassion, Natural Compassion (Pitié Naturelle), Natural Law (Droit Naturel), Natural Liberty (Liberté Naturelle), Public Morality (Morale Publique), Public Opinion (Opinion Publique), Social Contract, Social Contract (Contrat Social), Virtue, Virtue (Vertu)
+
+Color Groups:
+Color #800000: 4 concepts
+Autonomy, Autonomy (Autonomie), Autonomy of the Will (Autonomie de la Volonté), Moral Autonomy
+Color #FF8C00: 4 concepts
+Civil Liberty, Moral Liberty, Moral Liberty (Liberté Morale), Natural Liberty (Liberté Naturelle)
+Color #228B22: 3 concepts
+Common Good (Bien Commun), Public Good, Public Good (Bien Commun)
+Color #8B008B: 4 concepts
+Compassion, Compassion (Pitié), Natural Compassion, Natural Compassion (Pitié Naturelle)
+Color #A0522D: 1 concepts
+Compulsion to Be Free (Forcer d'Être Libre)
+Color #2E8B57: 1 concepts
+Conscience (Conscience)
+Color #9932CC: 1 concepts
+Consent
+Color #FFD700: 2 concepts
+Corruption (Corruption), Moral Corruption (Corruption Morale)
+Color #556B2F: 3 concepts
+Duty, Duty (Devoir), Duty and Obligation
+Color #C71585: 3 concepts
+Equality, Equality (Égalité), Moral Equality (Égalité Morale)
+Color #8B4513: 2 concepts
+Freedom, Freedom (Liberté)
+Color #20B2AA: 2 concepts
+General Will, General Will (Volonté Générale)
+Color #B22222: 3 concepts
+Justice, Justice (Justice), Justice and Injustice
+Color #FF4500: 3 concepts
+Law, Natural Law, Natural Law (Droit Naturel)
+Color #6A5ACD: 1 concepts
+Legitimacy of Laws (Légitimité des Lois)
+Color #D2691E: 7 concepts
+Moral Degradation (Dégénérescence Morale), Moral Education, Moral Education (Éducation Morale), Moral Person, Moral Person (Personne Morale), Moral Responsibility (Responsabilité Morale), Public Morality (Morale Publique)
+Color #006400: 3 concepts
+Public Opinion, Public Opinion (Opinion Publique), Public Opinion and Morality
+Color #708090: 1 concepts
+Punishment (Punition)
+Color #FF6347: 1 concepts
+Self-Preservation (Conservation de Soi)
+Color #483D8B: 2 concepts
+Social Contract, Social Contract (Contrat Social)
+Color #000000: 2 concepts
+Virtue, Virtue (Vertu)

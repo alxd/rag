@@ -1,0 +1,166 @@
+Concepts Overview
+================
+Total unique concepts: 109
+
+All Concepts:
+Character (1103a17–1103b35)
+Character (1103a17–b2, 1105a32, 1114a4–9)
+Character (1105a26–b9, 1114a4–9, 1114a19)
+Character (Ethos)
+Character (ethos)
+Character (êthos)
+Character (ἦθος)
+Character (ἦθος, ethos)
+Character (ἦθος, êthos)
+Control (Kurios)
+Correct Reason
+Correct Reason (Orthos Logos)
+Decision (1111a22–1112b33)
+Decision (1113a11–12, 1113b3–5, 1113b32, 1114a32)
+Decision (1113a11–12, 1113b3–5, 1114a31–b1)
+Decision (Prohairesis)
+Decision (prohairesis)
+Decision (προαίρεσις, prohairesis)
+Decision (πρόαιρεσις)
+Decision (πρόαιρεσις, prohairesis)
+Deliberation
+Deliberation (1112a1–1112b33)
+Deliberation (1112b8, 1113b21, 1143a32–b5)
+Deliberation (Boulēsis)
+Deliberation (bouleusis)
+Deliberation (βουλή, boule)
+Deliberation (βουλεύσις)
+Deliberation (βουλεύω, bouleuo)
+Deliberation (βούλησις, boulesis)
+Force
+Force (1110a22–1111a29)
+Force (1110a3, 1111a3, 1113a33)
+Force (1111a22–4, 1113b32, 1114a32)
+Force (bia)
+Force (βία)
+Force (βία, bia)
+Force (βία, bia) and Ignorance (ἄγνοια, agnoia)
+Force (βία, biā)
+Habituation
+Habituation (1103a17–b2, 1105a32, 1114a4–9)
+Habituation (ethismos)
+Habituation (ἔθος, ethos)
+Ignorance
+Ignorance (1110a22–1111a29)
+Ignorance (1110a3, 1111a3, 1113a33)
+Ignorance (1111a22–4, 1113b32, 1114a32)
+Ignorance (agnosia)
+Ignorance (ἀγνοία)
+Ignorance (ἀγνοία, agnoia)
+Incontinence
+Incontinence (ἀκρασία, akrasia)
+Involuntary Action
+Involuntary Action (akousion)
+Involuntary Action (akousios)
+Knowledge of Particulars (ἐπιστήμη τῶν καθ’ ἕκαστον, episteme ton kath’ hekaston)
+Moral Education
+Perception (Aisthesis)
+Perception (αἴσθησις, aisthêsis)
+Pleasure (ἡδονή, hêdonê)
+Praise and Blame
+Praise and Blame (1101b14, 1106a2, 1111a29, 1113b34)
+Praise and Blame (1105b14–16, 1111a29, 1113b34)
+Praise and Blame (1109b30–1110a22)
+Praise and Blame (epainos and nemesis)
+Praise and Blame (ἐπαινέω/ψέγω, epaineo/psego)
+Praise and Blame (ἐπαινέω/ψέγω, epaineō/psēgō)
+Praise and Blame (ἔπαινος καὶ ψόγος, epainos kai psogos)
+Praise and Blame (ἔπαινος, epainos; ψόγος, psogos)
+Principle (1111a22–4, 1113b32, 1114a32)
+Principle (Arche)
+Principle (arche)
+Principle (archê)
+Principle (ἀρχή)
+Principle (ἀρχή, arche)
+Principle (ἀρχή, archē)
+Principle in Us (1111a22–1112b33)
+Principle in Us (1111a22–4, 1114a19)
+Principle in Us (Archê en hêmin)
+Principle in Us (ἀρχή ἐν ἡμῖν, archê en hêmin)
+Principle in Us (ἀρχὴ ἐν ἡμῖν, archê en hêmin)
+Responsibility (1111a22–1112b33)
+Responsibility (1111a29, 1113b34, 1114a32)
+Responsibility (Aitios)
+Responsibility (aitios)
+Responsibility (aitios) (1111a29, 1113b34)
+Responsibility (αἰτία)
+Responsibility (αἰτία, aitia)
+Responsibility (αἴτιος, aitios)
+Vice (kakia)
+Virtue (1103a17–b2, 1105a32, 1114a4–9)
+Virtue (arete)
+Virtue (aretê)
+Virtue (ἀρετή) and Vice (κακία)
+Virtue (ἀρετή, aretê)
+Virtue and Vice
+Virtue and Vice (1105a26–b9, 1114a4–9, 1114a19)
+Virtue of Character
+Virtue of Character (ἀρετή ἠθική, arete ethike)
+Voluntary Action
+Voluntary Action (1110a22–1111a29)
+Voluntary Action (1110a22–4, 1111a22–4, 1113b32, 1114a32)
+Voluntary Action (1111a22–4, 1113b32, 1114a32)
+Voluntary Action (eph' hêmin)
+Voluntary Action (eph’ hêmin)
+Voluntary Action (hekouion)
+Voluntary Action (ἑκούσιον)
+Voluntary Action (ἑκούσιον, hekousion)
+Wisdom (σοφία, sophia)
+Wish (1112a1–1112b33)
+
+Concepts per block:
+Temperature (0-4): 30 concepts
+Character (Ethos), Character (êthos), Character (ἦθος), Control (Kurios), Decision (Prohairesis), Decision (prohairesis), Decision (πρόαιρεσις), Deliberation, Deliberation (bouleusis), Deliberation (βουλεύσις), Force, Force (βία), Habituation (ethismos), Ignorance, Ignorance (ἀγνοία), Involuntary Action (akousion), Moral Education, Praise and Blame, Principle (Arche), Principle (archê), Principle (ἀρχή), Responsibility (Aitios), Responsibility (aitios), Responsibility (αἰτία), Virtue (aretê), Virtue (ἀρετή) and Vice (κακία), Virtue and Vice, Voluntary Action, Voluntary Action (hekouion), Voluntary Action (ἑκούσιον)
+Top-p (5-9): 43 concepts
+Character (1103a17–b2, 1105a32, 1114a4–9), Character (Ethos), Character (ethos), Character (ἦθος, ethos), Correct Reason, Decision (1113a11–12, 1113b3–5, 1113b32, 1114a32), Decision (Prohairesis), Decision (prohairesis), Decision (πρόαιρεσις, prohairesis), Deliberation, Deliberation (βουλεύω, bouleuo), Force, Force (1110a3, 1111a3, 1113a33), Force (βία, bia) and Ignorance (ἄγνοια, agnoia), Habituation, Habituation (1103a17–b2, 1105a32, 1114a4–9), Habituation (ethismos), Ignorance, Ignorance (1110a3, 1111a3, 1113a33), Incontinence, Involuntary Action, Knowledge of Particulars (ἐπιστήμη τῶν καθ’ ἕκαστον, episteme ton kath’ hekaston), Praise and Blame, Praise and Blame (1101b14, 1106a2, 1111a29, 1113b34), Praise and Blame (epainos and nemesis), Praise and Blame (ἐπαινέω/ψέγω, epaineo/psego), Principle (1111a22–4, 1113b32, 1114a32), Principle (Arche), Principle (arche), Principle (ἀρχή, arche), Responsibility (Aitios), Responsibility (aitios) (1111a29, 1113b34), Responsibility (αἰτία, aitia), Vice (kakia), Virtue (1103a17–b2, 1105a32, 1114a4–9), Virtue (arete), Virtue and Vice, Virtue of Character, Virtue of Character (ἀρετή ἠθική, arete ethike), Voluntary Action, Voluntary Action (1110a22–4, 1111a22–4, 1113b32, 1114a32), Voluntary Action (hekouion), Voluntary Action (ἑκούσιον, hekousion)
+Top-k (10-14): 46 concepts
+Character (1103a17–1103b35), Character (1105a26–b9, 1114a4–9, 1114a19), Character (êthos), Character (ἦθος, êthos), Decision (1111a22–1112b33), Decision (1113a11–12, 1113b3–5, 1114a31–b1), Decision (prohairesis), Decision (πρόαιρεσις, prohairesis), Deliberation (1112a1–1112b33), Deliberation (1112b8, 1113b21, 1143a32–b5), Deliberation (bouleusis), Deliberation (βουλή, boule), Force (1110a22–1111a29), Force (1111a22–4, 1113b32, 1114a32), Force (bia), Force (βία, biā), Habituation (ethismos), Habituation (ἔθος, ethos), Ignorance (1110a22–1111a29), Ignorance (1111a22–4, 1113b32, 1114a32), Ignorance (agnosia), Ignorance (ἀγνοία, agnoia), Incontinence (ἀκρασία, akrasia), Perception (αἴσθησις, aisthêsis), Pleasure (ἡδονή, hêdonê), Praise and Blame, Praise and Blame (1105b14–16, 1111a29, 1113b34), Praise and Blame (1109b30–1110a22), Praise and Blame (ἔπαινος καὶ ψόγος, epainos kai psogos), Praise and Blame (ἔπαινος, epainos; ψόγος, psogos), Principle (ἀρχή, archē), Principle in Us (1111a22–1112b33), Principle in Us (1111a22–4, 1114a19), Principle in Us (ἀρχὴ ἐν ἡμῖν, archê en hêmin), Responsibility (1111a22–1112b33), Responsibility (1111a29, 1113b34, 1114a32), Responsibility (aitios), Responsibility (αἴτιος, aitios), Virtue (aretê), Virtue (ἀρετή, aretê), Virtue and Vice (1105a26–b9, 1114a4–9, 1114a19), Voluntary Action (1110a22–1111a29), Voluntary Action (1111a22–4, 1113b32, 1114a32), Voluntary Action (eph’ hêmin), Voluntary Action (ἑκούσιον, hekousion), Wish (1112a1–1112b33)
+BM25 Weight (15-19): 38 concepts
+Character (Ethos), Character (êthos), Character (ἦθος, ethos), Character (ἦθος, êthos), Correct Reason (Orthos Logos), Decision (Prohairesis), Decision (prohairesis), Decision (προαίρεσις, prohairesis), Decision (πρόαιρεσις, prohairesis), Deliberation, Deliberation (Boulēsis), Deliberation (bouleusis), Deliberation (βουλή, boule), Deliberation (βούλησις, boulesis), Force, Force (bia), Force (βία, bia), Habituation (ἔθος, ethos), Ignorance, Ignorance (agnosia), Ignorance (ἀγνοία, agnoia), Involuntary Action (akousios), Moral Education, Perception (Aisthesis), Praise and Blame, Praise and Blame (ἐπαινέω/ψέγω, epaineo/psego), Praise and Blame (ἐπαινέω/ψέγω, epaineō/psēgō), Principle in Us (Archê en hêmin), Principle in Us (ἀρχή ἐν ἡμῖν, archê en hêmin), Responsibility (Aitios), Responsibility (aitios), Responsibility (αἰτία, aitia), Virtue (aretê), Virtue and Vice, Voluntary Action, Voluntary Action (eph' hêmin), Voluntary Action (ἑκούσιον, hekousion), Wisdom (σοφία, sophia)
+
+Color Groups:
+Color #800000: 13 concepts
+Character (1103a17–1103b35), Character (1103a17–b2, 1105a32, 1114a4–9), Character (1105a26–b9, 1114a4–9, 1114a19), Character (Ethos), Character (ethos), Character (êthos), Character (ἦθος), Character (ἦθος, ethos), Character (ἦθος, êthos), Habituation (1103a17–b2, 1105a32, 1114a4–9), Virtue (1103a17–b2, 1105a32, 1114a4–9), Virtue of Character, Virtue of Character (ἀρετή ἠθική, arete ethike)
+Color #FF8C00: 1 concepts
+Control (Kurios)
+Color #228B22: 2 concepts
+Correct Reason, Correct Reason (Orthos Logos)
+Color #8B008B: 18 concepts
+Decision (1111a22–1112b33), Decision (1113a11–12, 1113b3–5, 1113b32, 1114a32), Decision (1113a11–12, 1113b3–5, 1114a31–b1), Decision (prohairesis), Decision (Prohairesis), Decision (προαίρεσις, prohairesis), Decision (πρόαιρεσις), Decision (πρόαιρεσις, prohairesis), Deliberation (1112a1–1112b33), Force (1111a22–4, 1113b32, 1114a32), Ignorance (1111a22–4, 1113b32, 1114a32), Principle (1111a22–4, 1113b32, 1114a32), Principle in Us (1111a22–1112b33), Principle in Us (1111a22–4, 1114a19), Responsibility (1111a22–1112b33), Voluntary Action (1110a22–4, 1111a22–4, 1113b32, 1114a32), Voluntary Action (1111a22–4, 1113b32, 1114a32), Wish (1112a1–1112b33)
+Color #A0522D: 8 concepts
+Deliberation, Deliberation (1112b8, 1113b21, 1143a32–b5), Deliberation (bouleusis), Deliberation (Boulēsis), Deliberation (βουλή, boule), Deliberation (βουλεύσις), Deliberation (βουλεύω, bouleuo), Deliberation (βούλησις, boulesis)
+Color #2E8B57: 8 concepts
+Force, Force (1110a22–1111a29), Force (1110a3, 1111a3, 1113a33), Force (bia), Force (βία), Force (βία, bia), Force (βία, bia) and Ignorance (ἄγνοια, agnoia), Force (βία, biā)
+Color #9932CC: 3 concepts
+Habituation, Habituation (ethismos), Habituation (ἔθος, ethos)
+Color #FFD700: 6 concepts
+Ignorance, Ignorance (1110a22–1111a29), Ignorance (1110a3, 1111a3, 1113a33), Ignorance (agnosia), Ignorance (ἀγνοία), Ignorance (ἀγνοία, agnoia)
+Color #556B2F: 2 concepts
+Incontinence, Incontinence (ἀκρασία, akrasia)
+Color #C71585: 10 concepts
+Involuntary Action, Involuntary Action (akousion), Involuntary Action (akousios), Voluntary Action, Voluntary Action (1110a22–1111a29), Voluntary Action (eph' hêmin), Voluntary Action (eph’ hêmin), Voluntary Action (hekouion), Voluntary Action (ἑκούσιον), Voluntary Action (ἑκούσιον, hekousion)
+Color #8B4513: 1 concepts
+Knowledge of Particulars (ἐπιστήμη τῶν καθ’ ἕκαστον, episteme ton kath’ hekaston)
+Color #20B2AA: 1 concepts
+Moral Education
+Color #B22222: 2 concepts
+Perception (Aisthesis), Perception (αἴσθησις, aisthêsis)
+Color #FF4500: 1 concepts
+Pleasure (ἡδονή, hêdonê)
+Color #6A5ACD: 12 concepts
+Praise and Blame, Praise and Blame (1101b14, 1106a2, 1111a29, 1113b34), Praise and Blame (1105b14–16, 1111a29, 1113b34), Praise and Blame (1109b30–1110a22), Praise and Blame (epainos and nemesis), Praise and Blame (ἐπαινέω/ψέγω, epaineo/psego), Praise and Blame (ἐπαινέω/ψέγω, epaineō/psēgō), Praise and Blame (ἔπαινος καὶ ψόγος, epainos kai psogos), Praise and Blame (ἔπαινος, epainos; ψόγος, psogos), Virtue (ἀρετή) and Vice (κακία), Virtue and Vice, Virtue and Vice (1105a26–b9, 1114a4–9, 1114a19)
+Color #D2691E: 9 concepts
+Principle (Arche), Principle (arche), Principle (archê), Principle (ἀρχή), Principle (ἀρχή, arche), Principle (ἀρχή, archē), Principle in Us (Archê en hêmin), Principle in Us (ἀρχή ἐν ἡμῖν, archê en hêmin), Principle in Us (ἀρχὴ ἐν ἡμῖν, archê en hêmin)
+Color #006400: 7 concepts
+Responsibility (1111a29, 1113b34, 1114a32), Responsibility (Aitios), Responsibility (aitios), Responsibility (aitios) (1111a29, 1113b34), Responsibility (αἰτία), Responsibility (αἰτία, aitia), Responsibility (αἴτιος, aitios)
+Color #708090: 1 concepts
+Vice (kakia)
+Color #FF6347: 3 concepts
+Virtue (arete), Virtue (aretê), Virtue (ἀρετή, aretê)
+Color #483D8B: 1 concepts
+Wisdom (σοφία, sophia)

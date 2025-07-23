@@ -1,0 +1,78 @@
+Concepts Overview
+================
+Total unique concepts: 37
+
+All Concepts:
+Autonomy (Autonomie)
+Autonomy (Selbstgesetzgebung)
+Autonomy of the Will
+Autonomy of the Will (Autonomie der Willkür)
+Autonomy of the Will (Autonomie des Willens)
+Categorical Imperative
+Categorical Imperative (Kategorischer Imperativ)
+Categorical Imperative (kategorischer Imperativ)
+Dignity (Würde)
+Duty (Pflicht)
+Freedom (Freiheit)
+Freedom of the Will
+Freedom of the Will (Freiheit der Willkür)
+Freedom of the Will (Freiheit des Willens)
+Good Will (Guter Wille)
+Good Will (guter Wille)
+Heteronomy (Fremdgesetzgebung)
+Heteronomy (Heteronomie)
+Heteronomy of the Will (Heteronomie der Willkür)
+Heteronomy of the Will (Heteronomie des Willens)
+Heteronomy vs Autonomy
+Heteronomy vs Autonomy (Heteronomie vs Autonomie)
+Kingdom of Ends (Reich der Zwecke)
+Maxim (Maxime)
+Maxims
+Maxims (Maximen)
+Moral Law (Sittengesetz)
+Moral Law (moralisches Gesetz)
+Moral Law as Unconditional Necessity
+Moral Worth (Sittliche Würde)
+Moral Worth (moralischer Wert)
+Moral Worth (sittliche Würde)
+Respect (Achtung)
+Respect for the Law (Achtung für das Gesetz)
+Respect for the Law (Achtung vor dem Gesetz)
+Respect for the Moral Law
+Respect for the Moral Law (Achtung für das moralische Gesetz)
+
+Concepts per block:
+Temperature (0-4): 26 concepts
+Autonomy (Selbstgesetzgebung), Autonomy of the Will, Autonomy of the Will (Autonomie der Willkür), Autonomy of the Will (Autonomie des Willens), Categorical Imperative, Categorical Imperative (kategorischer Imperativ), Duty (Pflicht), Freedom (Freiheit), Freedom of the Will, Freedom of the Will (Freiheit der Willkür), Good Will (Guter Wille), Good Will (guter Wille), Heteronomy (Heteronomie), Heteronomy of the Will (Heteronomie der Willkür), Heteronomy vs Autonomy, Kingdom of Ends (Reich der Zwecke), Maxim (Maxime), Maxims, Maxims (Maximen), Moral Law (moralisches Gesetz), Moral Law as Unconditional Necessity, Moral Worth (moralischer Wert), Respect (Achtung), Respect for the Law (Achtung für das Gesetz), Respect for the Law (Achtung vor dem Gesetz), Respect for the Moral Law
+Top-p (5-9): 18 concepts
+Autonomy (Autonomie), Autonomy of the Will (Autonomie des Willens), Categorical Imperative (kategorischer Imperativ), Dignity (Würde), Duty (Pflicht), Freedom (Freiheit), Good Will (guter Wille), Heteronomy (Heteronomie), Heteronomy of the Will (Heteronomie des Willens), Heteronomy vs Autonomy (Heteronomie vs Autonomie), Kingdom of Ends (Reich der Zwecke), Maxim (Maxime), Moral Law (Sittengesetz), Moral Law (moralisches Gesetz), Moral Worth (moralischer Wert), Moral Worth (sittliche Würde), Respect (Achtung), Respect for the Law (Achtung für das Gesetz)
+Top-k (10-14): 20 concepts
+Autonomy (Selbstgesetzgebung), Autonomy of the Will (Autonomie der Willkür), Autonomy of the Will (Autonomie des Willens), Categorical Imperative (Kategorischer Imperativ), Categorical Imperative (kategorischer Imperativ), Duty (Pflicht), Freedom (Freiheit), Good Will (Guter Wille), Good Will (guter Wille), Heteronomy (Fremdgesetzgebung), Heteronomy vs Autonomy, Kingdom of Ends (Reich der Zwecke), Maxim (Maxime), Moral Law (Sittengesetz), Moral Law (moralisches Gesetz), Moral Worth (Sittliche Würde), Moral Worth (moralischer Wert), Respect (Achtung), Respect for the Law (Achtung für das Gesetz), Respect for the Law (Achtung vor dem Gesetz)
+BM25 Weight (15-19): 20 concepts
+Autonomy (Autonomie), Autonomy of the Will (Autonomie des Willens), Categorical Imperative (Kategorischer Imperativ), Categorical Imperative (kategorischer Imperativ), Duty (Pflicht), Freedom (Freiheit), Freedom of the Will (Freiheit des Willens), Good Will (Guter Wille), Good Will (guter Wille), Heteronomy (Heteronomie), Heteronomy vs Autonomy, Heteronomy vs Autonomy (Heteronomie vs Autonomie), Kingdom of Ends (Reich der Zwecke), Maxim (Maxime), Moral Law (Sittengesetz), Moral Law (moralisches Gesetz), Moral Worth (Sittliche Würde), Respect (Achtung), Respect for the Law (Achtung für das Gesetz), Respect for the Moral Law (Achtung für das moralische Gesetz)
+
+Color Groups:
+Color #800000: 7 concepts
+Autonomy (Autonomie), Autonomy (Selbstgesetzgebung), Autonomy of the Will, Autonomy of the Will (Autonomie der Willkür), Autonomy of the Will (Autonomie des Willens), Heteronomy vs Autonomy, Heteronomy vs Autonomy (Heteronomie vs Autonomie)
+Color #FF8C00: 3 concepts
+Categorical Imperative, Categorical Imperative (kategorischer Imperativ), Categorical Imperative (Kategorischer Imperativ)
+Color #228B22: 3 concepts
+Dignity (Würde), Moral Worth (Sittliche Würde), Moral Worth (sittliche Würde)
+Color #8B008B: 1 concepts
+Duty (Pflicht)
+Color #A0522D: 4 concepts
+Freedom (Freiheit), Freedom of the Will, Freedom of the Will (Freiheit der Willkür), Freedom of the Will (Freiheit des Willens)
+Color #2E8B57: 4 concepts
+Good Will (Guter Wille), Good Will (guter Wille), Heteronomy of the Will (Heteronomie der Willkür), Heteronomy of the Will (Heteronomie des Willens)
+Color #9932CC: 2 concepts
+Heteronomy (Fremdgesetzgebung), Heteronomy (Heteronomie)
+Color #FFD700: 1 concepts
+Kingdom of Ends (Reich der Zwecke)
+Color #556B2F: 1 concepts
+Maxim (Maxime)
+Color #C71585: 2 concepts
+Maxims, Maxims (Maximen)
+Color #8B4513: 8 concepts
+Moral Law (moralisches Gesetz), Moral Law (Sittengesetz), Moral Law as Unconditional Necessity, Moral Worth (moralischer Wert), Respect for the Law (Achtung für das Gesetz), Respect for the Law (Achtung vor dem Gesetz), Respect for the Moral Law, Respect for the Moral Law (Achtung für das moralische Gesetz)
+Color #20B2AA: 1 concepts
+Respect (Achtung)

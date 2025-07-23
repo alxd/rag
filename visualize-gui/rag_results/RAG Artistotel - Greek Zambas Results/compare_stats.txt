@@ -1,0 +1,169 @@
+Concepts Overview
+================
+Total unique concepts: 108
+
+All Concepts:
+Aidos (Aidos) - Shame or Respect
+Aidos (Aidos) - Shame or Reverence
+Aidos (Shame)
+Aidos (Shame/Respect)
+Akolia (Wickedness or Vice)
+Akrasia (Akrasia) - Incontinence
+Akrasia (Akrasia) - Incontinence or Weakness of Will
+Akrasia (Akrasia) - Weakness of Will or Incontinence
+Akrasia (Incontinence or Weakness of Will)
+Akrasia (Incontinence)
+Akrasia (Incontinence) and Enkrateia (Self-Control)
+Akrasia (ἀκρασία) - Incontinence
+Akritia (Incontinence)
+Akritia (Incontinence) and Enkrateia (Self-Control)
+Akritēs (Incontinence)
+Andreia (Courage)
+Andreia (ἀνδρεία) - Courage
+Arete (Arete) - Virtue or Excellence
+Arete (Aristotle's Virtue Ethics)
+Arete (Arête) - Virtue or Excellence
+Arete (Courage)
+Arete (Excellence)
+Arete (Virtue)
+Arete Politike (Political Virtue)
+Aretē (Arete) - Virtue
+Aretē (Aristotle's concept of virtue)
+Aretē (Arête) - Virtue
+Aretē Ethike (Moral Virtue)
+Arête (Virtue)
+Arête (ἀρετή) - Virtue
+Courage (Andreia)
+Dikaiosyne (Dikaiosyne) - Justice
+Dikaiosyne (Justice)
+Dikaiosyne (δικαιοσύνη) - Justice
+Dikaiosynē (Dikaiosyne) - Justice
+Dikaiosynē (Justice)
+Enkrateia (Enkrateia) - Self-Control
+Enkrateia (Enkrateia) - Self-Control or Continence
+Enkrateia (Self-Control)
+Enkrateia (ἐγκράτεια) - Self-Control
+Ethos (Character)
+Ethos (Ethos) - Character or Habit
+Eudaimonia (Eudaimonia)
+Eudaimonia (Eudaimonia) - Flourishing
+Eudaimonia (Eudaimonia) - Flourishing or Happiness
+Eudaimonia (Eudaimonía - Flourishing/Happiness)
+Eudaimonia (Flourishing or Happiness)
+Eudaimonia (Flourishing)
+Eudaimonia (Flourishing/Happiness)
+Eudaimonia (Happiness or Flourishing)
+Eudaimonia (Happiness/Flourishing)
+Eudaimonia (εὐδαιμονία) - Flourishing/Happiness
+Friendship (Philia)
+Hedone (Hedone) - Pleasure
+Hedonē (Pleasure)
+Hexis (Hexis) - Habit or Disposition
+Hēdonē (Hēdonē) - Pleasure
+Justice (Dikaiosyne)
+Kakia (Kakia) - Vice
+Kakia (Vice)
+Kakia (Vices)
+Katharsis (Purification)
+Kathēkon (Duty)
+Kathēkon (Kathēkon) - Proper Function
+Megalopsychia (Magnanimity)
+Moral Luck (Tyche)
+Moral Responsibility in Action (Praxis)
+Moral Responsibility in Social Contexts
+Nomos (Law or Custom)
+Nomos (Law)
+Nomos (Law/Convention)
+Nomos (Law/Custom)
+Nomos (Nomos) - Law
+Nomos (Nomos) - Law or Custom
+Nomos (νόμος) - Law/Custom
+Pathos (Pathos) - Emotion
+Pathos (Pathos) - Passion
+Philautia (Philautia) - Self-Love
+Philautia (Self-Love)
+Philia (Friendship)
+Philia (Philia) - Friendship
+Philos (Friendship)
+Philos (Philia) - Friendship
+Phronesis (Phronesis) - Practical Wisdom
+Phronesis (Practical Wisdom)
+Phronesis (φρόνησις) - Practical Wisdom
+Phronēsis (Phronesis) - Practical Wisdom
+Phronēsis (Practical Wisdom)
+Pleasure (Hedone) and Pain (Lupe)
+Proairesis (Proaíresis)
+Proairesis (Prohairesis)
+Proairesis (Prohairesis) - Choice or Decision
+Proairesis (Prohairesis) - Voluntary Choice
+Prohairesis (Choice)
+Prohairesis (Proaíresis) – Voluntary Choice
+Prohairesis (Voluntary Choice)
+Prohairesis (προαίρεσις) - Choice
+Self-Control (Enkrateia)
+Sophrosyne (Sophrosyne) - Temperance or Self-Control
+Sophrosyne (Temperance)
+Sophrosyne (σωφροσύνη) - Temperance
+Sophrosynē (Sophrosyne) - Temperance
+Temperance (Sophrosyne)
+Thumos (Spiritedness)
+Thumos (Thumos) - Spirit
+Thumos (Thumos) - Spirit or Emotion
+Tyche (Fortune/Chance)
+Tyche (Tyche) - Luck
+
+Concepts per block:
+Temperature (0-4): 33 concepts
+Aidos (Shame), Akrasia (Incontinence), Akritia (Incontinence), Akritia (Incontinence) and Enkrateia (Self-Control), Arete (Excellence), Arete (Virtue), Aretē (Aristotle's concept of virtue), Arête (Virtue), Dikaiosyne (Justice), Dikaiosynē (Justice), Enkrateia (Self-Control), Ethos (Character), Eudaimonia (Eudaimonia), Eudaimonia (Eudaimonía - Flourishing/Happiness), Eudaimonia (Flourishing), Eudaimonia (Happiness/Flourishing), Hedonē (Pleasure), Kakia (Vice), Kakia (Vices), Megalopsychia (Magnanimity), Nomos (Law), Nomos (Law/Convention), Philautia (Self-Love), Philia (Friendship), Philos (Friendship), Phronesis (Practical Wisdom), Phronēsis (Practical Wisdom), Proairesis (Proaíresis), Proairesis (Prohairesis), Prohairesis (Choice), Sophrosyne (Temperance), Thumos (Spiritedness), Tyche (Fortune/Chance)
+Top-p (5-9): 43 concepts
+Aidos (Aidos) - Shame or Reverence, Akrasia (Akrasia) - Incontinence, Akrasia (Akrasia) - Weakness of Will or Incontinence, Akrasia (Incontinence) and Enkrateia (Self-Control), Akritia (Incontinence), Arete (Arete) - Virtue or Excellence, Arete (Virtue), Aretē (Arête) - Virtue, Arête (Virtue), Dikaiosyne (Dikaiosyne) - Justice, Dikaiosyne (Justice), Dikaiosynē (Dikaiosyne) - Justice, Enkrateia (Enkrateia) - Self-Control, Enkrateia (Enkrateia) - Self-Control or Continence, Ethos (Ethos) - Character or Habit, Eudaimonia (Eudaimonia) - Flourishing, Eudaimonia (Eudaimonia) - Flourishing or Happiness, Eudaimonia (Flourishing/Happiness), Eudaimonia (Happiness or Flourishing), Hedone (Hedone) - Pleasure, Hēdonē (Hēdonē) - Pleasure, Kakia (Kakia) - Vice, Kakia (Vices), Katharsis (Purification), Kathēkon (Kathēkon) - Proper Function, Megalopsychia (Magnanimity), Nomos (Law or Custom), Nomos (Nomos) - Law, Nomos (Nomos) - Law or Custom, Pathos (Pathos) - Emotion, Pathos (Pathos) - Passion, Philia (Friendship), Philia (Philia) - Friendship, Phronesis (Phronesis) - Practical Wisdom, Phronesis (Practical Wisdom), Phronēsis (Phronesis) - Practical Wisdom, Proairesis (Prohairesis) - Choice or Decision, Proairesis (Prohairesis) - Voluntary Choice, Prohairesis (Choice), Sophrosyne (Temperance), Sophrosynē (Sophrosyne) - Temperance, Thumos (Thumos) - Spirit, Tyche (Tyche) - Luck
+Top-k (10-14): 37 concepts
+Akrasia (Incontinence) and Enkrateia (Self-Control), Akrasia (ἀκρασία) - Incontinence, Akritia (Incontinence), Andreia (Courage), Andreia (ἀνδρεία) - Courage, Arete (Aristotle's Virtue Ethics), Arete (Courage), Aretē Ethike (Moral Virtue), Arête (Virtue), Arête (ἀρετή) - Virtue, Courage (Andreia), Dikaiosyne (Justice), Dikaiosyne (δικαιοσύνη) - Justice, Enkrateia (ἐγκράτεια) - Self-Control, Eudaimonia (Flourishing), Eudaimonia (Flourishing/Happiness), Eudaimonia (εὐδαιμονία) - Flourishing/Happiness, Friendship (Philia), Justice (Dikaiosyne), Kakia (Vice), Moral Luck (Tyche), Moral Responsibility in Action (Praxis), Moral Responsibility in Social Contexts, Nomos (Law), Nomos (Law/Convention), Nomos (νόμος) - Law/Custom, Philos (Friendship), Phronesis (Practical Wisdom), Phronesis (φρόνησις) - Practical Wisdom, Pleasure (Hedone) and Pain (Lupe), Prohairesis (Choice), Prohairesis (Proaíresis) – Voluntary Choice, Prohairesis (προαίρεσις) - Choice, Self-Control (Enkrateia), Sophrosyne (Temperance), Sophrosyne (σωφροσύνη) - Temperance, Temperance (Sophrosyne)
+BM25 Weight (15-19): 40 concepts
+Aidos (Aidos) - Shame or Respect, Aidos (Shame/Respect), Akolia (Wickedness or Vice), Akrasia (Akrasia) - Incontinence or Weakness of Will, Akrasia (Incontinence or Weakness of Will), Akritēs (Incontinence), Arete (Arête) - Virtue or Excellence, Arete (Courage), Arete (Excellence), Arete Politike (Political Virtue), Aretē (Arete) - Virtue, Arête (Virtue), Dikaiosyne (Dikaiosyne) - Justice, Dikaiosyne (Justice), Dikaiosynē (Dikaiosyne) - Justice, Enkrateia (Self-Control), Eudaimonia (Eudaimonia) - Flourishing or Happiness, Eudaimonia (Flourishing or Happiness), Eudaimonia (Flourishing/Happiness), Eudaimonia (Happiness/Flourishing), Hexis (Hexis) - Habit or Disposition, Kakia (Kakia) - Vice, Kathēkon (Duty), Nomos (Law or Custom), Nomos (Law/Custom), Nomos (Nomos) - Law or Custom, Philautia (Philautia) - Self-Love, Philia (Friendship), Philos (Friendship), Philos (Philia) - Friendship, Phronesis (Phronesis) - Practical Wisdom, Phronesis (Practical Wisdom), Phronēsis (Phronesis) - Practical Wisdom, Proairesis (Prohairesis) - Choice or Decision, Prohairesis (Choice), Prohairesis (Voluntary Choice), Sophrosyne (Sophrosyne) - Temperance or Self-Control, Sophrosyne (Temperance), Sophrosynē (Sophrosyne) - Temperance, Thumos (Thumos) - Spirit or Emotion
+
+Color Groups:
+Color #800000: 21 concepts
+Aidos (Aidos) - Shame or Respect, Aidos (Aidos) - Shame or Reverence, Aidos (Shame), Aidos (Shame/Respect), Akolia (Wickedness or Vice), Akrasia (Akrasia) - Incontinence or Weakness of Will, Akrasia (Akrasia) - Weakness of Will or Incontinence, Akrasia (Incontinence or Weakness of Will), Arete (Arete) - Virtue or Excellence, Arete (Arête) - Virtue or Excellence, Enkrateia (Enkrateia) - Self-Control or Continence, Ethos (Ethos) - Character or Habit, Eudaimonia (Eudaimonia) - Flourishing or Happiness, Eudaimonia (Flourishing or Happiness), Eudaimonia (Happiness or Flourishing), Hexis (Hexis) - Habit or Disposition, Nomos (Law or Custom), Nomos (Nomos) - Law or Custom, Proairesis (Prohairesis) - Choice or Decision, Sophrosyne (Sophrosyne) - Temperance or Self-Control, Thumos (Thumos) - Spirit or Emotion
+Color #FF8C00: 7 concepts
+Akrasia (Akrasia) - Incontinence, Akrasia (Incontinence), Akrasia (Incontinence) and Enkrateia (Self-Control), Akrasia (ἀκρασία) - Incontinence, Akritia (Incontinence), Akritia (Incontinence) and Enkrateia (Self-Control), Akritēs (Incontinence)
+Color #228B22: 4 concepts
+Andreia (Courage), Andreia (ἀνδρεία) - Courage, Arete (Courage), Courage (Andreia)
+Color #8B008B: 10 concepts
+Arete (Aristotle's Virtue Ethics), Arete (Excellence), Arete (Virtue), Arete Politike (Political Virtue), Aretē (Arete) - Virtue, Aretē (Aristotle's concept of virtue), Aretē (Arête) - Virtue, Aretē Ethike (Moral Virtue), Arête (Virtue), Arête (ἀρετή) - Virtue
+Color #A0522D: 6 concepts
+Dikaiosyne (Dikaiosyne) - Justice, Dikaiosyne (Justice), Dikaiosyne (δικαιοσύνη) - Justice, Dikaiosynē (Dikaiosyne) - Justice, Dikaiosynē (Justice), Justice (Dikaiosyne)
+Color #2E8B57: 6 concepts
+Enkrateia (Enkrateia) - Self-Control, Enkrateia (Self-Control), Enkrateia (ἐγκράτεια) - Self-Control, Philautia (Philautia) - Self-Love, Philautia (Self-Love), Self-Control (Enkrateia)
+Color #9932CC: 1 concepts
+Ethos (Character)
+Color #FFD700: 7 concepts
+Eudaimonia (Eudaimonia), Eudaimonia (Eudaimonia) - Flourishing, Eudaimonia (Eudaimonía - Flourishing/Happiness), Eudaimonia (Flourishing), Eudaimonia (Flourishing/Happiness), Eudaimonia (Happiness/Flourishing), Eudaimonia (εὐδαιμονία) - Flourishing/Happiness
+Color #556B2F: 5 concepts
+Friendship (Philia), Philia (Friendship), Philia (Philia) - Friendship, Philos (Friendship), Philos (Philia) - Friendship
+Color #C71585: 4 concepts
+Hedone (Hedone) - Pleasure, Hedonē (Pleasure), Hēdonē (Hēdonē) - Pleasure, Pleasure (Hedone) and Pain (Lupe)
+Color #8B4513: 3 concepts
+Kakia (Kakia) - Vice, Kakia (Vice), Kakia (Vices)
+Color #20B2AA: 1 concepts
+Katharsis (Purification)
+Color #B22222: 2 concepts
+Kathēkon (Duty), Kathēkon (Kathēkon) - Proper Function
+Color #FF4500: 1 concepts
+Megalopsychia (Magnanimity)
+Color #6A5ACD: 5 concepts
+Moral Luck (Tyche), Moral Responsibility in Action (Praxis), Moral Responsibility in Social Contexts, Tyche (Fortune/Chance), Tyche (Tyche) - Luck
+Color #D2691E: 5 concepts
+Nomos (Law), Nomos (Law/Convention), Nomos (Law/Custom), Nomos (Nomos) - Law, Nomos (νόμος) - Law/Custom
+Color #006400: 2 concepts
+Pathos (Pathos) - Emotion, Pathos (Pathos) - Passion
+Color #708090: 5 concepts
+Phronesis (Phronesis) - Practical Wisdom, Phronesis (Practical Wisdom), Phronesis (φρόνησις) - Practical Wisdom, Phronēsis (Phronesis) - Practical Wisdom, Phronēsis (Practical Wisdom)
+Color #FF6347: 4 concepts
+Proairesis (Proaíresis), Proairesis (Prohairesis), Proairesis (Prohairesis) - Voluntary Choice, Prohairesis (Proaíresis) – Voluntary Choice
+Color #483D8B: 3 concepts
+Prohairesis (Choice), Prohairesis (Voluntary Choice), Prohairesis (προαίρεσις) - Choice
+Color #000000: 4 concepts
+Sophrosyne (Temperance), Sophrosyne (σωφροσύνη) - Temperance, Sophrosynē (Sophrosyne) - Temperance, Temperance (Sophrosyne)
+Color #808000: 2 concepts
+Thumos (Spiritedness), Thumos (Thumos) - Spirit

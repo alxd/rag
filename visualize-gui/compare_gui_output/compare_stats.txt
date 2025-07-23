@@ -1,0 +1,133 @@
+Concepts Overview
+================
+Total unique concepts: 70
+
+All Concepts:
+Character (Ethos)
+Character (ἦθος - ethos)
+Character (ἦθος)
+Choice (Prohairesis)
+Deliberation
+Deliberation (Boulēsis)
+Deliberation (βουλεύσις)
+Deliberation (βούλησις - boulesis)
+Equity (Epikeia)
+Habit (Ethos)
+Habits (Ethos)
+Habituation (Ethos)
+Habituation (ἔθος - ethos)
+Habituation (ἔθος)
+Habituation and Virtue
+Ignorance (Agnoia)
+Ignorance (ἀγνοία - agnoia)
+Ignorance and Responsibility
+Incontinence (Akrasia)
+Injustice (Adikia)
+Intellect (Nous)
+Intellect and Will
+Intent (βούλησις)
+Intention (βούλησις - boulesis)
+Involuntary (ἀκούσιον - akousion)
+Involuntary Actions
+Involuntary Actions (ἀκούσια πράξεις)
+Justice (Dikaiosune)
+Justice (Dikaiosyne)
+Knowledge (ἐπιστήμη - episteme)
+Knowledge (ἐπιστήμη)
+Knowledge and Ignorance
+Moral Character (Ethos)
+Moral Choice (Prohairesis)
+Moral Choice (προαίρεσις - prohairesis)
+Moral Choice (προαίρεσις)
+Moral Luck
+Moral Principle (Logos)
+Moral Principles and Rules
+Moral Sense
+Moral Sense (Aisthesis)
+Moral Virtue (Arete)
+Moral Virtues
+Moral Virtues (Ethikai Aretai)
+Moral Virtues and Vices
+Passion (Pathos)
+Passion and Emotion
+Passions (Pathē)
+Pleasure and Pain
+Pleasure and Pain (Hedone and Lupe)
+Practical Wisdom (Phronesis)
+Practical Wisdom (φρόνησις - phronesis)
+Practical Wisdom (φρόνησις)
+Practical Wisdom and Virtue
+Punishment and Reward
+Reason (Logos)
+Responsibility for Feelings and Actions
+Self-Control (Enkrateia)
+Self-Control (Enkrateia) and Akrasia (Incontinence)
+Self-Control (Enkrateia) and Incontinence (Akrasia)
+Self-Control (Enkrateia) and Lack of Self-Control (Akrasia)
+Vice (Kakia)
+Virtue (Arete)
+Virtue (ἀρετή)
+Virtue and Vice
+Virtue of Character (Ethike Arete)
+Voluntary (ἑκούσιον - hekousion)
+Voluntary Actions
+Voluntary Actions (ἑκούσια πράξεις)
+Voluntary and Involuntary Actions
+
+Concepts per block:
+Temperature (0-4): 19 concepts
+Choice (Prohairesis), Habituation (Ethos), Incontinence (Akrasia), Injustice (Adikia), Justice (Dikaiosune), Justice (Dikaiosyne), Moral Character (Ethos), Moral Luck, Moral Virtue (Arete), Moral Virtues, Moral Virtues (Ethikai Aretai), Passions (Pathē), Pleasure and Pain, Practical Wisdom (Phronesis), Practical Wisdom and Virtue, Punishment and Reward, Virtue (Arete), Virtue of Character (Ethike Arete), Voluntary and Involuntary Actions
+Top-p (5-9): 36 concepts
+Character (ἦθος - ethos), Character (ἦθος), Deliberation (βουλεύσις), Deliberation (βούλησις - boulesis), Habit (Ethos), Habituation (Ethos), Habituation (ἔθος - ethos), Habituation (ἔθος), Ignorance (Agnoia), Ignorance (ἀγνοία - agnoia), Incontinence (Akrasia), Intellect (Nous), Intent (βούλησις), Intention (βούλησις - boulesis), Involuntary (ἀκούσιον - akousion), Involuntary Actions, Involuntary Actions (ἀκούσια πράξεις), Knowledge (ἐπιστήμη - episteme), Knowledge (ἐπιστήμη), Moral Choice (Prohairesis), Moral Choice (προαίρεσις - prohairesis), Moral Choice (προαίρεσις), Moral Principle (Logos), Moral Sense (Aisthesis), Moral Virtues and Vices, Passion (Pathos), Practical Wisdom (Phronesis), Practical Wisdom (φρόνησις - phronesis), Practical Wisdom (φρόνησις), Self-Control (Enkrateia), Virtue (Arete), Virtue (ἀρετή), Voluntary (ἑκούσιον - hekousion), Voluntary Actions, Voluntary Actions (ἑκούσια πράξεις), Voluntary and Involuntary Actions
+Top-k (10-14): 22 concepts
+Character (Ethos), Deliberation (Boulēsis), Habit (Ethos), Habits (Ethos), Habituation (Ethos), Ignorance (Agnoia), Intellect (Nous), Involuntary Actions, Moral Character (Ethos), Moral Choice (Prohairesis), Moral Principle (Logos), Moral Virtues and Vices, Passion (Pathos), Pleasure and Pain (Hedone and Lupe), Practical Wisdom (Phronesis), Reason (Logos), Self-Control (Enkrateia), Self-Control (Enkrateia) and Lack of Self-Control (Akrasia), Vice (Kakia), Virtue (Arete), Voluntary Actions, Voluntary and Involuntary Actions
+BM25 Weight (15-19): 25 concepts
+Deliberation, Deliberation (Boulēsis), Equity (Epikeia), Habituation (Ethos), Habituation and Virtue, Ignorance (Agnoia), Ignorance and Responsibility, Intellect and Will, Justice (Dikaiosyne), Knowledge and Ignorance, Moral Choice (Prohairesis), Moral Principles and Rules, Moral Sense, Moral Sense (Aisthesis), Moral Virtues and Vices, Passion (Pathos), Passion and Emotion, Practical Wisdom (Phronesis), Responsibility for Feelings and Actions, Self-Control (Enkrateia) and Akrasia (Incontinence), Self-Control (Enkrateia) and Incontinence (Akrasia), Self-Control (Enkrateia) and Lack of Self-Control (Akrasia), Virtue (Arete), Virtue and Vice, Voluntary and Involuntary Actions
+
+Color Groups:
+Color #800000: 9 concepts
+Character (Ethos), Character (ἦθος - ethos), Character (ἦθος), Habit (Ethos), Habits (Ethos), Habituation (Ethos), Habituation (ἔθος - ethos), Moral Character (Ethos), Virtue of Character (Ethike Arete)
+Color #FF8C00: 4 concepts
+Choice (Prohairesis), Moral Choice (Prohairesis), Moral Choice (προαίρεσις - prohairesis), Moral Choice (προαίρεσις)
+Color #228B22: 4 concepts
+Deliberation, Deliberation (Boulēsis), Deliberation (βουλεύσις), Deliberation (βούλησις - boulesis)
+Color #8B008B: 1 concepts
+Equity (Epikeia)
+Color #A0522D: 2 concepts
+Habituation (ἔθος), Habituation and Virtue
+Color #2E8B57: 4 concepts
+Ignorance (Agnoia), Ignorance (ἀγνοία - agnoia), Ignorance and Responsibility, Knowledge and Ignorance
+Color #9932CC: 4 concepts
+Incontinence (Akrasia), Self-Control (Enkrateia) and Akrasia (Incontinence), Self-Control (Enkrateia) and Incontinence (Akrasia), Self-Control (Enkrateia) and Lack of Self-Control (Akrasia)
+Color #FFD700: 1 concepts
+Injustice (Adikia)
+Color #556B2F: 2 concepts
+Intellect (Nous), Intellect and Will
+Color #C71585: 2 concepts
+Intent (βούλησις), Intention (βούλησις - boulesis)
+Color #8B4513: 4 concepts
+Involuntary (ἀκούσιον - akousion), Involuntary Actions, Involuntary Actions (ἀκούσια πράξεις), Voluntary and Involuntary Actions
+Color #20B2AA: 2 concepts
+Justice (Dikaiosune), Justice (Dikaiosyne)
+Color #B22222: 2 concepts
+Knowledge (ἐπιστήμη - episteme), Knowledge (ἐπιστήμη)
+Color #FF4500: 9 concepts
+Moral Luck, Moral Principle (Logos), Moral Principles and Rules, Moral Sense, Moral Sense (Aisthesis), Moral Virtue (Arete), Moral Virtues, Moral Virtues (Ethikai Aretai), Moral Virtues and Vices
+Color #6A5ACD: 2 concepts
+Passion (Pathos), Passion and Emotion
+Color #D2691E: 1 concepts
+Passions (Pathē)
+Color #006400: 6 concepts
+Pleasure and Pain, Pleasure and Pain (Hedone and Lupe), Practical Wisdom and Virtue, Punishment and Reward, Responsibility for Feelings and Actions, Virtue and Vice
+Color #708090: 3 concepts
+Practical Wisdom (Phronesis), Practical Wisdom (φρόνησις - phronesis), Practical Wisdom (φρόνησις)
+Color #FF6347: 1 concepts
+Reason (Logos)
+Color #483D8B: 1 concepts
+Self-Control (Enkrateia)
+Color #000000: 1 concepts
+Vice (Kakia)
+Color #808000: 2 concepts
+Virtue (Arete), Virtue (ἀρετή)
+Color #8B0000: 3 concepts
+Voluntary (ἑκούσιον - hekousion), Voluntary Actions, Voluntary Actions (ἑκούσια πράξεις)

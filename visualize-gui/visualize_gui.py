@@ -238,6 +238,35 @@ class UpSetGUI:
                                      command=self.start_processing, state='disabled')
         self.process_btn.grid(row=0, column=1, pady=0)
         
+        # --- Aggregate Results section ---
+        aggregate_frame = ttk.LabelFrame(main_frame, text="Aggregate Results from Multiple Folders", padding="5")
+        aggregate_frame.grid(row=7, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(10,2))
+        self.aggregate_folder = None
+        self.aggregate_folder_label = ttk.Label(aggregate_frame, text="No folder selected", foreground="gray")
+        self.aggregate_folder_label.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
+        self.select_aggregate_folder_btn = ttk.Button(aggregate_frame, text="Select Parent Folder", command=self.select_aggregate_folder)
+        self.select_aggregate_folder_btn.grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=2)
+        self.aggregate_btn = ttk.Button(aggregate_frame, text="Aggregate Results", command=self.aggregate_results, state='disabled')
+        self.aggregate_btn.grid(row=1, column=1, sticky=tk.W, padx=(5, 0), pady=2)
+        self.aggregate_status_label = ttk.Label(aggregate_frame, text="", foreground="blue")
+        self.aggregate_status_label.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
+        # --- Progress bar for aggregation ---
+        self.aggregate_progress = ttk.Progressbar(aggregate_frame, mode='determinate', length=300)
+        self.aggregate_progress.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(2,2))
+        self.aggregate_time_label = ttk.Label(aggregate_frame, text="", foreground="gray")
+        self.aggregate_time_label.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
+        # --- Fuzzy threshold and grouping logic controls ---
+        threshold_frame = ttk.Frame(aggregate_frame)
+        threshold_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5,2))
+        ttk.Label(threshold_frame, text="Similarity Threshold:").grid(row=0, column=0, sticky=tk.W)
+        self.sim_threshold_var = tk.DoubleVar(value=0.85)
+        self.sim_threshold_entry = ttk.Entry(threshold_frame, textvariable=self.sim_threshold_var, width=5)
+        self.sim_threshold_entry.grid(row=0, column=1, sticky=tk.W, padx=(2,10))
+        ttk.Label(threshold_frame, text="Grouping Logic:").grid(row=0, column=2, sticky=tk.W)
+        self.grouping_logic_var = tk.StringVar(value="Fuzzy")
+        self.grouping_logic_combo = ttk.Combobox(threshold_frame, textvariable=self.grouping_logic_var, values=["Fuzzy", "Exact", "None"], state="readonly", width=8)
+        self.grouping_logic_combo.grid(row=0, column=3, sticky=tk.W, padx=(2,0))
+        
         # Results frame with zoom controls
         results_frame = ttk.LabelFrame(main_frame, text="Results", padding="5")
         results_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.N, tk.S, tk.E, tk.W), pady=5)
@@ -1060,6 +1089,379 @@ class UpSetGUI:
         else:
             self.group_by_same_color_cb.state(['disabled'])
             self.group_by_same_color.set(False)
+
+    def select_aggregate_folder(self):
+        folder_path = filedialog.askdirectory(title="Select Parent Folder Containing Results")
+        if folder_path:
+            self.aggregate_folder = folder_path
+            self.aggregate_folder_label.config(text=folder_path, foreground="black")
+            self.aggregate_btn.config(state='normal')
+            self.aggregate_status_label.config(text="Ready to aggregate.", foreground="blue")
+        else:
+            self.aggregate_folder = None
+            self.aggregate_folder_label.config(text="No folder selected", foreground="gray")
+            self.aggregate_btn.config(state='disabled')
+            self.aggregate_status_label.config(text="", foreground="blue")
+
+    def aggregate_results(self):
+        # Run aggregation in a background thread to avoid blocking the UI
+        thread = threading.Thread(target=self._aggregate_results_thread)
+        thread.daemon = True
+        thread.start()
+
+    def _aggregate_results_thread(self):
+        import os
+        import docx
+        from docx.shared import RGBColor, Inches
+        from collections import defaultdict, Counter
+        import re
+        from tkinter import messagebox
+        from PIL import Image as PILImage
+        import difflib
+        import traceback
+        import time
+        import string
+        def safe_update_progress(val, elapsed, est_total):
+            self.root.after(0, lambda: self._update_aggregate_progress(val, elapsed, est_total))
+        def safe_update_status(msg, color):
+            self.root.after(0, lambda: self.aggregate_status_label.config(text=msg, foreground=color))
+        def safe_update_time(msg):
+            self.root.after(0, lambda: self.aggregate_time_label.config(text=msg))
+        safe_update_status("Scanning folders...", "blue")
+        parent = self.aggregate_folder
+        if not parent or not os.path.isdir(parent):
+            safe_update_status("Invalid parent folder.", "red")
+            return
+        # Get threshold and grouping logic from UI
+        try:
+            threshold = float(self.sim_threshold_var.get())
+        except Exception:
+            threshold = 0.85
+        grouping_logic = self.grouping_logic_var.get()
+        # Step 1: Find valid subfolders
+        subfolders = [os.path.join(parent, d) for d in os.listdir(parent) if os.path.isdir(os.path.join(parent, d))]
+        valid_folders = []
+        for folder in subfolders:
+            files = os.listdir(folder)
+            required = ["compare_stats.txt", "compare_BM25_composed.png", "compare_Topk_composed.png", "compare_Topp_composed.png", "compare_Temp_composed.png"]
+            if all(f in files for f in required):
+                valid_folders.append(folder)
+        if not valid_folders:
+            safe_update_status("No valid result folders found.", "red")
+            return
+        safe_update_status(f"Found {len(valid_folders)} valid folders. Extracting data...", "blue")
+        # Step 2: Extract concepts and images
+        folder_concepts = {}
+        all_concepts = set()
+        t0 = time.time()
+        for idx, folder in enumerate(valid_folders):
+            txt_path = os.path.join(folder, "compare_stats.txt")
+            try:
+                with open(txt_path, encoding="utf-8") as f:
+                    lines = f.readlines()
+                # Find 'All Concepts:' section
+                concepts = []
+                in_concepts = False
+                for line in lines:
+                    if line.strip().startswith("All Concepts:"):
+                        in_concepts = True
+                        continue
+                    if in_concepts:
+                        if not line.strip() or line.strip().endswith(":"):
+                            break
+                        c = line.strip()
+                        if c:
+                            concepts.append(c)
+                folder_concepts[folder] = set(concepts)
+                all_concepts.update(concepts)
+            except Exception as e:
+                print(f"Error reading {txt_path}: {e}")
+            # Progress bar update
+            elapsed = time.time() - t0
+            if idx == 0 and len(valid_folders) > 1:
+                est_total = elapsed * len(valid_folders)
+            else:
+                est_total = elapsed if idx == 0 else est_total
+            safe_update_progress(100 * (idx+1) / len(valid_folders), elapsed, est_total)
+        total_elapsed = time.time() - t0
+        # Step 3: Grouping logic
+        concept_list = sorted(all_concepts, key=lambda x: x.lower())
+        # --- Color grouping by common word ---
+        stopwords = set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','should','could','can','may','might','must'])
+        def extract_words(concept):
+            words = re.findall(r'\b\w+\b', concept.lower())
+            return [w for w in words if w not in stopwords and len(w) > 2]
+        word_groups = defaultdict(set)
+        for c in concept_list:
+            words = extract_words(c)
+            for w in words:
+                word_groups[w].add(c)
+        # Merge groups with overlap
+        merged_groups = []
+        seen = set()
+        for group in word_groups.values():
+            group = set(group)
+            if not group or group & seen:
+                continue
+            # Merge all groups that share any concept
+            merged = set(group)
+            for other in word_groups.values():
+                if merged & other:
+                    merged |= other
+            merged_groups.append(merged)
+            seen |= merged
+        # Fallback: any concept not in a group
+        for c in concept_list:
+            if not any(c in g for g in merged_groups):
+                merged_groups.append(set([c]))
+        # Assign color per group
+        color_palette = [
+            '#800000', '#FF8C00', '#228B22', '#8B008B', '#A0522D', '#2E8B57', '#9932CC', '#FFD700',
+            '#556B2F', '#C71585', '#8B4513', '#20B2AA', '#B22222', '#FF4500', '#6A5ACD', '#D2691E',
+            '#006400', '#708090', '#FF6347', '#483D8B', '#000000', '#808000', '#8B0000', '#FF1493',
+        ]
+        group_colors = {}
+        for i, group in enumerate(merged_groups):
+            for c in group:
+                group_colors[c] = color_palette[i % len(color_palette)]
+        # --- Fuzzy/Exact/None grouping for overlap and canonicalization ---
+        if grouping_logic == "Fuzzy":
+            groups = []  # List of sets
+            used = set()
+            for c in concept_list:
+                if c in used:
+                    continue
+                group = set([c])
+                for other in concept_list:
+                    if other == c or other in used:
+                        continue
+                    ratio = difflib.SequenceMatcher(None, c.lower(), other.lower()).ratio()
+                    if ratio >= threshold:
+                        group.add(other)
+                        used.add(other)
+                used.add(c)
+                groups.append(group)
+        elif grouping_logic == "Exact":
+            groups = [{c} for c in concept_list]
+        else:  # None
+            groups = [{c} for c in concept_list]
+        # Map each concept to its canonical group label (first in sorted group)
+        group_labels = {}
+        group_variants = {}
+        for group in groups:
+            label = sorted(group, key=lambda x: x.lower())[0]
+            for variant in group:
+                group_labels[variant] = label
+            group_variants[label] = sorted(group, key=lambda x: x.lower())
+        canonical_concepts = sorted(group_variants.keys(), key=lambda x: x.lower())
+        # Step 4: Compute overlap/uniqueness using canonical groups
+        overlap_table = []  # List of (canonical, [present in folder1, folder2, ...])
+        folder_names = [os.path.basename(f) for f in valid_folders]
+        for canon in canonical_concepts:
+            row = [canon]
+            canon_variants = set(group_variants[canon])
+            for folder in valid_folders:
+                present = any(v in folder_concepts[folder] for v in canon_variants)
+                row.append(1 if present else 0)
+            overlap_table.append(row)
+        # --- Unique words in folder names ---
+        def get_unique_folder_words(folder_names):
+            all_words = [set(re.findall(r'\w+', name.lower())) for name in folder_names]
+            common = set.intersection(*all_words) if all_words else set()
+            unique_words = []
+            for words in all_words:
+                unique = words - common
+                unique_words.append(unique)
+            return unique_words, common
+        unique_folder_words, common_folder_words = get_unique_folder_words(folder_names)
+        folder_unique_map = {folder_names[i]: unique_folder_words[i] for i in range(len(folder_names))}
+        def get_concept_folders(concept, folder_concepts, folder_names, valid_folders):
+            folders = set()
+            for i, folder in enumerate(valid_folders):
+                if concept in folder_concepts[folder]:
+                    folders.add(folder_names[i])
+            return folders
+        def get_concept_unique_words(concept, folder_concepts, folder_names, valid_folders, folder_unique_map):
+            folders = get_concept_folders(concept, folder_concepts, folder_names, valid_folders)
+            unique_words = set()
+            for fname in folders:
+                unique_words |= folder_unique_map[fname]
+            return unique_words
+        # Step 5: Collect images
+        folder_images = []  # List of (folder_name, [img1, img2, img3, img4])
+        for folder in valid_folders:
+            imgs = [os.path.join(folder, f) for f in ["compare_BM25_composed.png", "compare_Topk_composed.png", "compare_Topp_composed.png", "compare_Temp_composed.png"]]
+            folder_images.append((os.path.basename(folder), imgs))
+        # Step 6: Generate DOCX
+        try:
+            doc = docx.Document()
+            # Set landscape orientation and zero margins
+            section = doc.sections[0]
+            from docx.enum.section import WD_ORIENT
+            section.orientation = WD_ORIENT.LANDSCAPE
+            section.page_width, section.page_height = section.page_height, section.page_width
+            section.top_margin = 0
+            section.bottom_margin = 0
+            section.left_margin = 0
+            section.right_margin = 0
+            section.header_distance = 0
+            section.footer_distance = 0
+            # --- Overlap summary at the top ---
+            doc.add_heading("Overlap Summary", level=1)
+            total = len(canonical_concepts)
+            for i, folder in enumerate(valid_folders):
+                unique = sum(1 for row in overlap_table if row[i+1] and sum(row[1:]) == 1)
+                shared = sum(1 for row in overlap_table if all(row[1:]))
+                percent_unique = 100.0 * unique / total if total else 0
+                percent_shared = 100.0 * shared / total if total else 0
+                doc.add_paragraph(f"{folder_names[i]}: {unique} unique concepts ({percent_unique:.1f}%), {shared} shared concepts ({percent_shared:.1f}%)")
+            # --- Additional table: number of unique/common concepts and unique folder words ---
+            doc.add_heading("Unique/Common Concepts Table", level=2)
+            uniq_table = doc.add_table(rows=1, cols=7)
+            uniq_table.rows[0].cells[0].text = "Type"
+            uniq_table.rows[0].cells[1].text = "# Concepts"
+            uniq_table.rows[0].cells[2].text = "Concepts"
+            uniq_table.rows[0].cells[3].text = "Folder Unique Words"
+            uniq_table.rows[0].cells[4].text = "Total Concepts"
+            uniq_table.rows[0].cells[5].text = "Percentage (%)"
+            uniq_table.rows[0].cells[6].text = "Color"
+            # Unique concepts per folder
+            for i, folder in enumerate(valid_folders):
+                unique_concepts = [row[0] for row in overlap_table if row[i+1] and sum(row[1:]) == 1]
+                if unique_concepts:
+                    row = uniq_table.add_row().cells
+                    row[0].text = "Unique"
+                    row[1].text = str(len(unique_concepts))
+                    # Color each concept in its color
+                    para = row[2].paragraphs[0]
+                    for idx, concept in enumerate(unique_concepts):
+                        color = group_colors.get(concept, '#000000')
+                        run = para.add_run(concept)
+                        if color.startswith('#') and len(color) == 7:
+                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                            run.font.color.rgb = RGBColor(r, g, b)
+                        if idx < len(unique_concepts) - 1:
+                            para.add_run(", ")
+                    row[3].text = ", ".join(sorted(folder_unique_map[folder_names[i]]))
+                    row[4].text = str(total)
+                    percent = 100.0 * len(unique_concepts) / total if total else 0
+                    row[5].text = f"{percent:.1f}"
+                    # Show color swatch for the first concept
+                    color = group_colors.get(unique_concepts[0], '#000000') if unique_concepts else '#000000'
+                    run = row[6].paragraphs[0].add_run('■')
+                    if color.startswith('#') and len(color) == 7:
+                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                        run.font.color.rgb = RGBColor(r, g, b)
+            # Common concepts (shared by all)
+            common_concepts = [row[0] for row in overlap_table if all(row[1:])]
+            if common_concepts:
+                row = uniq_table.add_row().cells
+                row[0].text = "Common"
+                row[1].text = str(len(common_concepts))
+                para = row[2].paragraphs[0]
+                for idx, concept in enumerate(common_concepts):
+                    color = group_colors.get(concept, '#000000')
+                    run = para.add_run(concept)
+                    if color.startswith('#') and len(color) == 7:
+                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                        run.font.color.rgb = RGBColor(r, g, b)
+                    if idx < len(common_concepts) - 1:
+                        para.add_run(", ")
+                row[3].text = ", ".join(sorted(set.union(*unique_folder_words)))
+                row[4].text = str(total)
+                percent = 100.0 * len(common_concepts) / total if total else 0
+                row[5].text = f"{percent:.1f}"
+                color = group_colors.get(common_concepts[0], '#000000') if common_concepts else '#000000'
+                run = row[6].paragraphs[0].add_run('■')
+                if color.startswith('#') and len(color) == 7:
+                    r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                    run.font.color.rgb = RGBColor(r, g, b)
+            doc.add_page_break()
+            doc.add_heading("Aggregated Results", level=1)
+            # Table of images
+            doc.add_heading("UpSet Plots from Each Folder", level=2)
+            img_table = doc.add_table(rows=1, cols=5)
+            hdr = img_table.rows[0].cells
+            hdr[0].text = "Folder"
+            hdr[1].text = "BM25"
+            hdr[2].text = "Top-k"
+            hdr[3].text = "Top-p"
+            hdr[4].text = "Temp"
+            for folder_name, imgs in folder_images:
+                row = img_table.add_row().cells
+                row[0].text = folder_name
+                for i, img_path in enumerate(imgs):
+                    try:
+                        run = row[i+1].paragraphs[0].add_run()
+                        run.add_picture(img_path, width=Inches(1.5))
+                    except Exception as e:
+                        row[i+1].text = "[Image error]"
+            doc.add_page_break()
+            # Table of all canonical concepts (color-coded, with variants, grouped by color)
+            doc.add_heading("All Concepts (Grouped by Color, Color-coded)", level=2)
+            # Group concepts by color
+            color_to_concepts = defaultdict(list)
+            for c in concept_list:
+                color = group_colors[c]
+                color_to_concepts[color].append(c)
+            concept_table = doc.add_table(rows=1, cols=3)
+            concept_table.rows[0].cells[0].text = "Color Group"
+            concept_table.rows[0].cells[1].text = "Concepts"
+            concept_table.rows[0].cells[2].text = "Folder Unique Words"
+            for color, concepts in color_to_concepts.items():
+                row = concept_table.add_row().cells
+                run = row[0].paragraphs[0].add_run(color)
+                if color.startswith('#') and len(color) == 7:
+                    r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                    run.font.color.rgb = RGBColor(r, g, b)
+                # All concepts in this group in the same color
+                para = row[1].paragraphs[0]
+                for idx, c in enumerate(concepts):
+                    rc = para.add_run(c)
+                    if color.startswith('#') and len(color) == 7:
+                        rc.font.color.rgb = RGBColor(r, g, b)
+                    if idx < len(concepts) - 1:
+                        para.add_run(", ")
+                # Folder unique words for this group (use same logic as above)
+                folders_with_concept = set()
+                for c in concepts:
+                    for i, folder in enumerate(valid_folders):
+                        if c in folder_concepts[folder]:
+                            folders_with_concept.add(folder_names[i])
+                unique_words = set()
+                for fname in folders_with_concept:
+                    unique_words |= folder_unique_map[fname]
+                row[2].text = ", ".join(sorted(unique_words))
+            doc.add_page_break()
+            # Overlap table: put all concepts in the same group on the same row
+            doc.add_heading("Concept Overlap Across Folders (Grouped)", level=2)
+            overlap_doc_table = doc.add_table(rows=1, cols=2+len(folder_names))
+            hdr = overlap_doc_table.rows[0].cells
+            hdr[0].text = "Canonical Concept"
+            hdr[1].text = "Variants"
+            for i, name in enumerate(folder_names):
+                hdr[2+i].text = name
+            for canon in canonical_concepts:
+                doc_row = overlap_doc_table.add_row().cells
+                doc_row[0].text = canon
+                doc_row[1].text = ", ".join(group_variants[canon])
+                canon_variants = set(group_variants[canon])
+                for j, folder in enumerate(valid_folders):
+                    present = any(v in folder_concepts[folder] for v in canon_variants)
+                    doc_row[2+j].text = "✔" if present else ""
+            safe_update_progress(100, total_elapsed, total_elapsed)
+            # Save
+            out_path = os.path.join(parent, "aggregated_results.docx")
+            doc.save(out_path)
+            safe_update_status(f"Aggregation complete. Saved to {out_path}", "green")
+        except Exception as e:
+            tb = traceback.format_exc()
+            safe_update_status(f"Error generating DOCX: {e}", "red")
+            print(tb)
+
+    def _update_aggregate_progress(self, val, elapsed, est_total):
+        self.aggregate_progress['value'] = val
+        self.aggregate_time_label.config(text=f"Elapsed: {elapsed:.1f}s, Estimated total: {est_total:.1f}s")
 
 def replace_bekker_with_greek(concept, bekker_map):
     for bekker, greek in bekker_map.items():

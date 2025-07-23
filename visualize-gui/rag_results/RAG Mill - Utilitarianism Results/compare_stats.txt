@@ -1,0 +1,99 @@
+Concepts Overview
+================
+Total unique concepts: 64
+
+All Concepts:
+Conflict of Moral Obligations
+Conflict of Obligations
+Conscience
+Conscience and Moral Feeling
+Conscience and Moral Feelings
+Conscience and Moral Sentiment
+Desert and Retribution
+Duty
+Duty and Obligation
+Equality
+Expediency vs Justice
+Expediency vs Principle
+Impartiality
+Impartiality and Equality
+Intention vs Motive
+Justice
+Justice and Injustice
+Justice as a Moral Obligation
+Justice as a Social Utility
+Moral Education and Cultivation
+Moral Education and Social Influence
+Moral Feelings and Sentiments
+Moral Intuition vs Utilitarianism
+Moral Obligation
+Moral Progress and Improvement
+Moral Progress and Refinement
+Moral Responsibility
+Moral Responsibility and Accountability
+Moral Responsibility and Conscience
+Moral Responsibility and Legal Responsibility
+Moral Responsibility and Social Contract
+Moral Responsibility and Social Utility
+Moral Rights
+Moral Rights and Duties
+Moral Rights and Legal Rights
+Moral Rules and Exceptions
+Moral Sentiment
+Moral Sentiment and Conscience
+Punishment and Retribution
+Retribution
+Retribution and Punishment
+Right and Wrong
+Rights and Correlative Duties
+Rights and Duties
+Rights and Moral Obligations
+Rights and Moral Responsibility
+Rights and Obligations
+Rights and Wrongs
+Sanction
+Sanction of Morality
+Sanctions (External and Internal)
+Sanctions (Internal and External)
+Sanctions of Morality
+Sanctions of Morality (External and Internal)
+Sentiment of Justice
+Social Sympathy and Unity
+Social Utility
+Social Utility and Collective Good
+Sympathy and Social Feeling
+Utility (Greatest Happiness Principle)
+Utility and Happiness
+Utility as a Moral Standard
+Utility as a Standard of Morality
+Virtue and Disinterested Morality
+
+Concepts per block:
+Temperature (0-4): 31 concepts
+Conflict of Moral Obligations, Conflict of Obligations, Conscience, Conscience and Moral Feeling, Conscience and Moral Feelings, Duty, Equality, Expediency vs Justice, Expediency vs Principle, Impartiality, Impartiality and Equality, Justice, Justice and Injustice, Justice as a Moral Obligation, Moral Education and Cultivation, Moral Obligation, Moral Rights, Moral Rules and Exceptions, Moral Sentiment, Punishment and Retribution, Retribution, Rights and Correlative Duties, Rights and Moral Responsibility, Rights and Wrongs, Sanctions (External and Internal), Sanctions (Internal and External), Sanctions of Morality (External and Internal), Social Utility and Collective Good, Sympathy and Social Feeling, Utility (Greatest Happiness Principle), Utility as a Moral Standard
+Top-p (5-9): 29 concepts
+Conflict of Obligations, Conscience, Conscience and Moral Sentiment, Desert and Retribution, Duty, Duty and Obligation, Expediency vs Principle, Impartiality and Equality, Intention vs Motive, Justice, Justice and Injustice, Moral Education and Cultivation, Moral Obligation, Moral Responsibility and Accountability, Moral Responsibility and Conscience, Moral Responsibility and Social Utility, Moral Rights, Moral Rights and Legal Rights, Moral Sentiment, Moral Sentiment and Conscience, Punishment and Retribution, Right and Wrong, Rights and Wrongs, Sanctions (Internal and External), Sanctions of Morality, Sentiment of Justice, Social Utility, Utility (Greatest Happiness Principle), Utility as a Moral Standard
+Top-k (10-14): 28 concepts
+Conflict of Obligations, Conscience, Conscience and Moral Sentiment, Desert and Retribution, Expediency vs Justice, Expediency vs Principle, Impartiality and Equality, Justice, Justice and Injustice, Justice as a Moral Obligation, Moral Education and Cultivation, Moral Education and Social Influence, Moral Feelings and Sentiments, Moral Intuition vs Utilitarianism, Moral Obligation, Moral Progress and Improvement, Moral Responsibility and Conscience, Moral Responsibility and Social Contract, Moral Rights and Legal Rights, Moral Sentiment, Moral Sentiment and Conscience, Rights and Wrongs, Sanction of Morality, Sanctions (Internal and External), Sanctions of Morality, Social Sympathy and Unity, Utility (Greatest Happiness Principle), Utility as a Moral Standard
+BM25 Weight (15-19): 36 concepts
+Conflict of Obligations, Conscience, Conscience and Moral Feeling, Duty, Equality, Expediency vs Principle, Impartiality, Impartiality and Equality, Justice, Justice and Injustice, Justice as a Social Utility, Moral Education and Cultivation, Moral Education and Social Influence, Moral Obligation, Moral Progress and Refinement, Moral Responsibility, Moral Responsibility and Legal Responsibility, Moral Responsibility and Social Contract, Moral Responsibility and Social Utility, Moral Rights and Duties, Moral Sentiment, Moral Sentiment and Conscience, Retribution and Punishment, Right and Wrong, Rights and Duties, Rights and Moral Obligations, Rights and Obligations, Sanction, Sanctions (Internal and External), Sanctions of Morality, Sentiment of Justice, Utility (Greatest Happiness Principle), Utility and Happiness, Utility as a Moral Standard, Utility as a Standard of Morality, Virtue and Disinterested Morality
+
+Color Groups:
+Color #800000: 34 concepts
+Conflict of Moral Obligations, Conflict of Obligations, Conscience and Moral Feeling, Conscience and Moral Feelings, Conscience and Moral Sentiment, Justice as a Moral Obligation, Moral Education and Cultivation, Moral Education and Social Influence, Moral Feelings and Sentiments, Moral Intuition vs Utilitarianism, Moral Obligation, Moral Progress and Improvement, Moral Progress and Refinement, Moral Responsibility, Moral Responsibility and Accountability, Moral Responsibility and Conscience, Moral Responsibility and Legal Responsibility, Moral Responsibility and Social Contract, Moral Responsibility and Social Utility, Moral Rights, Moral Rights and Duties, Moral Rights and Legal Rights, Moral Rules and Exceptions, Moral Sentiment, Moral Sentiment and Conscience, Rights and Moral Obligations, Rights and Moral Responsibility, Rights and Obligations, Sanction of Morality, Sanctions of Morality, Sanctions of Morality (External and Internal), Sentiment of Justice, Utility as a Moral Standard, Utility as a Standard of Morality
+Color #FF8C00: 1 concepts
+Conscience
+Color #228B22: 18 concepts
+Desert and Retribution, Duty and Obligation, Impartiality and Equality, Justice and Injustice, Punishment and Retribution, Retribution, Retribution and Punishment, Right and Wrong, Rights and Correlative Duties, Rights and Duties, Rights and Wrongs, Sanctions (External and Internal), Sanctions (Internal and External), Social Sympathy and Unity, Social Utility and Collective Good, Sympathy and Social Feeling, Utility and Happiness, Virtue and Disinterested Morality
+Color #8B008B: 1 concepts
+Duty
+Color #A0522D: 1 concepts
+Equality
+Color #2E8B57: 5 concepts
+Expediency vs Justice, Expediency vs Principle, Intention vs Motive, Justice, Justice as a Social Utility
+Color #9932CC: 1 concepts
+Impartiality
+Color #FFD700: 1 concepts
+Sanction
+Color #556B2F: 2 concepts
+Social Utility, Utility (Greatest Happiness Principle)

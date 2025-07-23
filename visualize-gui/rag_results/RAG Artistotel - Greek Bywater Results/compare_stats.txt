@@ -1,0 +1,143 @@
+Concepts Overview
+================
+Total unique concepts: 78
+
+All Concepts:
+Aidos (Shame)
+Aidos (Shame/Respect)
+Aisthēsis (Perception)
+Andreia (Courage)
+Andreia (ἀνδρεία)
+Andreia (ἀνδρεία) - Courage
+Arete (Arête)
+Arete (Courage)
+Arete (Excellence)
+Aretē (Excellence)
+Aretē (Virtue)
+Aretē (ἀρετή) - Excellence
+Arête (Excellence/Virtue)
+Arête (Virtue)
+Arête (ἀρετή)
+Arête (ἀρετή) - Virtue
+Dikaion (Justice)
+Dikaiosune (Justice)
+Dikaiosune (δικαιοσύνη)
+Dikaiosyne (Dikaiosýnē)
+Dikaiosyne (Justice)
+Dikaiosynē (δικαιοσύνη) - Justice
+Ethos (Character)
+Ethos (Habit/Character)
+Eudaimonia (Eudaimonía)
+Eudaimonia (Flourishing)
+Eudaimonia (Flourishing/Happiness)
+Eudaimonia (Happiness/Flourishing)
+Eudaimonia (εὐδαιμονία)
+Eudaimonia (εὐδαιμονία) - Happiness/Flourishing
+Habit (Ethos)
+Hedone (Hedonē)
+Hedone (Pleasure)
+Hedone (ἡδονή)
+Kakia (Kakía)
+Kakia (Vice)
+Kakia (Vices)
+Kakia (Viciousness)
+Kakia (κακία)
+Kakia (κακία) - Vice
+Kathēkon (Proper Function)
+Megalopsuchia (μεγαλοψυχία)
+Megalopsychia (Magnanimity)
+Mesotes (Mean)
+Moral Decision-Making
+Moral Education
+Moral Habit
+Moral Responsibility
+Moral Responsibility and Action
+Moral Responsibility and Community
+Moral Responsibility and Education
+Moral Responsibility and Happiness
+Moral Responsibility and Law
+Moral Virtue
+Nike (Victory)
+Nike (νίκη) - Victory
+Nikomachean Ethics
+Nomos (Law)
+Nomos (Law/Convention)
+Nomos (Law/Custom)
+Nomos (Nómos)
+Philautia (Self-Love)
+Philautia (φιλία)
+Philos (Friendship)
+Philos (φίλος) - Friendship
+Phronesis (Phronēsis)
+Phronesis (Practical Wisdom)
+Phronesis (φρόνησις)
+Phronesis (φρόνησις) - Practical Wisdom
+Phronēsis (Practical Wisdom)
+Prohairesis (Choice)
+Prohairesis (Prohaíresis)
+Sophrosune (σωφροσύνη)
+Sophrosyne (Sōphrosýnē)
+Sophrosyne (Temperance)
+Sophrosynē (σωφροσύνη) - Temperance
+Thumos (Spiritedness)
+Thumos (Thumós)
+
+Concepts per block:
+Temperature (0-4): 29 concepts
+Arete (Arête), Arete (Excellence), Aretē (Excellence), Arête (Virtue), Dikaiosune (Justice), Dikaiosyne (Dikaiosýnē), Dikaiosyne (Justice), Eudaimonia (Eudaimonía), Eudaimonia (Flourishing/Happiness), Eudaimonia (Happiness/Flourishing), Hedone (Hedonē), Hedone (Pleasure), Kakia (Kakía), Kakia (Vice), Kakia (Viciousness), Kathēkon (Proper Function), Megalopsychia (Magnanimity), Nike (Victory), Nomos (Law), Nomos (Law/Convention), Nomos (Nómos), Phronesis (Phronēsis), Phronesis (Practical Wisdom), Prohairesis (Choice), Prohairesis (Prohaíresis), Sophrosyne (Sōphrosýnē), Sophrosyne (Temperance), Thumos (Spiritedness), Thumos (Thumós)
+Top-p (5-9): 31 concepts
+Aidos (Shame), Aisthēsis (Perception), Andreia (Courage), Andreia (ἀνδρεία) - Courage, Aretē (Excellence), Aretē (Virtue), Aretē (ἀρετή) - Excellence, Arête (Excellence/Virtue), Arête (Virtue), Arête (ἀρετή) - Virtue, Dikaiosune (Justice), Dikaiosyne (Justice), Dikaiosynē (δικαιοσύνη) - Justice, Eudaimonia (Flourishing), Eudaimonia (Flourishing/Happiness), Eudaimonia (εὐδαιμονία) - Happiness/Flourishing, Hedone (Pleasure), Kakia (Vice), Kakia (κακία) - Vice, Megalopsychia (Magnanimity), Nike (νίκη) - Victory, Nomos (Law), Nomos (Law/Convention), Philautia (Self-Love), Philos (φίλος) - Friendship, Phronesis (Practical Wisdom), Phronesis (φρόνησις) - Practical Wisdom, Phronēsis (Practical Wisdom), Prohairesis (Choice), Sophrosyne (Temperance), Sophrosynē (σωφροσύνη) - Temperance
+Top-k (10-14): 37 concepts
+Aidos (Shame), Aidos (Shame/Respect), Andreia (Courage), Andreia (ἀνδρεία), Arete (Excellence), Arête (Excellence/Virtue), Arête (Virtue), Arête (ἀρετή), Dikaion (Justice), Dikaiosune (Justice), Dikaiosune (δικαιοσύνη), Dikaiosyne (Justice), Ethos (Character), Ethos (Habit/Character), Eudaimonia (Flourishing/Happiness), Eudaimonia (Happiness/Flourishing), Eudaimonia (εὐδαιμονία), Hedone (ἡδονή), Kakia (Vice), Kakia (κακία), Megalopsuchia (μεγαλοψυχία), Megalopsychia (Magnanimity), Moral Decision-Making, Moral Education, Moral Habit, Moral Responsibility, Moral Virtue, Nike (Victory), Nikomachean Ethics, Nomos (Law/Custom), Philautia (φιλία), Phronesis (Practical Wisdom), Phronesis (φρόνησις), Prohairesis (Choice), Sophrosune (σωφροσύνη), Sophrosyne (Temperance), Thumos (Spiritedness)
+BM25 Weight (15-19): 27 concepts
+Andreia (Courage), Arete (Courage), Arete (Excellence), Arête (Excellence/Virtue), Arête (Virtue), Dikaiosyne (Justice), Ethos (Character), Eudaimonia (Flourishing/Happiness), Eudaimonia (Happiness/Flourishing), Habit (Ethos), Hedone (Pleasure), Kakia (Vice), Kakia (Vices), Megalopsychia (Magnanimity), Mesotes (Mean), Moral Responsibility and Action, Moral Responsibility and Community, Moral Responsibility and Education, Moral Responsibility and Happiness, Moral Responsibility and Law, Nike (Victory), Nikomachean Ethics, Nomos (Law), Philos (Friendship), Phronesis (Practical Wisdom), Prohairesis (Choice), Sophrosyne (Temperance)
+
+Color Groups:
+Color #800000: 4 concepts
+Aidos (Shame), Aidos (Shame/Respect), Sophrosune (σωφροσύνη), Sophrosynē (σωφροσύνη) - Temperance
+Color #FF8C00: 3 concepts
+Aisthēsis (Perception), Sophrosyne (Sōphrosýnē), Sophrosyne (Temperance)
+Color #228B22: 6 concepts
+Andreia (Courage), Andreia (ἀνδρεία), Andreia (ἀνδρεία) - Courage, Arete (Courage), Thumos (Spiritedness), Thumos (Thumós)
+Color #8B008B: 6 concepts
+Arete (Arête), Arete (Excellence), Arête (Excellence/Virtue), Arête (Virtue), Arête (ἀρετή), Arête (ἀρετή) - Virtue
+Color #A0522D: 3 concepts
+Aretē (Excellence), Aretē (Virtue), Aretē (ἀρετή) - Excellence
+Color #2E8B57: 4 concepts
+Dikaion (Justice), Dikaiosune (Justice), Dikaiosyne (Justice), Dikaiosynē (δικαιοσύνη) - Justice
+Color #9932CC: 1 concepts
+Dikaiosune (δικαιοσύνη)
+Color #FFD700: 1 concepts
+Dikaiosyne (Dikaiosýnē)
+Color #556B2F: 3 concepts
+Ethos (Character), Ethos (Habit/Character), Habit (Ethos)
+Color #C71585: 6 concepts
+Eudaimonia (Eudaimonía), Eudaimonia (Flourishing), Eudaimonia (Flourishing/Happiness), Eudaimonia (Happiness/Flourishing), Eudaimonia (εὐδαιμονία), Eudaimonia (εὐδαιμονία) - Happiness/Flourishing
+Color #8B4513: 3 concepts
+Hedone (Hedonē), Hedone (Pleasure), Hedone (ἡδονή)
+Color #20B2AA: 6 concepts
+Kakia (Kakía), Kakia (Vice), Kakia (Vices), Kakia (Viciousness), Kakia (κακία), Kakia (κακία) - Vice
+Color #B22222: 1 concepts
+Kathēkon (Proper Function)
+Color #FF4500: 1 concepts
+Megalopsuchia (μεγαλοψυχία)
+Color #6A5ACD: 1 concepts
+Megalopsychia (Magnanimity)
+Color #D2691E: 1 concepts
+Mesotes (Mean)
+Color #006400: 10 concepts
+Moral Decision-Making, Moral Education, Moral Habit, Moral Responsibility, Moral Responsibility and Action, Moral Responsibility and Community, Moral Responsibility and Education, Moral Responsibility and Happiness, Moral Responsibility and Law, Moral Virtue
+Color #708090: 2 concepts
+Nike (Victory), Nike (νίκη) - Victory
+Color #FF6347: 1 concepts
+Nikomachean Ethics
+Color #483D8B: 4 concepts
+Nomos (Law), Nomos (Law/Convention), Nomos (Law/Custom), Nomos (Nómos)
+Color #000000: 2 concepts
+Philautia (Self-Love), Philautia (φιλία)
+Color #808000: 2 concepts
+Philos (Friendship), Philos (φίλος) - Friendship
+Color #8B0000: 5 concepts
+Phronesis (Phronēsis), Phronesis (Practical Wisdom), Phronesis (φρόνησις), Phronesis (φρόνησις) - Practical Wisdom, Phronēsis (Practical Wisdom)
+Color #FF1493: 2 concepts
+Prohairesis (Choice), Prohairesis (Prohaíresis)

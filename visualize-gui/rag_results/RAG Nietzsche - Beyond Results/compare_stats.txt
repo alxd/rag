@@ -1,0 +1,108 @@
+Concepts Overview
+================
+Total unique concepts: 67
+
+All Concepts:
+Ascetic Ideal
+Bad Conscience (Schlechtes Gewissen)
+Beyond Good and Evil
+Beyond Good and Evil (Jenseits von Gut und Böse)
+Corruption and Decay
+Decadence (Dekadenz)
+Decadence and Corruption
+Eternal Recurrence (Ewige Wiederkunft)
+Genealogy of Morals (Genealogie der Moral)
+Gradations of Rank
+Greatness and Individualism
+Greatness and Nobility
+Master-Morality vs Slave-Morality
+Master-Slave Morality
+Master-Slave Morality (Herr-Moral vs Sklaven-Moral)
+Master-Slave Morality (Herr-Moral vs Sklavenmoral)
+Master-Slave Morality (Herrschaft-Moral vs Knecht-Moral)
+Moral Autonomy vs Herd Morality
+Moral Decadence
+Moral Decay
+Moral Decay (Corruption)
+Moral Decay and Corruption
+Moral Fanaticism
+Moral Genealogy
+Moral Hypocrisy
+Moral Hypocrisy (Moralische Heuchelei)
+Moral Innovation and Creativity
+Moral Inversion (Umwertung der Werte)
+Moral Perspectivism
+Moral Prejudices
+Moral Prejudices and Timidity
+Moral Relativism
+Moral Responsibility and Autonomy
+Moral Responsibility and Power
+Moral Responsibility and Rank
+Moral Responsibility and Self-Creation
+Moral Responsibility and the Self
+Moral Responsibility as Self-Creation
+Moral Responsibility as a Social Construct
+Moral Sentiment and Fear
+Moral Skepticism
+Moral Sublimation
+Noble vs Common Man
+Noble vs Common Morality
+Overman (Übermensch)
+Perspectivism
+Perspectivism (Perspektivismus)
+Pity and Sympathy
+Punishment and Fear
+Punishment and Justice
+Resentment (Ressentiment)
+Resentment and Revenge
+Self-Control and Self-Deception
+Self-Control and Self-Deception (Selbstbeherrschung und Selbsttäuschung)
+Self-Overcoming
+Self-Overcoming (Selbstüberwindung)
+Self-Sacrifice
+Self-Sacrifice and Martyrdom
+Self-Sacrifice and Self-Preservation
+Self-Surmounting
+Sympathy and Compassion
+Sympathy and Pity
+Sympathy and Utility
+Utility and Gregarious Utility
+Will to Power
+Will to Power (Wille zur Macht)
+Übermensch (Overman)
+
+Concepts per block:
+Temperature (0-4): 28 concepts
+Ascetic Ideal, Bad Conscience (Schlechtes Gewissen), Beyond Good and Evil, Eternal Recurrence (Ewige Wiederkunft), Master-Morality vs Slave-Morality, Master-Slave Morality, Moral Decadence, Moral Decay and Corruption, Moral Genealogy, Moral Hypocrisy, Moral Innovation and Creativity, Moral Inversion (Umwertung der Werte), Moral Perspectivism, Moral Relativism, Moral Responsibility and Autonomy, Moral Responsibility and Rank, Moral Responsibility and Self-Creation, Moral Responsibility as Self-Creation, Noble vs Common Man, Noble vs Common Morality, Resentment (Ressentiment), Resentment and Revenge, Self-Control and Self-Deception, Self-Overcoming, Self-Overcoming (Selbstüberwindung), Sympathy and Pity, Will to Power, Übermensch (Overman)
+Top-p (5-9): 27 concepts
+Gradations of Rank, Master-Morality vs Slave-Morality, Master-Slave Morality, Moral Autonomy vs Herd Morality, Moral Decay (Corruption), Moral Decay and Corruption, Moral Genealogy, Moral Hypocrisy, Moral Perspectivism, Moral Prejudices and Timidity, Moral Relativism, Moral Responsibility and Power, Moral Responsibility and Rank, Moral Responsibility and the Self, Moral Responsibility as a Social Construct, Moral Sentiment and Fear, Moral Skepticism, Punishment and Justice, Resentment (Ressentiment), Self-Control and Self-Deception, Self-Sacrifice and Martyrdom, Self-Sacrifice and Self-Preservation, Sympathy and Compassion, Sympathy and Pity, Sympathy and Utility, Utility and Gregarious Utility, Will to Power
+Top-k (10-14): 29 concepts
+Bad Conscience (Schlechtes Gewissen), Eternal Recurrence (Ewige Wiederkunft), Genealogy of Morals (Genealogie der Moral), Gradations of Rank, Master-Slave Morality, Master-Slave Morality (Herr-Moral vs Sklaven-Moral), Master-Slave Morality (Herr-Moral vs Sklavenmoral), Moral Decadence, Moral Decay, Moral Fanaticism, Moral Hypocrisy, Moral Prejudices, Moral Responsibility and Power, Moral Sentiment and Fear, Moral Sublimation, Noble vs Common Morality, Overman (Übermensch), Perspectivism, Punishment and Fear, Punishment and Justice, Resentment (Ressentiment), Self-Control and Self-Deception, Self-Overcoming (Selbstüberwindung), Self-Sacrifice and Self-Preservation, Self-Surmounting, Sympathy and Pity, Sympathy and Utility, Will to Power, Will to Power (Wille zur Macht)
+BM25 Weight (15-19): 31 concepts
+Beyond Good and Evil (Jenseits von Gut und Böse), Corruption and Decay, Decadence (Dekadenz), Decadence and Corruption, Eternal Recurrence (Ewige Wiederkunft), Greatness and Individualism, Greatness and Nobility, Master-Slave Morality, Master-Slave Morality (Herrschaft-Moral vs Knecht-Moral), Moral Decay and Corruption, Moral Fanaticism, Moral Genealogy, Moral Hypocrisy, Moral Hypocrisy (Moralische Heuchelei), Moral Perspectivism, Moral Prejudices, Moral Relativism, Moral Sublimation, Noble vs Common Morality, Overman (Übermensch), Perspectivism (Perspektivismus), Pity and Sympathy, Punishment and Justice, Resentment (Ressentiment), Resentment and Revenge, Self-Control and Self-Deception, Self-Control and Self-Deception (Selbstbeherrschung und Selbsttäuschung), Self-Sacrifice, Sympathy and Utility, Will to Power, Will to Power (Wille zur Macht)
+
+Color Groups:
+Color #800000: 1 concepts
+Ascetic Ideal
+Color #FF8C00: 1 concepts
+Bad Conscience (Schlechtes Gewissen)
+Color #228B22: 27 concepts
+Beyond Good and Evil, Beyond Good and Evil (Jenseits von Gut und Böse), Corruption and Decay, Decadence and Corruption, Greatness and Individualism, Greatness and Nobility, Moral Decay and Corruption, Moral Innovation and Creativity, Moral Prejudices and Timidity, Moral Responsibility and Autonomy, Moral Responsibility and Power, Moral Responsibility and Rank, Moral Responsibility and Self-Creation, Moral Responsibility and the Self, Moral Sentiment and Fear, Pity and Sympathy, Punishment and Fear, Punishment and Justice, Resentment and Revenge, Self-Control and Self-Deception, Self-Control and Self-Deception (Selbstbeherrschung und Selbsttäuschung), Self-Sacrifice and Martyrdom, Self-Sacrifice and Self-Preservation, Sympathy and Compassion, Sympathy and Pity, Sympathy and Utility, Utility and Gregarious Utility
+Color #8B008B: 2 concepts
+Decadence (Dekadenz), Moral Decadence
+Color #A0522D: 1 concepts
+Eternal Recurrence (Ewige Wiederkunft)
+Color #2E8B57: 20 concepts
+Genealogy of Morals (Genealogie der Moral), Gradations of Rank, Master-Slave Morality (Herr-Moral vs Sklaven-Moral), Master-Slave Morality (Herr-Moral vs Sklavenmoral), Master-Slave Morality (Herrschaft-Moral vs Knecht-Moral), Moral Autonomy vs Herd Morality, Moral Decay, Moral Decay (Corruption), Moral Fanaticism, Moral Genealogy, Moral Hypocrisy, Moral Hypocrisy (Moralische Heuchelei), Moral Inversion (Umwertung der Werte), Moral Perspectivism, Moral Prejudices, Moral Relativism, Moral Responsibility as a Social Construct, Moral Responsibility as Self-Creation, Moral Skepticism, Moral Sublimation
+Color #9932CC: 4 concepts
+Master-Morality vs Slave-Morality, Master-Slave Morality, Noble vs Common Man, Noble vs Common Morality
+Color #FFD700: 2 concepts
+Overman (Übermensch), Übermensch (Overman)
+Color #556B2F: 2 concepts
+Perspectivism, Perspectivism (Perspektivismus)
+Color #C71585: 1 concepts
+Resentment (Ressentiment)
+Color #8B4513: 4 concepts
+Self-Overcoming, Self-Overcoming (Selbstüberwindung), Self-Sacrifice, Self-Surmounting
+Color #20B2AA: 2 concepts
+Will to Power, Will to Power (Wille zur Macht)

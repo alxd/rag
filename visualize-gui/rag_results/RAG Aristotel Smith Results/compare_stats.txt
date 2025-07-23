@@ -1,0 +1,125 @@
+Concepts Overview
+================
+Total unique concepts: 72
+
+All Concepts:
+Character (?èïò - ethos)
+Character (?èïò)
+Character (Ethos)
+Deliberation
+Deliberation (Boul?sis)
+Deliberation (Boulesis)
+Deliberation (âïõëÞóéò)
+Deliberation (âïõëåýóéò)
+Deliberation (âïýëçóéò - boulesis)
+Equity (?ðéåßêåéá)
+Equity (Epikeia)
+Habit (?èïò)
+Habit (Ethos)
+Habits (Ethos)
+Habituation (?èïò - ethos)
+Habituation (?èïò)
+Habituation (Ethos)
+Habituation and Virtue
+Ignorance (?ãíïßá - agnoia)
+Ignorance (Agnoia)
+Ignorance and Responsibility
+Incontinence (?êñáóßá)
+Incontinence (Akrasia)
+Intellect (Nous)
+Intellect (íï?ò)
+Intellect and Will
+Intent (âïýëçóéò)
+Intention (âïýëçóéò - boulesis)
+Involuntary (?êïýóéïí - akousion)
+Involuntary (Akousion)
+Involuntary Actions
+Involuntary Actions (?êïýóéá ðñÜîåéò)
+Justice (Dikaiosyne)
+Justice (äéêáéïóýíç)
+Knowledge (?ðéóôÞìç - episteme)
+Knowledge (?ðéóôÞìç)
+Knowledge and Ignorance
+Moral Character (Ethos)
+Moral Choice (Prohairesis)
+Moral Choice (ðñïáßñåóéò - prohairesis)
+Moral Choice (ðñïáßñåóéò)
+Moral Principle (Logos)
+Moral Principles and Rules
+Moral Sense
+Moral Sense (Aisthesis)
+Moral Virtue (Ethike Arete)
+Moral Virtues and Vices
+Passion (Pathos)
+Passion and Emotion
+Pleasure and Pain
+Pleasure and Pain (Hedone and Lupe)
+Practical Wisdom (Phronesis)
+Practical Wisdom (öñüíçóéò - phronesis)
+Practical Wisdom (öñüíçóéò)
+Reason (Logos)
+Responsibility for Feelings and Actions
+Responsibility for Ignorance
+Self-Control (?ãêñÜôåéá)
+Self-Control (Enkrateia)
+Self-Control (Enkrateia) and Akrasia (Incontinence)
+Self-Control (Enkrateia) and Incontinence (Akrasia)
+Self-Control (Enkrateia) and Lack of Self-Control (Akrasia)
+Vice (Kakia)
+Virtue (?ñåôÞ)
+Virtue (Arete)
+Virtue and Vice
+Voluntary (?êïýóéïí - hekousion)
+Voluntary (Hekousion)
+Voluntary Actions
+Voluntary Actions (?êïýóéá ðñÜîåéò)
+Voluntary Actions (?êïýóéá)
+Voluntary and Involuntary Actions
+
+Concepts per block:
+Temperature (0-4): 36 concepts
+Deliberation (Boul?sis), Deliberation (Boulesis), Deliberation (âïõëÞóéò), Equity (?ðéåßêåéá), Equity (Epikeia), Habit (?èïò), Habit (Ethos), Habituation (Ethos), Habituation and Virtue, Ignorance (Agnoia), Incontinence (?êñáóßá), Incontinence (Akrasia), Intellect (Nous), Intellect (íï?ò), Involuntary (Akousion), Justice (äéêáéïóýíç), Knowledge and Ignorance, Moral Choice (Prohairesis), Moral Choice (ðñïáßñåóéò), Moral Principles and Rules, Moral Virtue (Ethike Arete), Moral Virtues and Vices, Passion (Pathos), Pleasure and Pain, Practical Wisdom (Phronesis), Practical Wisdom (öñüíçóéò), Responsibility for Feelings and Actions, Responsibility for Ignorance, Self-Control (?ãêñÜôåéá), Self-Control (Enkrateia), Self-Control (Enkrateia) and Akrasia (Incontinence), Virtue (?ñåôÞ), Virtue (Arete), Voluntary (Hekousion), Voluntary Actions (?êïýóéá), Voluntary and Involuntary Actions
+Top-p (5-9): 36 concepts
+Character (?èïò - ethos), Character (?èïò), Deliberation (âïõëåýóéò), Deliberation (âïýëçóéò - boulesis), Habit (Ethos), Habituation (?èïò - ethos), Habituation (?èïò), Habituation (Ethos), Ignorance (?ãíïßá - agnoia), Ignorance (Agnoia), Incontinence (Akrasia), Intellect (Nous), Intent (âïýëçóéò), Intention (âïýëçóéò - boulesis), Involuntary (?êïýóéïí - akousion), Involuntary Actions, Involuntary Actions (?êïýóéá ðñÜîåéò), Knowledge (?ðéóôÞìç - episteme), Knowledge (?ðéóôÞìç), Moral Choice (Prohairesis), Moral Choice (ðñïáßñåóéò - prohairesis), Moral Choice (ðñïáßñåóéò), Moral Principle (Logos), Moral Sense (Aisthesis), Moral Virtues and Vices, Passion (Pathos), Practical Wisdom (Phronesis), Practical Wisdom (öñüíçóéò - phronesis), Practical Wisdom (öñüíçóéò), Self-Control (Enkrateia), Virtue (?ñåôÞ), Virtue (Arete), Voluntary (?êïýóéïí - hekousion), Voluntary Actions, Voluntary Actions (?êïýóéá ðñÜîåéò), Voluntary and Involuntary Actions
+Top-k (10-14): 22 concepts
+Character (Ethos), Deliberation (Boul?sis), Habit (Ethos), Habits (Ethos), Habituation (Ethos), Ignorance (Agnoia), Intellect (Nous), Involuntary Actions, Moral Character (Ethos), Moral Choice (Prohairesis), Moral Principle (Logos), Moral Virtues and Vices, Passion (Pathos), Pleasure and Pain (Hedone and Lupe), Practical Wisdom (Phronesis), Reason (Logos), Self-Control (Enkrateia), Self-Control (Enkrateia) and Lack of Self-Control (Akrasia), Vice (Kakia), Virtue (Arete), Voluntary Actions, Voluntary and Involuntary Actions
+BM25 Weight (15-19): 25 concepts
+Deliberation, Deliberation (Boul?sis), Equity (Epikeia), Habituation (Ethos), Habituation and Virtue, Ignorance (Agnoia), Ignorance and Responsibility, Intellect and Will, Justice (Dikaiosyne), Knowledge and Ignorance, Moral Choice (Prohairesis), Moral Principles and Rules, Moral Sense, Moral Sense (Aisthesis), Moral Virtues and Vices, Passion (Pathos), Passion and Emotion, Practical Wisdom (Phronesis), Responsibility for Feelings and Actions, Self-Control (Enkrateia) and Akrasia (Incontinence), Self-Control (Enkrateia) and Incontinence (Akrasia), Self-Control (Enkrateia) and Lack of Self-Control (Akrasia), Virtue (Arete), Virtue and Vice, Voluntary and Involuntary Actions
+
+Color Groups:
+Color #800000: 10 concepts
+Character (?èïò - ethos), Character (?èïò), Character (Ethos), Habit (?èïò), Habit (Ethos), Habits (Ethos), Habituation (?èïò - ethos), Habituation (?èïò), Habituation (Ethos), Moral Character (Ethos)
+Color #FF8C00: 6 concepts
+Deliberation, Deliberation (Boul?sis), Deliberation (Boulesis), Deliberation (âïõëåýóéò), Deliberation (âïõëÞóéò), Deliberation (âïýëçóéò - boulesis)
+Color #228B22: 2 concepts
+Equity (?ðéåßêåéá), Equity (Epikeia)
+Color #8B008B: 18 concepts
+Habituation and Virtue, Ignorance and Responsibility, Intellect and Will, Knowledge and Ignorance, Moral Principles and Rules, Moral Virtue (Ethike Arete), Moral Virtues and Vices, Passion and Emotion, Pleasure and Pain, Pleasure and Pain (Hedone and Lupe), Responsibility for Feelings and Actions, Self-Control (Enkrateia) and Akrasia (Incontinence), Self-Control (Enkrateia) and Incontinence (Akrasia), Self-Control (Enkrateia) and Lack of Self-Control (Akrasia), Virtue (?ñåôÞ), Virtue (Arete), Virtue and Vice, Voluntary and Involuntary Actions
+Color #A0522D: 3 concepts
+Ignorance (?ãíïßá - agnoia), Ignorance (Agnoia), Responsibility for Ignorance
+Color #2E8B57: 2 concepts
+Incontinence (?êñáóßá), Incontinence (Akrasia)
+Color #9932CC: 2 concepts
+Intellect (Nous), Intellect (íï?ò)
+Color #FFD700: 2 concepts
+Intent (âïýëçóéò), Intention (âïýëçóéò - boulesis)
+Color #556B2F: 5 concepts
+Involuntary (?êïýóéïí - akousion), Involuntary (Akousion), Involuntary Actions, Involuntary Actions (?êïýóéá ðñÜîåéò), Voluntary (?êïýóéïí - hekousion)
+Color #C71585: 2 concepts
+Justice (Dikaiosyne), Justice (äéêáéïóýíç)
+Color #8B4513: 2 concepts
+Knowledge (?ðéóôÞìç - episteme), Knowledge (?ðéóôÞìç)
+Color #20B2AA: 6 concepts
+Moral Choice (Prohairesis), Moral Choice (ðñïáßñåóéò - prohairesis), Moral Choice (ðñïáßñåóéò), Moral Principle (Logos), Moral Sense, Moral Sense (Aisthesis)
+Color #B22222: 1 concepts
+Passion (Pathos)
+Color #FF4500: 3 concepts
+Practical Wisdom (Phronesis), Practical Wisdom (öñüíçóéò - phronesis), Practical Wisdom (öñüíçóéò)
+Color #6A5ACD: 1 concepts
+Reason (Logos)
+Color #D2691E: 2 concepts
+Self-Control (?ãêñÜôåéá), Self-Control (Enkrateia)
+Color #006400: 1 concepts
+Vice (Kakia)
+Color #708090: 4 concepts
+Voluntary (Hekousion), Voluntary Actions, Voluntary Actions (?êïýóéá ðñÜîåéò), Voluntary Actions (?êïýóéá)
