@@ -1498,7 +1498,18 @@ class UpSetGUI:
                 folder_group_counts.append(groups_in_folder)
             folder_names_str = ', '.join(folder_names)
             folder_group_list = ', '.join(f"{name}: {count}" for name, count in zip(folder_names, folder_group_counts))
-            doc.add_paragraph(f"Total concepts: extracted {total_concepts} from [{folder_names_str}] with groups per folder: {folder_group_list}")
+            # Overlap Summary with emoticons and bold
+            para = doc.add_paragraph()
+            para.add_run("📊 Total concepts: ").bold = True
+            run = para.add_run(str(total_concepts))
+            run.bold = True
+            para.add_run("\n")
+            for i, name in enumerate(folder_names):
+                folder_line = f"📁 {name}: "
+                run = doc.add_paragraph().add_run(folder_line)
+                run.bold = True
+                run2 = doc.paragraphs[-1].add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups")
+                run2.bold = True
             # Regrouping method
             if self.llm_grouping_var.get():
                 method_str = "color grouping based on LLM"
@@ -1512,20 +1523,45 @@ class UpSetGUI:
                 else:
                     method_str = "exact grouping"
             num_groups = len(llm_group_tuples) if self.llm_grouping_var.get() else len(color_to_concepts)
-            doc.add_paragraph(f"The concepts have been regrouped into {num_groups} concept groups through the method: {method_str}.")
+            para = doc.add_paragraph()
+            para.add_run("🎨 The concepts have been regrouped into ").bold = True
+            run = para.add_run(str(num_groups))
+            run.bold = True
+            para.add_run(" concept groups through the method: ")
+            run2 = para.add_run(method_str)
+            run2.bold = True
+            para.add_run(".")
             total_unique_groups = len(unique_color_groups)
             for i, folder in enumerate(valid_folders):
                 unique_groups = sum(1 for row in color_overlap_table if row[i+1] and sum(row[1:]) == 1)
                 shared_groups = sum(1 for row in color_overlap_table if all(row[1:]))
                 percent_unique = 100.0 * unique_groups / total_unique_groups if total_unique_groups else 0
                 percent_shared = 100.0 * shared_groups / total_unique_groups if total_unique_groups else 0
-                doc.add_paragraph(f"{folder_names[i]}: {unique_groups} unique concept groups ({percent_unique:.1f}%), {shared_groups} shared concept groups ({percent_shared:.1f}%)")
+                para = doc.add_paragraph()
+                para.add_run(f"🟢 {folder_names[i]}: ").bold = True
+                run = para.add_run(f"{unique_groups}")
+                run.bold = True
+                para.add_run(" unique concept groups (")
+                run = para.add_run(f"{percent_unique:.1f}%")
+                run.bold = True
+                para.add_run("), ")
+                run = para.add_run(f"{shared_groups}")
+                run.bold = True
+                para.add_run(" shared concept groups (")
+                run = para.add_run(f"{percent_shared:.1f}%")
+                run.bold = True
+                para.add_run(")")
             # --- Unique/Common Concepts Table ---
             doc.add_heading("Unique/Common Concepts Table", level=2)
             uniq_table = doc.add_table(rows=1, cols=4)
             widths = [6.0, 1.2, 1.5, 2.0]  # inches
             for i, w in enumerate(widths):
                 uniq_table.columns[i].width = docx.shared.Inches(w)
+            # Make headings bold
+            for cell in uniq_table.rows[0].cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.bold = True
             uniq_table.rows[0].cells[0].text = "Concepts"
             uniq_table.rows[0].cells[1].text = "Unique/Shared"
             uniq_table.rows[0].cells[2].text = "Folders"
@@ -1545,15 +1581,12 @@ class UpSetGUI:
             if self.llm_grouping_var.get():
                 for idx, (color, concepts) in enumerate(llm_group_tuples):
                     row = uniq_table.add_row().cells
-                    # Concepts in this group, with color group label
                     para = row[0].paragraphs[0]
-                    group_label = f"Group {idx+1}: "
-                    run = para.add_run(group_label)
-                    if color.startswith('#') and len(color) == 7:
-                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                        run.font.color.rgb = RGBColor(r, g, b)
                     for cidx, concept in enumerate(concepts):
                         rc = para.add_run(concept)
+                        if color.startswith('#') and len(color) == 7:
+                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                            rc.font.color.rgb = RGBColor(r, g, b)
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
@@ -1574,14 +1607,12 @@ class UpSetGUI:
                 for idx, color in enumerate(unique_color_groups):
                     row = uniq_table.add_row().cells
                     para = row[0].paragraphs[0]
-                    group_label = f"Group {idx+1}: "
-                    run = para.add_run(group_label)
-                    if color.startswith('#') and len(color) == 7:
-                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                        run.font.color.rgb = RGBColor(r, g, b)
                     concepts = color_to_concepts[color]
                     for cidx, concept in enumerate(concepts):
                         rc = para.add_run(concept)
+                        if color.startswith('#') and len(color) == 7:
+                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                            rc.font.color.rgb = RGBColor(r, g, b)
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
@@ -1657,51 +1688,49 @@ class UpSetGUI:
                     unique_words |= folder_unique_map[fname]
                 row[2].text = ", ".join(sorted(unique_words))
             doc.add_page_break()
-            # Overlap table: put all concepts in the same color group on the same row
+            # --- Overlap table: put all concepts in the same color group on the same row ---
             doc.add_heading("Concept Overlap Across Folders (Grouped)", level=2)
-            overlap_doc_table = doc.add_table(rows=1, cols=2+len(folder_names))
+            overlap_doc_table = doc.add_table(rows=1, cols=1+len(folder_names))
             hdr = overlap_doc_table.rows[0].cells
-            hdr[0].text = "Color Group"
-            hdr[1].text = "Concepts in Group"
+            hdr[0].text = "Concepts in Group"
             for i, name in enumerate(folder_names):
-                hdr[2+i].text = name
+                hdr[1+i].text = name
+            # Make headings bold
+            for cell in overlap_doc_table.rows[0].cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.bold = True
             if self.llm_grouping_var.get():
                 for idx, (color, concepts) in enumerate(llm_group_tuples):
                     doc_row = overlap_doc_table.add_row().cells
-                    # Color group label
-                    group_label = f"Group {idx+1}"
-                    run = doc_row[0].paragraphs[0].add_run(group_label)
-                    if color.startswith('#') and len(color) == 7:
-                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                        run.font.color.rgb = RGBColor(r, g, b)
-                    # Concepts in group
-                    para = doc_row[1].paragraphs[0]
+                    para = doc_row[0].paragraphs[0]
                     for cidx, c in enumerate(concepts):
                         rc = para.add_run(c)
+                        if color.startswith('#') and len(color) == 7:
+                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                            rc.font.color.rgb = RGBColor(r, g, b)
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     concepts_in_color = set(concepts)
                     for j, folder in enumerate(valid_folders):
                         present = any(c in folder_concepts[folder] for c in concepts_in_color)
-                        doc_row[2+j].text = "✔" if present else ""
+                        doc_row[1+j].text = "✔" if present else ""
             else:
                 for idx, color in enumerate(unique_color_groups):
                     doc_row = overlap_doc_table.add_row().cells
-                    group_label = f"Group {idx+1}"
-                    run = doc_row[0].paragraphs[0].add_run(group_label)
-                    if color.startswith('#') and len(color) == 7:
-                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                        run.font.color.rgb = RGBColor(r, g, b)
-                    para = doc_row[1].paragraphs[0]
+                    para = doc_row[0].paragraphs[0]
                     concepts = color_to_concepts[color]
                     for cidx, c in enumerate(concepts):
                         rc = para.add_run(c)
+                        if color.startswith('#') and len(color) == 7:
+                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                            rc.font.color.rgb = RGBColor(r, g, b)
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     concepts_in_color = set(concepts)
                     for j, folder in enumerate(valid_folders):
                         present = any(c in folder_concepts[folder] for c in concepts_in_color)
-                        doc_row[2+j].text = "✔" if present else ""
+                        doc_row[1+j].text = "✔" if present else ""
             safe_update_progress(100, total_elapsed, total_elapsed)
             # Save
             out_path = os.path.join(parent, "aggregated_results.docx")
