@@ -1390,6 +1390,7 @@ class UpSetGUI:
                 groups = [{c} for c in concept_list]
             else:  # None or fuzzy disabled
                 groups = [{c} for c in concept_list]
+            
             # Map each concept to its canonical group label (first in sorted group)
             group_labels = {}
             group_variants = {}
@@ -1399,6 +1400,7 @@ class UpSetGUI:
                     group_labels[variant] = label
                 group_variants[label] = sorted(group, key=lambda x: x.lower())
             canonical_concepts = sorted(group_variants.keys(), key=lambda x: x.lower())
+            
             # Step 4: Compute overlap/uniqueness using color groups (unique semantic groups)
             color_to_concepts = defaultdict(list)
             for c in concept_list:
@@ -1476,9 +1478,10 @@ class UpSetGUI:
             section.right_margin = 0
             section.header_distance = 0
             section.footer_distance = 0
-            # --- Overlap summary at the top ---
+            # --- Overlap Summary with UpSet Diagram ---
             doc.add_heading("Overlap Summary", level=1)
-            # Gather folder/group stats
+            
+            # Gather folder/group stats for the left column text
             total_concepts = sum(len(group) for _, group in llm_group_tuples) if self.llm_grouping_var.get() else sum(len(concepts) for concepts in color_to_concepts.values())
             folder_concept_counts = []
             folder_group_counts = []
@@ -1497,20 +1500,7 @@ class UpSetGUI:
                             concepts_in_folder.update([concept for concept in concepts if concept in folder_concepts[folder]])
                 folder_concept_counts.append(len(concepts_in_folder))
                 folder_group_counts.append(groups_in_folder)
-            folder_names_str = ', '.join(folder_names)
-            folder_group_list = ', '.join(f"{name}: {count}" for name, count in zip(folder_names, folder_group_counts))
-            # Overlap Summary with emoticons and bold
-            para = doc.add_paragraph()
-            para.add_run("📊 Total concepts: ").bold = True
-            run = para.add_run(str(total_concepts))
-            run.bold = True
-            para.add_run("\n")
-            for i, name in enumerate(folder_names):
-                folder_line = f"📁 {name}: "
-                run = doc.add_paragraph().add_run(folder_line)
-                run.bold = True
-                run2 = doc.paragraphs[-1].add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups")
-                run2.bold = True
+            
             # Regrouping method
             if self.llm_grouping_var.get():
                 method_str = "color grouping based on LLM"
@@ -1524,42 +1514,7 @@ class UpSetGUI:
                 else:
                     method_str = "exact grouping"
             num_groups = len(llm_group_tuples) if self.llm_grouping_var.get() else len(color_to_concepts)
-            para = doc.add_paragraph()
-            para.add_run("🎨 The concepts have been regrouped into ").bold = True
-            run = para.add_run(str(num_groups))
-            run.bold = True
-            para.add_run(" concept groups through the method: ")
-            run2 = para.add_run(method_str)
-            run2.bold = True
-            para.add_run(".")
             total_unique_groups = len(unique_color_groups)
-            for i, folder in enumerate(valid_folders):
-                unique_groups = sum(1 for row in color_overlap_table if row[i+1] and sum(row[1:]) == 1)
-                shared_groups = sum(1 for row in color_overlap_table if all(row[1:]))
-                percent_unique = 100.0 * unique_groups / total_unique_groups if total_unique_groups else 0
-                percent_shared = 100.0 * shared_groups / total_unique_groups if total_unique_groups else 0
-                para = doc.add_paragraph()
-                para.add_run(f"🟢 {folder_names[i]}: ").bold = True
-                run = para.add_run(f"{unique_groups}")
-                run.bold = True
-                para.add_run(" unique concept groups (")
-                run = para.add_run(f"{percent_unique:.1f}%")
-                run.bold = True
-                para.add_run("), ")
-                run = para.add_run(f"{shared_groups}")
-                run.bold = True
-                para.add_run(" shared concept groups (")
-                run = para.add_run(f"{percent_shared:.1f}%")
-                run.bold = True
-                para.add_run(")")
-
-            # --- Graph View of Common/Shared Concepts ---
-            # generate_concept_group_graph(doc, parent, folder_names, folder_unique_map, valid_folders, folder_concepts, llm_group_tuples, color_to_concepts, self)  # Disabled for now due to issues
-            # End of graph view block
-
-            # --- UpSet Diagram of Groups ---
-            # Move this section to appear right after the Overlap Summary, before the Unique/Common Concepts Table
-            doc.add_heading("UpSet Diagram of Concept Groups", level=2)
             
             # Function to extract group name from concepts
             def extract_group_name(concepts):
@@ -1705,8 +1660,6 @@ class UpSetGUI:
                 
                 # Add short folder names as red column labels (rotated 90 degrees)
                 for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
-                    if i == 0:  # Skip the first bar (empty intersection)
-                        continue
                     if bar.get_height() == 0:  # Skip empty bars
                         continue
                     
@@ -1729,12 +1682,18 @@ class UpSetGUI:
                             present_folders.append(short_name)
                     
                     if present_folders:
-                        # Create label showing short folder names
-                        label = ', '.join(present_folders)
-                        print(f"[UPSET DEBUG] Drawing folder label: '{label}' at x={x}")
-                        y_label = len(df_for_upset.columns) - 0.3
-                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=90, clip_on=False, weight='bold')
-                
+                        def check(n): 
+                            if n >= 0 and n < len(present_folders):
+                                return True
+                            else:
+                                return False
+                        if check(i-1):
+                            label = present_folders[i-1]  # Use first folder
+                            y_label = len(df_for_upset.columns) - 0.3
+                            matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=90, clip_on=False, weight='bold')
+                            print(f"[UPSET DEBUG] Drawing folder label: '{label}' at x={x}  all folders: {present_folders}")
+                            matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=90, clip_on=False, weight='bold')
+
                 # Customize the plot
                 plt.title("Concept Groups Overlap Across Folders", fontsize=14, pad=20)
                 
@@ -1744,17 +1703,66 @@ class UpSetGUI:
                 plt.close()
                 
                 # Add the plot to the document inline with text
-                # Create a table to place the plot on the right side
+                # Create a table to place the plot on the right side and overlap summary on the left
                 plot_table = doc.add_table(rows=1, cols=2)
                 plot_table.autofit = False
                 
-                # Left column for text (empty for now, can be used later)
+                # Left column for overlap summary text
                 left_cell = plot_table.rows[0].cells[0]
-                left_cell.width = docx.shared.Inches(2)  # Small width for text
+                left_cell.width = docx.shared.Inches(3)  # Increased width for text
+                
+                # Add overlap summary text to left column
+                # Total concepts
+                para = left_cell.paragraphs[0]
+                para.add_run("📊 Total concepts: ").bold = True
+                run = para.add_run(str(total_concepts))
+                run.bold = True
+                para.add_run("\n\n")
+                
+                # Folder information
+                for i, name in enumerate(folder_names):
+                    folder_line = f"📁 {name}: "
+                    run = para.add_run(folder_line)
+                    run.bold = True
+                    run2 = para.add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups")
+                    run2.bold = True
+                    para.add_run("\n")
+                
+                para.add_run("\n")
+                
+                # Regrouping method
+                para.add_run("🎨 The concepts have been regrouped into ").bold = True
+                run = para.add_run(str(num_groups))
+                run.bold = True
+                para.add_run(" concept groups through the method: ")
+                run2 = para.add_run(method_str)
+                run2.bold = True
+                para.add_run(".\n\n")
+                
+                # Unique/Shared groups per folder
+                for i, folder in enumerate(valid_folders):
+                    unique_groups = sum(1 for row in color_overlap_table if row[i+1] and sum(row[1:]) == 1)
+                    shared_groups = sum(1 for row in color_overlap_table if all(row[1:]))
+                    percent_unique = 100.0 * unique_groups / total_unique_groups if total_unique_groups else 0
+                    percent_shared = 100.0 * shared_groups / total_unique_groups if total_unique_groups else 0
+                    
+                    para.add_run(f"🟢 {folder_names[i]}: ").bold = True
+                    run = para.add_run(f"{unique_groups}")
+                    run.bold = True
+                    para.add_run(" unique concept groups (")
+                    run = para.add_run(f"{percent_unique:.1f}%")
+                    run.bold = True
+                    para.add_run("), ")
+                    run = para.add_run(f"{shared_groups}")
+                    run.bold = True
+                    para.add_run(" shared concept groups (")
+                    run = para.add_run(f"{percent_shared:.1f}%")
+                    run.bold = True
+                    para.add_run(")\n")
                 
                 # Right column for the plot
                 right_cell = plot_table.rows[0].cells[1]
-                right_cell.width = docx.shared.Inches(8)  # Most of the width for plot
+                right_cell.width = docx.shared.Inches(7)  # Adjusted width for plot
                 right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                 run = right_cell.paragraphs[0].add_run()
                 
@@ -1764,6 +1772,9 @@ class UpSetGUI:
                 available_height_inches = page_height_inches - (2 * margin_inches)
                 
                 run.add_picture(upset_plot_path, height=Inches(available_height_inches))
+                
+                # Add page break after the table
+                doc.add_page_break()
                 
             except Exception as e:
                 print(f"[UPSET ERROR] Failed to create UpSet plot: {e}")
@@ -1776,26 +1787,7 @@ class UpSetGUI:
                 for i, row_data in enumerate(group_data):
                     doc.add_paragraph(f"  {unique_group_names[i] if i < len(unique_group_names) else row_data[0]}: {row_data[1:]}")
             
-            # Add a table showing the group data
-            doc.add_paragraph("Group Presence Matrix:")
-            group_table = doc.add_table(rows=1, cols=1+len(folder_names))
-            group_table.rows[0].cells[0].text = "Group"
-            for i, folder_name in enumerate(folder_names):
-                group_table.rows[0].cells[1+i].text = folder_name.capitalize()
-            
-            # Make headings bold
-            for cell in group_table.rows[0].cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        run.bold = True
-            
-            # Add data rows
-            for i, row_data in enumerate(group_data):
-                row = group_table.add_row().cells
-                # Use the unique group name from the DataFrame
-                row[0].text = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
-                for j, present in enumerate(row_data[1:]):
-                    row[1+j].text = "✓" if present else "✗"
+
 
             # --- Unique/Common Concepts Table ---
             doc.add_heading("Unique/Common Concepts Table", level=2)
