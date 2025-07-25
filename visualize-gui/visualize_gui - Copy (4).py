@@ -1213,7 +1213,6 @@ class UpSetGUI:
         import os
         import docx
         from docx.shared import RGBColor, Inches
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from collections import defaultdict, Counter
         import re
         from tkinter import messagebox
@@ -1558,7 +1557,6 @@ class UpSetGUI:
             # End of graph view block
 
             # --- UpSet Diagram of Groups ---
-            # Move this section to appear right after the Overlap Summary, before the Unique/Common Concepts Table
             doc.add_heading("UpSet Diagram of Concept Groups", level=2)
             
             # Function to extract group name from concepts
@@ -1663,77 +1661,10 @@ class UpSetGUI:
                 upset_data = from_indicators(df_for_upset, df_for_upset.columns)
                 print('[UPSET DEBUG] UpSet data created successfully')
                 
-                # Create figure that fits page height (landscape orientation)
-                # Calculate available height for the plot
-                page_height_inches = 8.5  # Landscape page height
-                margin_inches = 1.0  # Top and bottom margins
-                available_height = page_height_inches - (2 * margin_inches)
-                
-                fig, axes = plt.subplots(1, 1, figsize=(12, available_height))
+                fig, axes = plt.subplots(1, 1, figsize=(12, 8))
                 
                 upset = UpSet(upset_data, show_counts=True, min_subset_size=1)
-                axes = upset.plot(fig=fig)
-                bar_ax = axes['intersections']
-                matrix_ax = axes['matrix']
-                bars = bar_ax.patches
-                upset_index = upset_data.index
-                
-                # Add group colors to the y-axis labels (group names)
-                yticks = matrix_ax.get_yticklabels()
-                for label, group_name in zip(matrix_ax.get_yticklabels(), df_for_upset.columns):
-                    # Find the color for this group
-                    group_color = None
-                    if self.llm_grouping_var.get():
-                        # For LLM grouping, find the color from llm_group_tuples
-                        for color, concepts in llm_group_tuples:
-                            if extract_group_name(concepts) == group_name:
-                                group_color = color
-                                break
-                    else:
-                        # For color grouping, find the color from color_to_concepts
-                        for color, concepts in color_to_concepts.items():
-                            if extract_group_name(concepts) == group_name:
-                                group_color = color
-                                break
-                    
-                    if group_color and group_color.startswith('#') and len(group_color) == 7:
-                        label.set_color(group_color)
-                    else:
-                        label.set_color('black')
-                    label.set_weight('bold')
-                    label.set_fontsize(10)
-                
-                # Add short folder names as red column labels (rotated 90 degrees)
-                for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
-                    if i == 0:  # Skip the first bar (empty intersection)
-                        continue
-                    if bar.get_height() == 0:  # Skip empty bars
-                        continue
-                    
-                    x = bar.get_x() + bar.get_width() / 2
-                    intersection_idx = i - 1
-                    actual_intersection = upset_index[intersection_idx]
-                    
-                    # Find which folders are present in this intersection
-                    present_folders = []
-                    for j, present in enumerate(actual_intersection):
-                        if present and j < len(folder_names):
-                            # Get the short folder name from the unique words
-                            folder_unique_words = folder_unique_map.get(folder_names[j], set())
-                            if folder_unique_words:
-                                # Use the first unique word as short name
-                                short_name = sorted(folder_unique_words)[0].capitalize()
-                            else:
-                                # Fallback to first word of folder name
-                                short_name = folder_names[j].split()[0].capitalize()
-                            present_folders.append(short_name)
-                    
-                    if present_folders:
-                        # Create label showing short folder names
-                        label = ', '.join(present_folders)
-                        print(f"[UPSET DEBUG] Drawing folder label: '{label}' at x={x}")
-                        y_label = len(df_for_upset.columns) - 0.3
-                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=90, clip_on=False, weight='bold')
+                upset.plot(fig=fig)
                 
                 # Customize the plot
                 plt.title("Concept Groups Overlap Across Folders", fontsize=14, pad=20)
@@ -1743,27 +1674,8 @@ class UpSetGUI:
                 plt.savefig(upset_plot_path, dpi=150, bbox_inches='tight', pad_inches=0.5)
                 plt.close()
                 
-                # Add the plot to the document inline with text
-                # Create a table to place the plot on the right side
-                plot_table = doc.add_table(rows=1, cols=2)
-                plot_table.autofit = False
-                
-                # Left column for text (empty for now, can be used later)
-                left_cell = plot_table.rows[0].cells[0]
-                left_cell.width = docx.shared.Inches(2)  # Small width for text
-                
-                # Right column for the plot
-                right_cell = plot_table.rows[0].cells[1]
-                right_cell.width = docx.shared.Inches(8)  # Most of the width for plot
-                right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run = right_cell.paragraphs[0].add_run()
-                
-                # Calculate height to fit page
-                page_height_inches = 8.5  # 8.5 inches * 72 points per inch
-                margin_inches = 1.0  # 1 inch margins
-                available_height_inches = page_height_inches - (2 * margin_inches)
-                
-                run.add_picture(upset_plot_path, height=Inches(available_height_inches))
+                # Add the plot to the document
+                doc.add_picture(upset_plot_path, width=docx.shared.Inches(8))
                 
             except Exception as e:
                 print(f"[UPSET ERROR] Failed to create UpSet plot: {e}")

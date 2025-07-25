@@ -17,21 +17,10 @@ import traceback
 import textwrap
 import win32com.client
 import subprocess
-import random
-import json
-import openai
-try:
-    from mistralai import Mistral
-except ImportError:
-    Mistral = None
-try:
-    from huggingface_hub import InferenceClient
-except ImportError:
-    InferenceClient = None
 
 # Common suffixes for substring grouping (except suffixes)
 common_suffixes = [
-    'ation','ption', 'ment', 'ness', 'sion', 'tion', 'ing', 'ed', 'ly', 'er', 'est', 'ful', 'less', 'able', 'ible', 'ous', 'ive', 'al', 'ic', 'ant', 'ent', 'ism', 'ist', 'ity', 'ty', 'en', 'ize', 'ise', 'ward', 'wise'
+    'ation', 'ment', 'ness', 'sion', 'tion', 'ing', 'ed', 'ly', 'er', 'est', 'ful', 'less', 'able', 'ible', 'ous', 'ive', 'al', 'ic', 'ant', 'ent', 'ism', 'ist', 'ity', 'ty', 'en', 'ize', 'ise', 'ward', 'wise'
 ]
 
 warnings.filterwarnings("ignore", category=UserWarning)
@@ -180,12 +169,6 @@ class UpSetGUI:
         self.group_by_words = tk.BooleanVar(value=True)
         self.group_by_same_color = tk.BooleanVar(value=False)
         
-        # New variables for refined color grouping
-        self.agg_use_colors = tk.BooleanVar(value=True)
-        self.agg_group_by_subletters = tk.BooleanVar(value=False)
-        self.agg_group_by_words = tk.BooleanVar(value=True)
-        self.agg_enable_fuzzy = tk.BooleanVar(value=True)
-        
         self.setup_ui()
         
     def setup_ui(self):
@@ -272,56 +255,17 @@ class UpSetGUI:
         self.aggregate_progress.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(2,2))
         self.aggregate_time_label = ttk.Label(aggregate_frame, text="", foreground="gray")
         self.aggregate_time_label.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
-        
-        # --- LLM Grouping Controls ---
-        llm_grouping_frame = ttk.Frame(aggregate_frame)
-        llm_grouping_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5,2))
-        self.llm_grouping_var = tk.BooleanVar(value=False)
-        self.llm_grouping_cb = ttk.Checkbutton(llm_grouping_frame, text="LLM Grouping (semantic)", variable=self.llm_grouping_var, command=self.on_llm_grouping_toggle)
-        self.llm_grouping_cb.grid(row=0, column=0, sticky=tk.W, pady=0)
-        self.llm_model_var = tk.StringVar(value="Mistral-API")
-        self.llm_model_dropdown = ttk.Combobox(llm_grouping_frame, textvariable=self.llm_model_var, values=[
-            "Remote Meta-Llama-3", "Mistral-API", "GPT-3.5", "GPT-4o", "GPT-4o mini", "o1-mini", "o3-mini",
-            "Gemini", "Claude", "Grok", "Qwen3", "Phi4", "Meta Llama 70B", "DeepSeek V3", "Mistral (Nebius)"
-        ], state="readonly", width=18)
-        self.llm_model_dropdown.grid(row=0, column=1, padx=(10,0), pady=0)
-        self.llm_prompt_var = tk.StringVar(value="Group the following concepts by meaning. Return the result as JSON, where each group is a list of concepts.\nConcepts:\n- concept1\n- concept2\n...")
-        self.llm_prompt_entry = ttk.Entry(llm_grouping_frame, textvariable=self.llm_prompt_var, width=60)
-        self.llm_prompt_entry.grid(row=0, column=2, padx=(10,0), pady=0)
-        # --- Refined Color Grouping Controls ---
-        refined_grouping_frame = ttk.Frame(aggregate_frame)
-        refined_grouping_frame.grid(row=7, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5,2))
-        
-        # Color grouping options
-        agg_color_frame = ttk.Frame(refined_grouping_frame)
-        agg_color_frame.grid(row=0, column=0, sticky=tk.W, pady=2)
-        self.agg_color_criteria_cb = ttk.Checkbutton(agg_color_frame, text="Refined Color Grouping", variable=self.agg_use_colors, command=self.on_agg_color_criteria_toggle)
-        self.agg_color_criteria_cb.grid(row=0, column=0, sticky=tk.W, pady=0)
-        ttk.Label(agg_color_frame, text="Min shared letters:").grid(row=0, column=1, padx=(5,0), pady=0)
-        self.agg_min_letters_var = tk.StringVar(value="5")
-        self.agg_min_letters_entry = ttk.Entry(agg_color_frame, textvariable=self.agg_min_letters_var, width=3)
-        self.agg_min_letters_entry.grid(row=0, column=2, padx=(2,0), pady=0)
-        ttk.Checkbutton(agg_color_frame, text="Group by subletters (except suffixes)", variable=self.agg_group_by_subletters, command=self.on_agg_group_by_subletters).grid(row=0, column=3, padx=(5,0), pady=0)
-        ttk.Checkbutton(agg_color_frame, text="Group by whole words", variable=self.agg_group_by_words, command=self.on_agg_group_by_words).grid(row=0, column=4, padx=(5,0), pady=0)
-        
-        # Fuzzy logic controls
-        fuzzy_frame = ttk.Frame(refined_grouping_frame)
-        fuzzy_frame.grid(row=1, column=0, sticky=tk.W, pady=2)
-        ttk.Checkbutton(fuzzy_frame, text="Enable Fuzzy Logic", variable=self.agg_enable_fuzzy, command=self.on_agg_enable_fuzzy_toggle).grid(row=0, column=0, sticky=tk.W, pady=0)
-        ttk.Label(fuzzy_frame, text="Similarity Threshold:").grid(row=0, column=1, padx=(5,0), pady=0)
+        # --- Fuzzy threshold and grouping logic controls ---
+        threshold_frame = ttk.Frame(aggregate_frame)
+        threshold_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5,2))
+        ttk.Label(threshold_frame, text="Similarity Threshold:").grid(row=0, column=0, sticky=tk.W)
         self.sim_threshold_var = tk.DoubleVar(value=0.85)
-        self.sim_threshold_entry = ttk.Entry(fuzzy_frame, textvariable=self.sim_threshold_var, width=5)
-        self.sim_threshold_entry.grid(row=0, column=2, sticky=tk.W, padx=(2,10))
-        ttk.Label(fuzzy_frame, text="Grouping Logic:").grid(row=0, column=3, sticky=tk.W)
+        self.sim_threshold_entry = ttk.Entry(threshold_frame, textvariable=self.sim_threshold_var, width=5)
+        self.sim_threshold_entry.grid(row=0, column=1, sticky=tk.W, padx=(2,10))
+        ttk.Label(threshold_frame, text="Grouping Logic:").grid(row=0, column=2, sticky=tk.W)
         self.grouping_logic_var = tk.StringVar(value="Fuzzy")
-        self.grouping_logic_combo = ttk.Combobox(fuzzy_frame, textvariable=self.grouping_logic_var, values=["Fuzzy", "Exact", "None"], state="readonly", width=8)
-        self.grouping_logic_combo.grid(row=0, column=4, sticky=tk.W, padx=(2,0))
-        # Add fuzzy logic explanation label
-        self.fuzzy_explanation_label = ttk.Label(fuzzy_frame, text="Fuzzy logic groups concepts by overall string similarity.\nThreshold 1.0 = only identical concepts.\nThreshold 0.85 = minor spelling/word order differences.\nThreshold 0.6 = allows more distant matches.\nExample: 'justice' and 'justices' are grouped at 0.85, but 'justice' and 'injustice' only at 0.6.", justify='left', foreground='gray')
-        self.fuzzy_explanation_label.grid(row=1, column=0, columnspan=5, sticky=tk.W, pady=(2,0))
-        
-        # Initialize fuzzy controls state
-        self.on_agg_enable_fuzzy_toggle()
+        self.grouping_logic_combo = ttk.Combobox(threshold_frame, textvariable=self.grouping_logic_var, values=["Fuzzy", "Exact", "None"], state="readonly", width=8)
+        self.grouping_logic_combo.grid(row=0, column=3, sticky=tk.W, padx=(2,0))
         
         # Results frame with zoom controls
         results_frame = ttk.LabelFrame(main_frame, text="Results", padding="5")
@@ -472,8 +416,10 @@ class UpSetGUI:
     def extract_key_words(self, concept):
         """Extract meaningful words from a concept"""
         stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'should', 'could', 'can', 'may', 'might', 'must'}
+        
         words = re.findall(r'\b\w+\b', concept.lower())
         meaningful_words = [self.normalize_word(word) for word in words if word not in stop_words and len(word) > 2]
+        
         return meaningful_words
     
     def create_color_mapping(self, all_concepts):
@@ -1144,52 +1090,6 @@ class UpSetGUI:
             self.group_by_same_color_cb.state(['disabled'])
             self.group_by_same_color.set(False)
 
-    def on_agg_group_by_subletters(self):
-        if self.agg_group_by_subletters.get():
-            self.agg_group_by_words.set(False)
-
-    def on_agg_group_by_words(self):
-        if self.agg_group_by_words.get():
-            self.agg_group_by_subletters.set(False)
-
-    def on_agg_color_criteria_toggle(self):
-        # This method can be used for future functionality if needed
-        pass
-
-    def on_agg_enable_fuzzy_toggle(self):
-        # Enable/disable fuzzy logic controls based on checkbox
-        if self.agg_enable_fuzzy.get():
-            self.sim_threshold_entry.config(state='normal')
-            self.grouping_logic_combo.config(state='readonly')
-        else:
-            self.sim_threshold_entry.config(state='disabled')
-            self.grouping_logic_combo.config(state='disabled')
-
-    def get_aggregation_params(self):
-        """Get aggregation parameters from GUI controls"""
-        try:
-            threshold = float(self.sim_threshold_var.get())
-        except Exception:
-            threshold = 0.85
-        
-        grouping_logic = self.grouping_logic_var.get()
-        if not self.agg_enable_fuzzy.get():
-            grouping_logic = "None"
-        
-        try:
-            min_letters = int(self.agg_min_letters_var.get())
-        except Exception:
-            min_letters = 5
-        
-        return {
-            'threshold': threshold,
-            'grouping_logic': grouping_logic,
-            'min_letters': min_letters,
-            'use_colors': self.agg_use_colors.get(),
-            'group_by_words': self.agg_group_by_words.get(),
-            'group_by_subletters': self.agg_group_by_subletters.get()
-        }
-
     def select_aggregate_folder(self):
         folder_path = filedialog.askdirectory(title="Select Parent Folder Containing Results")
         if folder_path:
@@ -1213,7 +1113,6 @@ class UpSetGUI:
         import os
         import docx
         from docx.shared import RGBColor, Inches
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
         from collections import defaultdict, Counter
         import re
         from tkinter import messagebox
@@ -1233,10 +1132,12 @@ class UpSetGUI:
         if not parent or not os.path.isdir(parent):
             safe_update_status("Invalid parent folder.", "red")
             return
-        # Get aggregation parameters from GUI
-        params = self.get_aggregation_params()
-        threshold = params['threshold']
-        grouping_logic = params['grouping_logic']
+        # Get threshold and grouping logic from UI
+        try:
+            threshold = float(self.sim_threshold_var.get())
+        except Exception:
+            threshold = 0.85
+        grouping_logic = self.grouping_logic_var.get()
         # Step 1: Find valid subfolders
         subfolders = [os.path.join(parent, d) for d in os.listdir(parent) if os.path.isdir(os.path.join(parent, d))]
         valid_folders = []
@@ -1283,157 +1184,86 @@ class UpSetGUI:
                 est_total = elapsed if idx == 0 else est_total
             safe_update_progress(100 * (idx+1) / len(valid_folders), elapsed, est_total)
         total_elapsed = time.time() - t0
-        # Step 3: Refined Color Grouping Logic
+        # Step 3: Grouping logic
         concept_list = sorted(all_concepts, key=lambda x: x.lower())
-        # LLM Grouping logic
-        if self.llm_grouping_var.get():
-            # Improved prompt for group-name: [concepts] format
-            prompt = (
-                self.llm_prompt_var.get().strip() +
-                "\nReturn a JSON object where each key is a group name and the value is a list of concepts. Example:\n{\n  \"Character\": [\"Character (1103a17–1103b35)\", ...],\n  \"Intellect\": [\"Intellect (Nous)\", ...]\n}"
-            )
-            model = self.llm_model_var.get()
-            llm_groups = real_llm_grouping(concept_list, prompt, model, output_dir=parent)
-            # Only assign colors to concepts present in LLM output
-            concepts_in_llm = set()
-            for group in llm_groups:
-                for concept in group:
-                    concepts_in_llm.add(concept)
-            missing_concepts = [c for c in concept_list if c not in concepts_in_llm]
-            if missing_concepts:
-                msg = f"[LLM GROUPING] {len(missing_concepts)} concepts missing from LLM output. Not assigned to any group.\n" + ", ".join(missing_concepts)
-                print(msg)
-                self.root.after(0, lambda: self.aggregate_status_label.config(text=msg, foreground="red"))
-            color_palette = [
-                '#800000', '#FF8C00', '#228B22', '#8B008B', '#A0522D', '#2E8B57', '#9932CC', '#FFD700',
-                '#556B2F', '#C71585', '#8B4513', '#20B2AA', '#B22222', '#FF4500', '#6A5ACD', '#D2691E',
-                '#006400', '#708090', '#FF6347', '#483D8B', '#000000', '#808000', '#8B0000', '#FF1493',
-            ]
-            group_colors = {}
-            color_to_concepts = defaultdict(list)
-            for i, group in enumerate(llm_groups):
-                color = color_palette[i % len(color_palette)]
-                for concept in group:
-                    group_colors[concept] = color
-                    color_to_concepts[color].append(concept)
-
-            # For LLM grouping, preserve group structure and color for DOCX output
-            if self.llm_grouping_var.get():
-                llm_group_tuples = []
-                for i, group in enumerate(llm_groups):
-                    color = color_palette[i % len(color_palette)]
-                    llm_group_tuples.append((color, group))
-        else:
-            def create_refined_color_groups(concepts, use_colors, group_by_words, group_by_subletters, min_letters):
-                """Create refined color groups based on semantic similarity (no transitive merging)"""
-                if not use_colors:
-                    return {c: '#000000' for c in concepts}
-                stopwords = set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','should','could','can','may','might','must'])
-                def extract_words(concept):
-                    words = re.findall(r'\b\w+\b', concept.lower())
-                    return [w for w in words if w not in stopwords and len(w) > 2]
-                # Build word-to-concept mapping
-                word_to_concepts = {}
-                for concept in concepts:
-                    words = extract_words(concept)
-                    for w in words:
-                        word_to_concepts.setdefault(w, set()).add(concept)
-                # Build groups: each group is all concepts sharing a word
-                groups = []
-                assigned = set()
-                for w, cset in word_to_concepts.items():
-                    group = set(cset) - assigned
-                    if len(group) > 1:
-                        groups.append(group)
-                        assigned.update(group)
-                # Any unassigned concepts become their own group
-                for concept in concepts:
-                    if concept not in assigned:
-                        groups.append({concept})
-                # Assign colors
-                color_palette = [
-                    '#800000', '#FF8C00', '#228B22', '#8B008B', '#A0522D', '#2E8B57', '#9932CC', '#FFD700',
-                    '#556B2F', '#C71585', '#8B4513', '#20B2AA', '#B22222', '#FF4500', '#6A5ACD', '#D2691E',
-                    '#006400', '#708090', '#FF6347', '#483D8B', '#000000', '#808000', '#8B0000', '#FF1493',
-                ]
-                group_colors = {}
-                for i, group in enumerate(groups):
-                    color = color_palette[i % len(color_palette)]
-                    for concept in group:
-                        group_colors[concept] = color
-                return group_colors
-            group_colors = create_refined_color_groups(
-                concept_list, 
-                params['use_colors'],
-                params['group_by_words'],
-                params['group_by_subletters'],
-                params['min_letters']
-            )
-            # --- Fuzzy/Exact/None grouping for overlap and canonicalization ---
-            if self.agg_enable_fuzzy.get() and grouping_logic == "Fuzzy":
-                groups = []  # List of sets
-                used = set()
-                for c in concept_list:
-                    if c in used:
-                        continue
-                    group = set([c])
-                    for other in concept_list:
-                        if other == c or other in used:
-                            continue
-                        ratio = difflib.SequenceMatcher(None, c.lower(), other.lower()).ratio()
-                        if ratio >= threshold:
-                            group.add(other)
-                            used.add(other)
-                    used.add(c)
-                    groups.append(group)
-            elif grouping_logic == "Exact":
-                groups = [{c} for c in concept_list]
-            else:  # None or fuzzy disabled
-                groups = [{c} for c in concept_list]
-            # Map each concept to its canonical group label (first in sorted group)
-            group_labels = {}
-            group_variants = {}
-            for group in groups:
-                label = sorted(group, key=lambda x: x.lower())[0]
-                for variant in group:
-                    group_labels[variant] = label
-                group_variants[label] = sorted(group, key=lambda x: x.lower())
-            canonical_concepts = sorted(group_variants.keys(), key=lambda x: x.lower())
-            # Step 4: Compute overlap/uniqueness using color groups (unique semantic groups)
-            color_to_concepts = defaultdict(list)
+        # --- Color grouping by common word ---
+        stopwords = set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','should','could','can','may','might','must'])
+        def extract_words(concept):
+            words = re.findall(r'\b\w+\b', concept.lower())
+            return [w for w in words if w not in stopwords and len(w) > 2]
+        word_groups = defaultdict(set)
+        for c in concept_list:
+            words = extract_words(c)
+            for w in words:
+                word_groups[w].add(c)
+        # Merge groups with overlap
+        merged_groups = []
+        seen = set()
+        for group in word_groups.values():
+            group = set(group)
+            if not group or group & seen:
+                continue
+            # Merge all groups that share any concept
+            merged = set(group)
+            for other in word_groups.values():
+                if merged & other:
+                    merged |= other
+            merged_groups.append(merged)
+            seen |= merged
+        # Fallback: any concept not in a group
+        for c in concept_list:
+            if not any(c in g for g in merged_groups):
+                merged_groups.append(set([c]))
+        # Assign color per group
+        color_palette = [
+            '#800000', '#FF8C00', '#228B22', '#8B008B', '#A0522D', '#2E8B57', '#9932CC', '#FFD700',
+            '#556B2F', '#C71585', '#8B4513', '#20B2AA', '#B22222', '#FF4500', '#6A5ACD', '#D2691E',
+            '#006400', '#708090', '#FF6347', '#483D8B', '#000000', '#808000', '#8B0000', '#FF1493',
+        ]
+        group_colors = {}
+        for i, group in enumerate(merged_groups):
+            for c in group:
+                group_colors[c] = color_palette[i % len(color_palette)]
+        # --- Fuzzy/Exact/None grouping for overlap and canonicalization ---
+        if grouping_logic == "Fuzzy":
+            groups = []  # List of sets
+            used = set()
             for c in concept_list:
-                color = group_colors.get(c, '#FF0000')
-                if c not in group_colors:
-                    print(f"[GROUP COLOR WARNING] Concept not in group_colors: {c}")
-                    self.root.after(0, lambda c=c: self.aggregate_status_label.config(text=f"[GROUP COLOR WARNING] Concept not in group_colors: {c}", foreground='red'))
-                    group_colors[c] = '#FF0000'
-                color_to_concepts[color].append(c)
-        # else: color_to_concepts is already correct from LLM grouping
-        
-        # Create unique color groups (each color represents a unique semantic group)
-        unique_color_groups = list(color_to_concepts.keys())
-        
-        # Compute overlap using color groups instead of canonical concepts
-        color_overlap_table = []  # List of (color, [present in folder1, folder2, ...])
+                if c in used:
+                    continue
+                group = set([c])
+                for other in concept_list:
+                    if other == c or other in used:
+                        continue
+                    ratio = difflib.SequenceMatcher(None, c.lower(), other.lower()).ratio()
+                    if ratio >= threshold:
+                        group.add(other)
+                        used.add(other)
+                used.add(c)
+                groups.append(group)
+        elif grouping_logic == "Exact":
+            groups = [{c} for c in concept_list]
+        else:  # None
+            groups = [{c} for c in concept_list]
+        # Map each concept to its canonical group label (first in sorted group)
+        group_labels = {}
+        group_variants = {}
+        for group in groups:
+            label = sorted(group, key=lambda x: x.lower())[0]
+            for variant in group:
+                group_labels[variant] = label
+            group_variants[label] = sorted(group, key=lambda x: x.lower())
+        canonical_concepts = sorted(group_variants.keys(), key=lambda x: x.lower())
+        # Step 4: Compute overlap/uniqueness using canonical groups
+        overlap_table = []  # List of (canonical, [present in folder1, folder2, ...])
         folder_names = [os.path.basename(f) for f in valid_folders]
-        for color in unique_color_groups:
-            row = [color]
-            concepts_in_color = set(color_to_concepts[color])
+        for canon in canonical_concepts:
+            row = [canon]
+            canon_variants = set(group_variants[canon])
             for folder in valid_folders:
-                present = any(c in folder_concepts[folder] for c in concepts_in_color)
+                present = any(v in folder_concepts[folder] for v in canon_variants)
                 row.append(1 if present else 0)
-            color_overlap_table.append(row)
-        
-        # Keep the original canonical overlap table for the final table
-        if not self.llm_grouping_var.get():
-            overlap_table = []  # List of (canonical, [present in folder1, folder2, ...])
-            for canon in canonical_concepts:
-                row = [canon]
-                canon_variants = set(group_variants[canon])
-                for folder in valid_folders:
-                    present = any(v in folder_concepts[folder] for v in canon_variants)
-                    row.append(1 if present else 0)
-                overlap_table.append(row)
+            overlap_table.append(row)
         # --- Unique words in folder names ---
         def get_unique_folder_words(folder_names):
             all_words = [set(re.findall(r'\w+', name.lower())) for name in folder_names]
@@ -1478,423 +1308,74 @@ class UpSetGUI:
             section.footer_distance = 0
             # --- Overlap summary at the top ---
             doc.add_heading("Overlap Summary", level=1)
-            # Gather folder/group stats
-            total_concepts = sum(len(group) for _, group in llm_group_tuples) if self.llm_grouping_var.get() else sum(len(concepts) for concepts in color_to_concepts.values())
-            folder_concept_counts = []
-            folder_group_counts = []
-            for folder in valid_folders:
-                concepts_in_folder = set()
-                groups_in_folder = 0
-                if self.llm_grouping_var.get():
-                    for _, group in llm_group_tuples:
-                        if any(concept in folder_concepts[folder] for concept in group):
-                            groups_in_folder += 1
-                            concepts_in_folder.update([concept for concept in group if concept in folder_concepts[folder]])
-                else:
-                    for color, concepts in color_to_concepts.items():
-                        if any(concept in folder_concepts[folder] for concept in concepts):
-                            groups_in_folder += 1
-                            concepts_in_folder.update([concept for concept in concepts if concept in folder_concepts[folder]])
-                folder_concept_counts.append(len(concepts_in_folder))
-                folder_group_counts.append(groups_in_folder)
-            folder_names_str = ', '.join(folder_names)
-            folder_group_list = ', '.join(f"{name}: {count}" for name, count in zip(folder_names, folder_group_counts))
-            # Overlap Summary with emoticons and bold
-            para = doc.add_paragraph()
-            para.add_run("📊 Total concepts: ").bold = True
-            run = para.add_run(str(total_concepts))
-            run.bold = True
-            para.add_run("\n")
-            for i, name in enumerate(folder_names):
-                folder_line = f"📁 {name}: "
-                run = doc.add_paragraph().add_run(folder_line)
-                run.bold = True
-                run2 = doc.paragraphs[-1].add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups")
-                run2.bold = True
-            # Regrouping method
-            if self.llm_grouping_var.get():
-                method_str = "color grouping based on LLM"
-            else:
-                if params['group_by_words']:
-                    method_str = "color grouping by words"
-                elif params['group_by_subletters']:
-                    method_str = "color grouping by subletters"
-                elif self.agg_enable_fuzzy.get() and params['grouping_logic'] == "Fuzzy":
-                    method_str = f"fuzzy grouping (threshold {params['threshold']})"
-                else:
-                    method_str = "exact grouping"
-            num_groups = len(llm_group_tuples) if self.llm_grouping_var.get() else len(color_to_concepts)
-            para = doc.add_paragraph()
-            para.add_run("🎨 The concepts have been regrouped into ").bold = True
-            run = para.add_run(str(num_groups))
-            run.bold = True
-            para.add_run(" concept groups through the method: ")
-            run2 = para.add_run(method_str)
-            run2.bold = True
-            para.add_run(".")
-            total_unique_groups = len(unique_color_groups)
+            total = len(canonical_concepts)
             for i, folder in enumerate(valid_folders):
-                unique_groups = sum(1 for row in color_overlap_table if row[i+1] and sum(row[1:]) == 1)
-                shared_groups = sum(1 for row in color_overlap_table if all(row[1:]))
-                percent_unique = 100.0 * unique_groups / total_unique_groups if total_unique_groups else 0
-                percent_shared = 100.0 * shared_groups / total_unique_groups if total_unique_groups else 0
-                para = doc.add_paragraph()
-                para.add_run(f"🟢 {folder_names[i]}: ").bold = True
-                run = para.add_run(f"{unique_groups}")
-                run.bold = True
-                para.add_run(" unique concept groups (")
-                run = para.add_run(f"{percent_unique:.1f}%")
-                run.bold = True
-                para.add_run("), ")
-                run = para.add_run(f"{shared_groups}")
-                run.bold = True
-                para.add_run(" shared concept groups (")
-                run = para.add_run(f"{percent_shared:.1f}%")
-                run.bold = True
-                para.add_run(")")
-
-            # --- Graph View of Common/Shared Concepts ---
-            # generate_concept_group_graph(doc, parent, folder_names, folder_unique_map, valid_folders, folder_concepts, llm_group_tuples, color_to_concepts, self)  # Disabled for now due to issues
-            # End of graph view block
-
-            # --- UpSet Diagram of Groups ---
-            # Move this section to appear right after the Overlap Summary, before the Unique/Common Concepts Table
-            doc.add_heading("UpSet Diagram of Concept Groups", level=2)
-            
-            # Function to extract group name from concepts
-            def extract_group_name(concepts):
-                """Extract a single common word that represents the group"""
-                if not concepts:
-                    return "Unknown"
-                
-                # Try to find the most common meaningful word
-                all_words = []
-                for concept in concepts:
-                    words = re.findall(r'\b\w+\b', concept.lower())
-                    # Filter out common words and short words
-                    meaningful_words = [w for w in words if len(w) > 3 and w not in ['the', 'and', 'for', 'with', 'from', 'that', 'this', 'have', 'been', 'they', 'will', 'would', 'could', 'should']]
-                    all_words.extend(meaningful_words)
-                
-                if all_words:
-                    # Count word frequencies
-                    from collections import Counter
-                    word_counts = Counter(all_words)
-                    # Return the most common word
-                    return word_counts.most_common(1)[0][0].capitalize()
-                
-                # Fallback: use first word of first concept
-                first_concept = concepts[0]
-                words = re.findall(r'\b\w+\b', first_concept)
-                if words:
-                    return words[0].capitalize()
-                
-                return "Group"
-            
-            # Create data for UpSet diagram
-            group_data = []
-            group_names = []
-            
-            if self.llm_grouping_var.get():
-                for color, concepts in llm_group_tuples:
-                    group_name = extract_group_name(concepts)
-                    group_names.append(group_name)
-                    
-                    # Create row for this group: [group_name, present_in_folder1, present_in_folder2, ...]
-                    row = [group_name]
-                    concepts_in_color = set(concepts)
-                    for folder in valid_folders:
-                        present = any(c in folder_concepts[folder] for c in concepts_in_color)
-                        row.append(1 if present else 0)
-                    group_data.append(row)
-            else:
-                for color in unique_color_groups:
-                    concepts = color_to_concepts[color]
-                    group_name = extract_group_name(concepts)
-                    group_names.append(group_name)
-                    
-                    # Create row for this group
-                    row = [group_name]
-                    concepts_in_color = set(concepts)
-                    for folder in valid_folders:
-                        present = any(c in folder_concepts[folder] for c in concepts_in_color)
-                        row.append(1 if present else 0)
-                    group_data.append(row)
-            
-            # Create DataFrame for UpSet
-            import pandas as pd
-            from upsetplot import UpSet, from_indicators
-            import matplotlib.pyplot as plt
-            
-            # Create DataFrame with group names as COLUMNS (not index) - like the existing code
-            # This matches the pattern: concept_matrix_reset with concepts as columns
-            df_groups = pd.DataFrame(group_data, columns=['Group'] + folder_names)
-            
-            # Ensure unique group names by adding index if duplicates exist
-            unique_group_names = []
-            group_name_counts = {}
-            for group_name in df_groups['Group']:
-                if group_name in group_name_counts:
-                    group_name_counts[group_name] += 1
-                    unique_name = f"{group_name}_{group_name_counts[group_name]}"
-                else:
-                    group_name_counts[group_name] = 0
-                    unique_name = group_name
-                unique_group_names.append(unique_name)
-            
-            df_groups['Group'] = unique_group_names
-            
-            # Now create the final DataFrame with groups as columns (like concept_matrix_reset)
-            # Extract the boolean data (folder columns) and use group names as column headers
-            group_columns = df_groups[folder_names].T  # Transpose to get groups as columns
-            group_columns.columns = unique_group_names  # Set group names as column headers
-            
-            # Convert to boolean and reset index to get default integer index
-            df_for_upset = group_columns.astype(bool).reset_index(drop=True)
-            
-            print(f"[UPSET DEBUG] Final DataFrame shape: {df_for_upset.shape}")
-            print(f"[UPSET DEBUG] Final DataFrame columns: {df_for_upset.columns.tolist()}")
-            print(f"[UPSET DEBUG] Final DataFrame dtypes: {df_for_upset.dtypes}")
-            print(f"[UPSET DEBUG] Final DataFrame head:")
-            print(df_for_upset.head())
-            
-            # Create UpSet plot with error handling
-            try:
-                # Use the same pattern as the existing code
-                upset_data = from_indicators(df_for_upset, df_for_upset.columns)
-                print('[UPSET DEBUG] UpSet data created successfully')
-                
-                # Create figure that fits page height (landscape orientation)
-                # Calculate available height for the plot
-                page_height_inches = 8.5  # Landscape page height
-                margin_inches = 1.0  # Top and bottom margins
-                available_height = page_height_inches - (2 * margin_inches)
-                
-                fig, axes = plt.subplots(1, 1, figsize=(12, available_height))
-                
-                upset = UpSet(upset_data, show_counts=True, min_subset_size=1)
-                axes = upset.plot(fig=fig)
-                bar_ax = axes['intersections']
-                matrix_ax = axes['matrix']
-                bars = bar_ax.patches
-                upset_index = upset_data.index
-                
-                # Add group colors to the y-axis labels (group names)
-                yticks = matrix_ax.get_yticklabels()
-                for label, group_name in zip(matrix_ax.get_yticklabels(), df_for_upset.columns):
-                    # Find the color for this group
-                    group_color = None
-                    if self.llm_grouping_var.get():
-                        # For LLM grouping, find the color from llm_group_tuples
-                        for color, concepts in llm_group_tuples:
-                            if extract_group_name(concepts) == group_name:
-                                group_color = color
-                                break
-                    else:
-                        # For color grouping, find the color from color_to_concepts
-                        for color, concepts in color_to_concepts.items():
-                            if extract_group_name(concepts) == group_name:
-                                group_color = color
-                                break
-                    
-                    if group_color and group_color.startswith('#') and len(group_color) == 7:
-                        label.set_color(group_color)
-                    else:
-                        label.set_color('black')
-                    label.set_weight('bold')
-                    label.set_fontsize(10)
-                
-                # Add short folder names as red column labels (rotated 90 degrees)
-                for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
-                    if i == 0:  # Skip the first bar (empty intersection)
-                        continue
-                    if bar.get_height() == 0:  # Skip empty bars
-                        continue
-                    
-                    x = bar.get_x() + bar.get_width() / 2
-                    intersection_idx = i - 1
-                    actual_intersection = upset_index[intersection_idx]
-                    
-                    # Find which folders are present in this intersection
-                    present_folders = []
-                    for j, present in enumerate(actual_intersection):
-                        if present and j < len(folder_names):
-                            # Get the short folder name from the unique words
-                            folder_unique_words = folder_unique_map.get(folder_names[j], set())
-                            if folder_unique_words:
-                                # Use the first unique word as short name
-                                short_name = sorted(folder_unique_words)[0].capitalize()
-                            else:
-                                # Fallback to first word of folder name
-                                short_name = folder_names[j].split()[0].capitalize()
-                            present_folders.append(short_name)
-                    
-                    if present_folders:
-                        # Create label showing short folder names
-                        label = ', '.join(present_folders)
-                        print(f"[UPSET DEBUG] Drawing folder label: '{label}' at x={x}")
-                        y_label = len(df_for_upset.columns) - 0.3
-                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=90, clip_on=False, weight='bold')
-                
-                # Customize the plot
-                plt.title("Concept Groups Overlap Across Folders", fontsize=14, pad=20)
-                
-                # Save the plot
-                upset_plot_path = os.path.join(parent, "groups_upset_plot.png")
-                plt.savefig(upset_plot_path, dpi=150, bbox_inches='tight', pad_inches=0.5)
-                plt.close()
-                
-                # Add the plot to the document inline with text
-                # Create a table to place the plot on the right side
-                plot_table = doc.add_table(rows=1, cols=2)
-                plot_table.autofit = False
-                
-                # Left column for text (empty for now, can be used later)
-                left_cell = plot_table.rows[0].cells[0]
-                left_cell.width = docx.shared.Inches(2)  # Small width for text
-                
-                # Right column for the plot
-                right_cell = plot_table.rows[0].cells[1]
-                right_cell.width = docx.shared.Inches(8)  # Most of the width for plot
-                right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run = right_cell.paragraphs[0].add_run()
-                
-                # Calculate height to fit page
-                page_height_inches = 8.5  # 8.5 inches * 72 points per inch
-                margin_inches = 1.0  # 1 inch margins
-                available_height_inches = page_height_inches - (2 * margin_inches)
-                
-                run.add_picture(upset_plot_path, height=Inches(available_height_inches))
-                
-            except Exception as e:
-                print(f"[UPSET ERROR] Failed to create UpSet plot: {e}")
-                print(f"[UPSET ERROR] Exception type: {type(e)}")
-                import traceback
-                print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")
-                # Add error message to document instead
-                doc.add_paragraph(f"Error creating UpSet diagram: {str(e)}")
-                doc.add_paragraph("Group data:")
-                for i, row_data in enumerate(group_data):
-                    doc.add_paragraph(f"  {unique_group_names[i] if i < len(unique_group_names) else row_data[0]}: {row_data[1:]}")
-            
-            # Add a table showing the group data
-            doc.add_paragraph("Group Presence Matrix:")
-            group_table = doc.add_table(rows=1, cols=1+len(folder_names))
-            group_table.rows[0].cells[0].text = "Group"
-            for i, folder_name in enumerate(folder_names):
-                group_table.rows[0].cells[1+i].text = folder_name.capitalize()
-            
-            # Make headings bold
-            for cell in group_table.rows[0].cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        run.bold = True
-            
-            # Add data rows
-            for i, row_data in enumerate(group_data):
-                row = group_table.add_row().cells
-                # Use the unique group name from the DataFrame
-                row[0].text = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
-                for j, present in enumerate(row_data[1:]):
-                    row[1+j].text = "✓" if present else "✗"
-
-            # --- Unique/Common Concepts Table ---
+                unique = sum(1 for row in overlap_table if row[i+1] and sum(row[1:]) == 1)
+                shared = sum(1 for row in overlap_table if all(row[1:]))
+                percent_unique = 100.0 * unique / total if total else 0
+                percent_shared = 100.0 * shared / total if total else 0
+                doc.add_paragraph(f"{folder_names[i]}: {unique} unique concepts ({percent_unique:.1f}%), {shared} shared concepts ({percent_shared:.1f}%)")
+            # --- Additional table: number of unique/common concepts and unique folder words ---
             doc.add_heading("Unique/Common Concepts Table", level=2)
-            uniq_table = doc.add_table(rows=1, cols=5)
-            widths = [1.5, 4.5, 1.2, 1.5, 2.0]  # inches - adjusted for new Group column
-            for i, w in enumerate(widths):
-                uniq_table.columns[i].width = docx.shared.Inches(w)
-            # Make headings bold
-            for cell in uniq_table.rows[0].cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        run.bold = True
-            uniq_table.rows[0].cells[0].text = "Group"
-            uniq_table.rows[0].cells[1].text = "Concepts"
-            uniq_table.rows[0].cells[2].text = "Unique/Shared"
-            uniq_table.rows[0].cells[3].text = "Folders"
-            uniq_table.rows[0].cells[4].text = "#Concepts"
-            
-            folder_unique_words_map = {}
-            all_concepts_table = {}
-            for color, concepts in (llm_group_tuples if self.llm_grouping_var.get() else color_to_concepts.items()):
-                for concept in concepts:
-                    folders_with_concept = set()
-                    for i, folder in enumerate(valid_folders):
-                        if concept in folder_concepts[folder]:
-                            folders_with_concept.add(folder_names[i])
-                    unique_words = set()
-                    for fname in folders_with_concept:
-                        unique_words |= folder_unique_map[fname]
-                    all_concepts_table[concept] = [w.capitalize() for w in unique_words]
-            
-            if self.llm_grouping_var.get():
-                for idx, (color, concepts) in enumerate(llm_group_tuples):
+            uniq_table = doc.add_table(rows=1, cols=7)
+            uniq_table.rows[0].cells[0].text = "Type"
+            uniq_table.rows[0].cells[1].text = "# Concepts"
+            uniq_table.rows[0].cells[2].text = "Concepts"
+            uniq_table.rows[0].cells[3].text = "Folder Unique Words"
+            uniq_table.rows[0].cells[4].text = "Total Concepts"
+            uniq_table.rows[0].cells[5].text = "Percentage (%)"
+            uniq_table.rows[0].cells[6].text = "Color"
+            # Unique concepts per folder
+            for i, folder in enumerate(valid_folders):
+                unique_concepts = [row[0] for row in overlap_table if row[i+1] and sum(row[1:]) == 1]
+                if unique_concepts:
                     row = uniq_table.add_row().cells
-                    
-                    # Group name column
-                    group_name = extract_group_name(concepts)
-                    row[0].text = group_name
-                    
-                    # Concepts column (colored)
-                    para = row[1].paragraphs[0]
-                    for cidx, concept in enumerate(concepts):
-                        rc = para.add_run(concept)
+                    row[0].text = "Unique"
+                    row[1].text = str(len(unique_concepts))
+                    # Color each concept in its color
+                    para = row[2].paragraphs[0]
+                    for idx, concept in enumerate(unique_concepts):
+                        color = group_colors.get(concept, '#000000')
+                        run = para.add_run(concept)
                         if color.startswith('#') and len(color) == 7:
                             r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                            rc.font.color.rgb = RGBColor(r, g, b)
-                        if cidx < len(concepts) - 1:
+                            run.font.color.rgb = RGBColor(r, g, b)
+                        if idx < len(unique_concepts) - 1:
                             para.add_run(", ")
-                    
-                    present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
-                    n_present = len(present_folders)
-                    n_total = len(folder_names)
-                    if n_present == 1:
-                        row[2].text = "Unique"
-                    elif n_present == n_total:
-                        row[2].text = f"Common in {n_present} / {n_total} authors"
-                    else:
-                        row[2].text = f"Partial in {n_present} / {n_total} authors"
-                    
-                    group_unique_words = set()
-                    for concept in concepts:
-                        group_unique_words.update(all_concepts_table.get(concept, []))
-                    row[3].text = ", ".join(sorted(group_unique_words))
-                    row[4].text = str(len(concepts))
-            else:
-                for idx, color in enumerate(unique_color_groups):
-                    row = uniq_table.add_row().cells
-                    concepts = color_to_concepts[color]
-                    
-                    # Group name column
-                    group_name = extract_group_name(concepts)
-                    row[0].text = group_name
-                    
-                    # Concepts column (colored)
-                    para = row[1].paragraphs[0]
-                    for cidx, concept in enumerate(concepts):
-                        rc = para.add_run(concept)
-                        if color.startswith('#') and len(color) == 7:
-                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                            rc.font.color.rgb = RGBColor(r, g, b)
-                        if cidx < len(concepts) - 1:
-                            para.add_run(", ")
-                    
-                    present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
-                    n_present = len(present_folders)
-                    n_total = len(folder_names)
-                    if n_present == 1:
-                        row[2].text = "Unique"
-                    elif n_present == n_total:
-                        row[2].text = f"Common in {n_present} / {n_total} authors"
-                    else:
-                        row[2].text = f"Partial in {n_present} / {n_total} authors"
-                    
-                    group_unique_words = set()
-                    for concept in concepts:
-                        group_unique_words.update(all_concepts_table.get(concept, []))
-                    row[3].text = ", ".join(sorted(group_unique_words))
-                    row[4].text = str(len(concepts))
-
+                    row[3].text = ", ".join(sorted(folder_unique_map[folder_names[i]]))
+                    row[4].text = str(total)
+                    percent = 100.0 * len(unique_concepts) / total if total else 0
+                    row[5].text = f"{percent:.1f}"
+                    # Show color swatch for the first concept
+                    color = group_colors.get(unique_concepts[0], '#000000') if unique_concepts else '#000000'
+                    run = row[6].paragraphs[0].add_run('■')
+                    if color.startswith('#') and len(color) == 7:
+                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                        run.font.color.rgb = RGBColor(r, g, b)
+            # Common concepts (shared by all)
+            common_concepts = [row[0] for row in overlap_table if all(row[1:])]
+            if common_concepts:
+                row = uniq_table.add_row().cells
+                row[0].text = "Common"
+                row[1].text = str(len(common_concepts))
+                para = row[2].paragraphs[0]
+                for idx, concept in enumerate(common_concepts):
+                    color = group_colors.get(concept, '#000000')
+                    run = para.add_run(concept)
+                    if color.startswith('#') and len(color) == 7:
+                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                        run.font.color.rgb = RGBColor(r, g, b)
+                    if idx < len(common_concepts) - 1:
+                        para.add_run(", ")
+                row[3].text = ", ".join(sorted(set.union(*unique_folder_words)))
+                row[4].text = str(total)
+                percent = 100.0 * len(common_concepts) / total if total else 0
+                row[5].text = f"{percent:.1f}"
+                color = group_colors.get(common_concepts[0], '#000000') if common_concepts else '#000000'
+                run = row[6].paragraphs[0].add_run('■')
+                if color.startswith('#') and len(color) == 7:
+                    r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                    run.font.color.rgb = RGBColor(r, g, b)
             doc.add_page_break()
             doc.add_heading("Aggregated Results", level=1)
             # Table of images
@@ -1918,7 +1399,11 @@ class UpSetGUI:
             doc.add_page_break()
             # Table of all canonical concepts (color-coded, with variants, grouped by color)
             doc.add_heading("All Concepts (Grouped by Color, Color-coded)", level=2)
-            # color_to_concepts is already created above
+            # Group concepts by color
+            color_to_concepts = defaultdict(list)
+            for c in concept_list:
+                color = group_colors[c]
+                color_to_concepts[color].append(c)
             concept_table = doc.add_table(rows=1, cols=3)
             concept_table.rows[0].cells[0].text = "Color Group"
             concept_table.rows[0].cells[1].text = "Concepts"
@@ -1933,13 +1418,8 @@ class UpSetGUI:
                 para = row[1].paragraphs[0]
                 for idx, c in enumerate(concepts):
                     rc = para.add_run(c)
-                    color_val = group_colors.get(c, '#FF0000')
-                    if c not in group_colors:
-                        print(f"[GROUP COLOR WARNING] Concept not in group_colors: {c}")
-                        self.root.after(0, lambda c=c: self.aggregate_status_label.config(text=f"[GROUP COLOR WARNING] Concept not in group_colors: {c}", foreground='red'))
-                        group_colors[c] = '#FF0000'
-                    if color_val.startswith('#') and len(color_val) == 7:
-                        rc.font.color.rgb = RGBColor(int(color_val[1:3], 16), int(color_val[3:5], 16), int(color_val[5:7], 16))
+                    if color.startswith('#') and len(color) == 7:
+                        rc.font.color.rgb = RGBColor(r, g, b)
                     if idx < len(concepts) - 1:
                         para.add_run(", ")
                 # Folder unique words for this group (use same logic as above)
@@ -1953,49 +1433,22 @@ class UpSetGUI:
                     unique_words |= folder_unique_map[fname]
                 row[2].text = ", ".join(sorted(unique_words))
             doc.add_page_break()
-            # --- Overlap table: put all concepts in the same color group on the same row ---
+            # Overlap table: put all concepts in the same group on the same row
             doc.add_heading("Concept Overlap Across Folders (Grouped)", level=2)
-            overlap_doc_table = doc.add_table(rows=1, cols=1+len(folder_names))
+            overlap_doc_table = doc.add_table(rows=1, cols=2+len(folder_names))
             hdr = overlap_doc_table.rows[0].cells
-            hdr[0].text = "Concepts in Group"
+            hdr[0].text = "Canonical Concept"
+            hdr[1].text = "Variants"
             for i, name in enumerate(folder_names):
-                hdr[1+i].text = name
-            # Make headings bold
-            for cell in overlap_doc_table.rows[0].cells:
-                for para in cell.paragraphs:
-                    for run in para.runs:
-                        run.bold = True
-            if self.llm_grouping_var.get():
-                for idx, (color, concepts) in enumerate(llm_group_tuples):
-                    doc_row = overlap_doc_table.add_row().cells
-                    para = doc_row[0].paragraphs[0]
-                    for cidx, c in enumerate(concepts):
-                        rc = para.add_run(c)
-                        if color.startswith('#') and len(color) == 7:
-                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                            rc.font.color.rgb = RGBColor(r, g, b)
-                        if cidx < len(concepts) - 1:
-                            para.add_run(", ")
-                    concepts_in_color = set(concepts)
-                    for j, folder in enumerate(valid_folders):
-                        present = any(c in folder_concepts[folder] for c in concepts_in_color)
-                        doc_row[1+j].text = "✔" if present else ""
-            else:
-                for idx, color in enumerate(unique_color_groups):
-                    doc_row = overlap_doc_table.add_row().cells
-                    para = doc_row[0].paragraphs[0]
-                    concepts = color_to_concepts[color]
-                    for cidx, c in enumerate(concepts):
-                        rc = para.add_run(c)
-                        if color.startswith('#') and len(color) == 7:
-                            r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                            rc.font.color.rgb = RGBColor(r, g, b)
-                        if cidx < len(concepts) - 1:
-                            para.add_run(", ")
-                    concepts_in_color = set(concepts)
-                    for j, folder in enumerate(valid_folders):
-                        present = any(c in folder_concepts[folder] for c in concepts_in_color)
-                        doc_row[1+j].text = "✔" if present else ""
+                hdr[2+i].text = name
+            for canon in canonical_concepts:
+                doc_row = overlap_doc_table.add_row().cells
+                doc_row[0].text = canon
+                doc_row[1].text = ", ".join(group_variants[canon])
+                canon_variants = set(group_variants[canon])
+                for j, folder in enumerate(valid_folders):
+                    present = any(v in folder_concepts[folder] for v in canon_variants)
+                    doc_row[2+j].text = "✔" if present else ""
             safe_update_progress(100, total_elapsed, total_elapsed)
             # Save
             out_path = os.path.join(parent, "aggregated_results.docx")
@@ -2009,22 +1462,6 @@ class UpSetGUI:
     def _update_aggregate_progress(self, val, elapsed, est_total):
         self.aggregate_progress['value'] = val
         self.aggregate_time_label.config(text=f"Elapsed: {elapsed:.1f}s, Estimated total: {est_total:.1f}s")
-
-    def on_llm_grouping_toggle(self):
-        # If LLM Grouping is enabled, disable all other grouping controls
-        state = 'disabled' if self.llm_grouping_var.get() else 'normal'
-        self.agg_color_criteria_cb.config(state=state)
-        self.agg_min_letters_entry.config(state=state)
-        self.agg_group_by_subletters.set(False if self.llm_grouping_var.get() else self.agg_group_by_subletters.get())
-        self.agg_group_by_words.set(False if self.llm_grouping_var.get() else self.agg_group_by_words.get())
-        self.sim_threshold_entry.config(state=state)
-        self.grouping_logic_combo.config(state=state)
-        self.agg_group_by_subletters_cb_state = getattr(self, 'agg_group_by_subletters_cb_state', None)
-        self.agg_group_by_words_cb_state = getattr(self, 'agg_group_by_words_cb_state', None)
-        # Optionally, disable the checkboxes themselves if you want
-        # (requires storing references to the checkboxes)
-        # self.agg_group_by_subletters_cb.config(state=state)
-        # self.agg_group_by_words_cb.config(state=state)
 
 def replace_bekker_with_greek(concept, bekker_map):
     for bekker, greek in bekker_map.items():
@@ -2052,273 +1489,6 @@ def convert_docx_to_pdf_libreoffice(docx_path, output_dir=None):
     except Exception as e:
         print("Error converting DOCX to PDF with LibreOffice:", e)
         return None
-
-def extract_groups_from_llm_output(parsed, concepts):
-    # If it's a dict, use values
-    if isinstance(parsed, dict):
-        return list(parsed.values())
-    # If it's a list of dicts with 'concepts' key, extract those
-    if isinstance(parsed, list) and all(isinstance(g, dict) and 'concepts' in g for g in parsed):
-        return [g['concepts'] for g in parsed]
-    # If it's a list of lists, use as-is
-    if isinstance(parsed, list) and all(isinstance(g, list) for g in parsed):
-        return parsed
-    # If it's a flat list, treat each as a singleton group
-    if isinstance(parsed, list):
-        return [[g] for g in parsed]
-    # Fallback: treat all as one group
-    return [concepts]
-
-def real_llm_grouping(concepts, prompt, model, output_dir=None):
-    """Call the real LLM API for grouping. Returns the LLM's raw output and parsed groups."""
-    # Prepare the prompt
-    prompt_full = (
-        prompt.strip() +
-        "\nIf the output is too large, split it into multiple JSON arrays or use short group names. Return only JSON, no explanation.\nConcepts:\n" +
-        "\n".join(f"- {c}" for c in concepts)
-    )
-    print("[LLM GROUPING REAL] Model:", model)
-    print("[LLM GROUPING REAL] Prompt:\n", prompt_full)
-    print("[LLM GROUPING REAL] Concepts:", concepts)
-    llm_output = None
-    parsed_groups = None
-    error = None
-    input_tokens = len(prompt_full.split())
-    output_tokens = 0
-    all_extracted_groups = []
-    try:
-        # --- Model selection and mapping logic (from advanced_rag.py) ---
-        model_map = {
-            "gpt-3.5": "gpt-3.5-turbo",
-            "gpt-4o": "gpt-4o",
-            "gpt-4o mini": "gpt-4o-mini",
-            "o1-mini": "gpt-4o-mini",
-            "o3-mini": "gpt-4o-mini",
-            "mistral": "mistral-small-latest",
-            "mistral-api": "mistral-small-latest",
-            "meta-llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
-            "remote meta-llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
-            "qwen3": "Qwen/Qwen1.5-7B-Chat",
-            # Add more mappings as needed
-        }
-        # Max tokens per model (based on public docs)
-        max_tokens_map = {
-            "gpt-3.5": 16385,
-            "gpt-4o": 128000,
-            "gpt-4o mini": 128000,
-            "o1-mini": 128000,
-            "o3-mini": 128000,
-            "mistral": 128000,
-            "mistral-api": 128000,
-            "meta-llama-3": 128000,
-            "remote meta-llama-3": 128000,
-            "qwen3": 128000,
-            "gemini": 128000,
-            "claude": 200000,
-        }
-        normalized = model.lower().replace("-api", "").replace("remote ", "").replace(" ", "-")
-        model_key = None
-        for key in model_map:
-            if key in normalized:
-                model_key = key
-                break
-        # Default max tokens
-        max_tokens = max_tokens_map.get(model_key, 128000)
-        # --- OpenAI GPT Models ---
-        if "gpt" in model.lower() or "o1-mini" in model.lower() or "o3-mini" in model.lower():
-            # Use 128000 for GPT-4o and variants
-            openai_api_key = os.environ.get("OPENAI_API_KEY")
-            if not openai_api_key:
-                raise RuntimeError("OpenAI API key not available.")
-            import openai
-            client = openai.OpenAI(api_key=openai_api_key)
-            model_name = model_map.get(model_key, "gpt-3.5-turbo")
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[{"role": "user", "content": prompt_full}],
-                temperature=0.3,
-                max_tokens=max_tokens  # 128000 for GPT-4o, 16385 for GPT-3.5
-            )
-            llm_output = response.choices[0].message.content
-            try:
-                import tiktoken
-                enc = tiktoken.encoding_for_model(model_name)
-                input_tokens = len(enc.encode(prompt_full))
-                output_tokens = len(enc.encode(llm_output))
-            except Exception:
-                input_tokens = len(prompt_full.split())
-                output_tokens = len(llm_output.split())
-        elif "mistral" in model.lower():
-            # Use 128000 for Mistral
-            api_key = os.environ.get("MISTRAL_API_KEY")
-            if not api_key or not Mistral:
-                raise RuntimeError("Mistral API or library not available.")
-            client = Mistral(api_key=api_key)
-            response = client.chat.complete(
-                model=model_map.get(model_key, "mistral-small-latest"),
-                messages=[{"role": "user", "content": prompt_full}],
-                temperature=0.3,
-                max_tokens=max_tokens  # 128000
-            )
-            llm_output = response.choices[0].message.content
-            input_tokens = len(prompt_full.split())
-            output_tokens = len(llm_output.split())
-        elif "llama" in model.lower():
-            # Use 128000 for Llama
-            hf_token = os.environ.get("HF_API_TOKEN")
-            if not hf_token or not InferenceClient:
-                raise RuntimeError("HuggingFace Inference API or library not available.")
-            client = InferenceClient(token=hf_token, timeout=120)
-            llm_output = client.text_generation(
-                prompt_full,
-                model=model_map.get(model_key, "meta-llama/Meta-Llama-3-8B-Instruct"),
-                temperature=0.3,
-                max_new_tokens=max_tokens  # 128000
-            )
-            input_tokens = len(prompt_full.split())
-            output_tokens = len(llm_output.split())
-        elif "qwen3" in model.lower():
-            # Use 128000 for Qwen3
-            try:
-                from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-            except ImportError:
-                raise RuntimeError("transformers library not installed. Please install with 'pip install transformers'.")
-            model_id = model_map.get(model_key, "Qwen/Qwen1.5-7B-Chat")
-            hf_token = os.environ.get("HF_API_TOKEN")
-            print(f"[LLM GROUPING REAL] Loading Qwen3 model {model_id} (this may take a while if not cached)...")
-            try:
-                tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
-                model_qwen = AutoModelForCausalLM.from_pretrained(model_id, token=hf_token)
-            except Exception as e:
-                raise RuntimeError(f"Qwen3 model not found or access denied: {e}")
-            pipe = pipeline("text-generation", model=model_qwen, tokenizer=tokenizer)
-            result = pipe(prompt_full, max_new_tokens=max_tokens, do_sample=True, temperature=0.3)  # 128000
-            llm_output = result[0]["generated_text"]
-            input_tokens = len(prompt_full.split())
-            output_tokens = len(llm_output.split())
-        elif "gemini" in model.lower():
-            # Use 128000 for Gemini
-            try:
-                import google.generativeai as genai
-            except ImportError:
-                print("[LLM GROUPING REAL] google-generativeai not installed.")
-                raise RuntimeError("google-generativeai not installed.")
-            gemini_api_key = os.environ.get("GEMINI_API_KEY")
-            if not gemini_api_key:
-                raise RuntimeError("GEMINI_API_KEY not set in environment.")
-            genai.configure(api_key=gemini_api_key)
-            model_name = "models/gemini-1.5-pro-latest"
-            try:
-                model_gemini = genai.GenerativeModel(model_name)
-                response = model_gemini.generate_content(prompt_full, generation_config={"max_output_tokens": max_tokens})  # 128000
-                llm_output = response.text
-            except Exception as e:
-                raise RuntimeError(f"Gemini API error: {e}")
-            input_tokens = len(prompt_full.split())
-            output_tokens = len(llm_output.split())
-        elif "claude" in model.lower():
-            # Use 200000 for Claude
-            try:
-                import anthropic
-            except ImportError:
-                print("[LLM GROUPING REAL] anthropic not installed.")
-                raise RuntimeError("anthropic not installed.")
-            claude_api_key = os.environ.get("ANTHROPIC_API_KEY")
-            if not claude_api_key:
-                raise RuntimeError("ANTHROPIC_API_KEY not set in environment.")
-            client = anthropic.Anthropic(api_key=claude_api_key)
-            tried_models = []
-            for model_name in [
-                "claude-3-7-sonnet-20250224",  # Claude 3.7 Sonnet (Feb 2025)
-                "claude-4-sonnet-20250501",    # Claude 4 Sonnet (May 2025)
-                "claude-3-5-sonnet-20241022",  # Claude 3.5 Sonnet (Oct 2024)
-                "claude-3-haiku-20240307"      # Claude 3 Haiku (Mar 2024)
-            ]:
-                tried_models.append(model_name)
-                try:
-                    response = client.messages.create(
-                        model=model_name,
-                        max_tokens=200000,  # Claude max
-                        temperature=0.3,
-                        messages=[{"role": "user", "content": prompt_full}]
-                    )
-                    llm_output = response.content[0].text if hasattr(response.content[0], 'text') else str(response.content)
-                    break
-                except Exception as e:
-                    print(f"[LLM GROUPING REAL] Claude model {model_name} not available: {e}")
-            else:
-                raise RuntimeError(f"Claude API error: None of the tried models are available: {tried_models}")
-            input_tokens = len(prompt_full.split())
-            output_tokens = len(llm_output.split())
-        elif "grok" in model.lower():
-            print("[LLM GROUPING REAL] Grok 3 and Grok 4 models are not available via public API.")
-            raise RuntimeError("Grok 3 and Grok 4 models are not yet implemented (no public API).")
-        elif "phi4" in model.lower():
-            # --- Phi4 (Not available) ---
-            print("[LLM GROUPING REAL] Phi4 model not yet implemented (no public API).")
-            raise RuntimeError("Phi4 model not yet implemented (no public API).")
-        elif "meta llama 70b" in model.lower():
-            # --- Meta Llama 70B (Not available) ---
-            print("[LLM GROUPING REAL] Meta Llama 70B model not yet implemented (no public API).")
-            raise RuntimeError("Meta Llama 70B model not yet implemented (no public API).")
-        elif "deepseek" in model.lower():
-            # --- DeepSeek V3 (Not available) ---
-            print("[LLM GROUPING REAL] DeepSeek V3 model not yet implemented (no public API).")
-            raise RuntimeError("DeepSeek V3 model not yet implemented (no public API).")
-        elif "nebius" in model.lower():
-            # --- Mistral (Nebius) (Not available) ---
-            print("[LLM GROUPING REAL] Mistral (Nebius) model not yet implemented (no public API).")
-            raise RuntimeError("Mistral (Nebius) model not yet implemented (no public API).")
-        else:
-            raise RuntimeError(f"Unsupported model: {model}")
-        print("[LLM GROUPING REAL] LLM Output:\n", llm_output)
-        print(f"[LLM GROUPING REAL] Input tokens: {input_tokens}, Output tokens: {output_tokens}")
-        # Try to parse JSON from the output
-        import re
-        # Extract all JSON arrays or objects from the output
-        json_matches = re.findall(r'\{[\s\S]*?\}|\[[\s\S]*?\]', llm_output)
-        for match in json_matches:
-            try:
-                obj = json.loads(match)
-                # If it's a dict of groups, convert to list of lists
-                if isinstance(obj, dict):
-                    group_list = list(obj.values())
-                    all_extracted_groups.extend(group_list)
-                elif isinstance(obj, list):
-                    all_extracted_groups.extend(obj)
-            except Exception as e:
-                print("[LLM GROUPING REAL] JSON parse error in match:", e)
-        if all_extracted_groups:
-            parsed_groups = extract_groups_from_llm_output(all_extracted_groups, concepts)
-        else:
-            # Try to parse the whole output as JSON
-            try:
-                parsed_groups = json.loads(llm_output)
-                parsed_groups = extract_groups_from_llm_output(parsed_groups, concepts)
-            except Exception as e:
-                print("[LLM GROUPING REAL] Fallback JSON parse error:", e)
-                parsed_groups = [concepts]
-        # Warn if output is likely truncated
-        if len(llm_output) > 18000 or (llm_output and not llm_output.rstrip().endswith(']') and not llm_output.rstrip().endswith('}')):
-            print("[LLM GROUPING REAL] WARNING: Output may be truncated or incomplete!")
-        # After parsing and flattening, print each group and its concepts
-        print("[LLM GROUPING REAL] Parsed groups:")
-        for idx, group in enumerate(parsed_groups):
-            print(f"  Group {idx+1}: {group}")
-    except Exception as e:
-        error = str(e)
-        print("[LLM GROUPING REAL] ERROR:", error)
-        parsed_groups = [concepts]
-        llm_output = error
-    # Save output to file
-    if output_dir:
-        try:
-            with open(os.path.join(output_dir, "llm_grouping_output.json"), "w", encoding="utf-8") as f:
-                json.dump(parsed_groups, f, ensure_ascii=False, indent=2)
-        except Exception as e:
-            print("[LLM GROUPING REAL] Failed to save output:", e)
-    print(f"[LLM GROUPING REAL] Parsed {len(parsed_groups)} groups.")
-    return parsed_groups
 
 def main():
     root = tk.Tk()
