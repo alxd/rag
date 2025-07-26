@@ -1418,13 +1418,25 @@ class UpSetGUI:
         # Compute overlap using color groups instead of canonical concepts
         color_overlap_table = []  # List of (color, [present in folder1, folder2, ...])
         folder_names = [os.path.basename(f) for f in valid_folders]
-        for color in unique_color_groups:
-            row = [color]
-            concepts_in_color = set(color_to_concepts[color])
-            for folder in valid_folders:
-                present = any(c in folder_concepts[folder] for c in concepts_in_color)
-                row.append(1 if present else 0)
-            color_overlap_table.append(row)
+        
+        if self.llm_grouping_var.get():
+            # For LLM grouping, create overlap table from llm_group_tuples
+            for color, concepts in llm_group_tuples:
+                row = [color]
+                concepts_in_color = set(concepts)
+                for folder in valid_folders:
+                    present = any(c in folder_concepts[folder] for c in concepts_in_color)
+                    row.append(1 if present else 0)
+                color_overlap_table.append(row)
+        else:
+            # For color grouping, create overlap table from color_to_concepts
+            for color in unique_color_groups:
+                row = [color]
+                concepts_in_color = set(color_to_concepts[color])
+                for folder in valid_folders:
+                    present = any(c in folder_concepts[folder] for c in concepts_in_color)
+                    row.append(1 if present else 0)
+                color_overlap_table.append(row)
         
         # Keep the original canonical overlap table for the final table
         if not self.llm_grouping_var.get():
@@ -1834,39 +1846,34 @@ class UpSetGUI:
                         run.font.size = docx.shared.Pt(9)  # Smaller font
             
             # Add data rows with colored concepts and smaller font
-            for i, row_data in enumerate(group_data):
+            # Use df_for_upset (same as UpSet diagram) for presence matrix
+            for group_idx, group_name in enumerate(df_for_upset.columns):
                 row = group_table.add_row().cells
-                # Use the unique group name from the DataFrame
-                group_name = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
                 row[0].text = group_name
-                
                 # Set smaller font for all cells in this row
                 for cell in row:
                     for para in cell.paragraphs:
                         for run in para.runs:
-                            run.font.size = docx.shared.Pt(8)  # Even smaller font
-                
+                            run.font.size = docx.shared.Pt(8)
                 # Color the group name based on the group's color
+                group_color = None
                 if self.llm_grouping_var.get():
-                    # For LLM grouping, find the color from llm_group_tuples
                     for color, concepts in llm_group_tuples:
                         if extract_group_name(concepts) == group_name:
-                            if color.startswith('#') and len(color) == 7:
-                                r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                                row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
+                            group_color = color
                             break
                 else:
-                    # For color grouping, find the color from color_to_concepts
                     for color, concepts in color_to_concepts.items():
                         if extract_group_name(concepts) == group_name:
-                            if color.startswith('#') and len(color) == 7:
-                                r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                                row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
+                            group_color = color
                             break
-                
-                # Add presence indicators with green/red emoticons
-                for j, present in enumerate(row_data[1:]):
-                    row[1+j].text = "🟢" if present else "🔴"
+                if group_color and group_color.startswith('#') and len(group_color) == 7:
+                    r, g, b = tuple(int(group_color[j:j+2], 16) for j in (1, 3, 5))
+                    row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
+                # Add presence indicators from df_for_upset (True=🟢, False=🔴)
+                for folder_idx, folder_name in enumerate(folder_names):
+                    present = bool(df_for_upset[group_name].iloc[folder_idx])
+                    row[1+folder_idx].text = "🟢" if present else "🔴"
 
             # --- Unique/Common Concepts Table ---
             doc.add_heading("Unique/Common Concepts Table", level=2)
