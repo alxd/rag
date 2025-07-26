@@ -4,6 +4,8 @@ import pandas as pd
 from sklearn.preprocessing import MultiLabelBinarizer
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 from upsetplot import UpSet, from_indicators
 import numpy as np
 import os
@@ -28,6 +30,9 @@ try:
     from huggingface_hub import InferenceClient
 except ImportError:
     InferenceClient = None
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+from docx.table import _Cell, Table
 
 # Common suffixes for substring grouping (except suffixes)
 common_suffixes = [
@@ -36,7 +41,114 @@ common_suffixes = [
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
-
+def create_fixed_width_table(doc, rows, cols, col_widths_inches):
+    """
+    Create a table with fixed column widths that actually work in python-docx.
+    
+    Args:
+        doc: The docx Document object
+        rows: Number of rows
+        cols: Number of columns
+        col_widths_inches: List of column widths in inches [3, 9]
+    
+    Returns:
+        The created table object
+    """
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Inches
+    
+    # Create the table
+    table = doc.add_table(rows=rows, cols=cols)
+    
+    # Set table-level properties first
+    table.style = 'Table Grid'
+    table.autofit = False
+    
+    # Get table element
+    tbl = table._tbl
+    
+    # Remove any existing table properties and start fresh
+    tblPr = tbl.tblPr
+    if tblPr is None:
+        tblPr = OxmlElement('w:tblPr')
+        tbl.insert(0, tblPr)
+    
+    # Clear existing table width if any
+    for child in list(tblPr):
+        if child.tag.endswith('tblW'):
+            tblPr.remove(child)
+        if child.tag.endswith('tblLayout'):
+            tblPr.remove(child)
+    
+    # Set table layout to fixed (CRITICAL)
+    tblLayout = OxmlElement('w:tblLayout')
+    tblLayout.set(qn('w:type'), 'fixed')
+    tblPr.append(tblLayout)
+    
+    # Set total table width
+    total_width_twips = sum(int(w * 1440) for w in col_widths_inches)
+    tblW = OxmlElement('w:tblW')
+    tblW.set(qn('w:w'), str(total_width_twips))
+    tblW.set(qn('w:type'), 'dxa')
+    tblPr.append(tblW)
+    
+    # Set column widths using grid (CRITICAL PART)
+    tblGrid = tbl.tblGrid
+    if tblGrid is not None:
+        tbl.remove(tblGrid)
+    
+    # Create new grid with specific widths
+    tblGrid = OxmlElement('w:tblGrid')
+    for width_inches in col_widths_inches:
+        width_twips = int(width_inches * 1440)  # Convert inches to twips
+        gridCol = OxmlElement('w:gridCol')
+        gridCol.set(qn('w:w'), str(width_twips))
+        tblGrid.append(gridCol)
+    tbl.append(tblGrid)
+    
+    # MOST IMPORTANT: Set cell widths for all cells - FORCE the widths
+    for row_idx, row in enumerate(table.rows):
+        for cell_idx, cell in enumerate(row.cells):
+            if cell_idx < len(col_widths_inches):
+                width_twips = int(col_widths_inches[cell_idx] * 1440)
+                
+                # Get the cell's XML element
+                tc = cell._tc
+                
+                # Remove existing tcPr and create fresh one
+                tcPr_elements = [child for child in tc if child.tag.endswith('tcPr')]
+                for tcPr in tcPr_elements:
+                    tc.remove(tcPr)
+                
+                # Create completely new tcPr
+                tcPr = OxmlElement('w:tcPr')
+                
+                # Set cell width with highest priority
+                tcW = OxmlElement('w:tcW')
+                tcW.set(qn('w:w'), str(width_twips))
+                tcW.set(qn('w:type'), 'dxa')
+                tcPr.append(tcW)
+                
+                # Add table cell margins to prevent overflow
+                tcMar = OxmlElement('w:tcMar')
+                for side in ['left', 'right', 'top', 'bottom']:
+                    mar = OxmlElement(f'w:{side}')
+                    mar.set(qn('w:w'), '100')
+                    mar.set(qn('w:type'), 'dxa')
+                    tcMar.append(mar)
+                tcPr.append(tcMar)
+                
+                # Insert tcPr as first child
+                tc.insert(0, tcPr)
+                
+                # Force the width property
+                cell.width = Inches(col_widths_inches[cell_idx])
+                
+                print(f"Set cell {cell_idx} width to {width_twips} twips ({col_widths_inches[cell_idx]} inches)")
+    
+    return table
+    
 def wrap_label(text, width=18):
     # Try to wrap at word boundaries, fallback to hard wrap
     return '\n'.join(textwrap.wrap(text, width=width))
@@ -1622,6 +1734,7 @@ class UpSetGUI:
             print(f"[UPSET DEBUG] Final DataFrame head:")
             print(df_for_upset.head())
             
+            upset_plot_path = ""
             # Create UpSet plot with error handling
             try:
                 # Use the same pattern as the existing code
@@ -1758,15 +1871,13 @@ class UpSetGUI:
                 print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")                
                 # Add overlap summary text to the first page (before the UpSet diagram)
 
-                            # Add the UpSet diagram in a table format (summary on left, diagram on right)
+            # Add the UpSet diagram in a table format (summary on left, diagram on right)
             doc.add_heading("Overlap Summary", level=1)
-            plot_table = doc.add_table(rows=1, cols=2)
-            plot_table.autofit = False
-            
+            plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[8, 7])
+
             # Left column for overlap summary text
             left_cell = plot_table.rows[0].cells[0]
-            left_cell.width = docx.shared.Inches(3)  # Width for text
-            
+
             # Add overlap summary text to left column
             para = left_cell.paragraphs[0]
             para.add_run("📊 Total concepts: ").bold = True
@@ -1815,27 +1926,466 @@ class UpSetGUI:
                 run.bold = True
                 para.add_run(")\n")
             
+            # Add individual concepts upset plots to left column (below stats)
+            try:
+                # Function to create upset plot for individual concepts
+                def create_individual_upset_plot(concepts_list, title, output_path, fig_width=3, fig_height=4):
+                    # Create data for individual concepts upset plot
+                    concept_data = []
+                    for concept in concepts_list:
+                        row = [concept]
+                        for folder in valid_folders:
+                            present = concept in folder_concepts[folder]
+                            row.append(1 if present else 0)
+                        concept_data.append(row)
+                    
+                    df_concepts = pd.DataFrame(concept_data, columns=['Concept'] + folder_names)
+                    
+                    # Ensure unique concept names for index
+                    unique_concept_names = []
+                    concept_name_counts = {}
+                    for concept in df_concepts['Concept']:
+                        if concept in concept_name_counts:
+                            concept_name_counts[concept] += 1
+                            unique_name = f"{concept}_{concept_name_counts[concept]}"
+                        else:
+                            concept_name_counts[concept] = 0
+                            unique_name = concept
+                        unique_concept_names.append(unique_name)
+                    df_concepts['Concept'] = unique_concept_names
+                    
+                    # Set index to concept names, columns to short folder names
+                    short_folder_names = [",".join(sorted(folder_unique_map[f])) if folder_unique_map[f] else f for f in folder_names]
+                    df_for_upset_individual = df_concepts.set_index('Concept')[folder_names]
+                    df_for_upset_individual.columns = short_folder_names
+                    df_for_upset_individual = df_for_upset_individual.astype(bool)
+                    
+                    # Create individual concepts upset plot
+                    upset_data_individual = from_indicators(df_for_upset_individual)
+                    
+                    # Create figure
+                    fig_individual_left, axes_individual_left = plt.subplots(1, 1, figsize=(fig_width, fig_height))
+                    upset_individual_left = UpSet(upset_data_individual, show_counts=True, subset_size='count')
+                    upset_individual_left.plot(fig=fig_individual_left)
+                    
+                    plt.title(title, fontsize=10, pad=10)
+                    plt.tight_layout()
+                    
+                    # Save the plot
+                    plt.savefig(output_path, dpi=150, bbox_inches='tight', pad_inches=0.2)
+                    plt.close()
+                
+                # Function to create upset plot for groups (using group names only)
+                def create_group_upset_plot(group_names_list, title, output_path, fig_width=3, fig_height=4):
+                    # Create data for groups upset plot
+                    group_data_plot = []
+                    for group_name in group_names_list:
+                        row = [group_name]
+                        for folder in valid_folders:
+                            # Check if any concept in this group is present in the folder
+                            present = False
+                            if self.llm_grouping_var.get():
+                                for color, concepts in llm_group_tuples:
+                                    if extract_group_name(concepts) == group_name:
+                                        present = any(concept in folder_concepts[folder] for concept in concepts)
+                                        break
+                            else:
+                                for color, concepts in color_to_concepts.items():
+                                    if extract_group_name(concepts) == group_name:
+                                        present = any(concept in folder_concepts[folder] for concept in concepts)
+                                        break
+                            row.append(1 if present else 0)
+                        group_data_plot.append(row)
+                    
+                    df_groups_plot = pd.DataFrame(group_data_plot, columns=['Group'] + folder_names)
+                    
+                    # Set index to group names, columns to short folder names
+                    short_folder_names = [",".join(sorted(folder_unique_map[f])) if folder_unique_map[f] else f for f in folder_names]
+                    df_for_upset_groups = df_groups_plot.set_index('Group')[folder_names]
+                    df_for_upset_groups.columns = short_folder_names
+                    df_for_upset_groups = df_for_upset_groups.astype(bool)
+                    
+                    # Create groups upset plot
+                    upset_data_groups = from_indicators(df_for_upset_groups)
+                    
+                    # Create figure
+                    fig_groups_left, axes_groups_left = plt.subplots(1, 1, figsize=(fig_width, fig_height))
+                    upset_groups_left = UpSet(upset_data_groups, show_counts=True, subset_size='count')
+                    upset_groups_left.plot(fig=fig_groups_left)
+                    
+                    plt.title(title, fontsize=10, pad=10)
+                    plt.tight_layout()
+                    
+                    # Save the plot
+                    plt.savefig(output_path, dpi=150, bbox_inches='tight', pad_inches=0.2)
+                    plt.close()
+                
+                # Get all individual concepts from color_to_concepts (BEFORE grouping)
+                all_individual_concepts = []
+                for color, concepts in color_to_concepts.items():
+                    all_individual_concepts.extend(concepts)
+                
+                # Remove duplicates while preserving order
+                seen = set()
+                unique_concepts_before = []
+                for concept in all_individual_concepts:
+                    if concept not in seen:
+                        seen.add(concept)
+                        unique_concepts_before.append(concept)
+                
+                # Create BEFORE grouping upset plot
+                before_title = f"ALL {len(unique_concepts_before)} plots BEFORE Grouping"
+                before_path = os.path.join(parent, "individual_concepts_upset_before.png")
+                create_individual_upset_plot(unique_concepts_before, before_title, before_path, fig_width=3, fig_height=3)
+                
+                # Get group names from Group Presence Matrix (AFTER grouping)
+                group_names_after = []
+                for i, row_data in enumerate(group_data):
+                    group_name = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
+                    group_names_after.append(group_name)
+                
+                # Create AFTER grouping upset plot (using group names only)
+                after_title = f"ALL {len(group_names_after)} plots AFTER Grouping"
+                after_path = os.path.join(parent, "group_upset_after.png")
+                create_group_upset_plot(group_names_after, after_title, after_path, fig_width=3, fig_height=3)
+                
+
+                # Add both plots to a nested table in the left column
+                # Create a nested table in the left cell (using python-docx's underlying XML)
+                def add_nested_table(cell, rows, cols, total_width_inches=2.8):
+                    """
+                    Create a nested table with proper column width settings
+                    """
+                    from docx.oxml import OxmlElement
+                    from docx.oxml.ns import qn
+                    from docx.table import Table
+                    import docx.shared
+                    
+                    tbl = OxmlElement('w:tbl')
+                    
+                    # Table properties
+                    tblPr = OxmlElement('w:tblPr')
+                    
+                    # Set table width to a specific value instead of auto
+                    tblW = OxmlElement('w:tblW')
+                    tblW.set(qn('w:w'), str(int(total_width_inches * 1440)))  # Convert inches to twips (1440 twips per inch)
+                    tblW.set(qn('w:type'), 'dxa')  # dxa = twentieths of a point
+                    tblPr.append(tblW)
+                    
+                    # Table layout - fixed instead of auto
+                    tblLayout = OxmlElement('w:tblLayout')
+                    tblLayout.set(qn('w:type'), 'fixed')
+                    tblPr.append(tblLayout)
+                    
+                    tbl.append(tblPr)
+                    
+                    # Table grid with specific column widths
+                    tblGrid = OxmlElement('w:tblGrid')
+                    col_width_twips = int((total_width_inches / cols) * 1440)  # Equal width columns
+                    
+                    for i in range(cols):
+                        gridCol = OxmlElement('w:gridCol')
+                        gridCol.set(qn('w:w'), str(col_width_twips))
+                        tblGrid.append(gridCol)
+                    tbl.append(tblGrid)
+                    
+                    # Create rows and cells
+                    for i in range(rows):
+                        tr = OxmlElement('w:tr')
+                        for j in range(cols):
+                            tc = OxmlElement('w:tc')
+                            
+                            # Cell properties with specific width
+                            tcPr = OxmlElement('w:tcPr')
+                            tcW = OxmlElement('w:tcW')
+                            tcW.set(qn('w:w'), str(col_width_twips))
+                            tcW.set(qn('w:type'), 'dxa')
+                            tcPr.append(tcW)
+                            tc.append(tcPr)
+                            
+                            # Add paragraph to cell
+                            p = OxmlElement('w:p')
+                            tc.append(p)
+                            tr.append(tc)
+                        tbl.append(tr)
+                    
+                    # Append to parent cell
+                    cell._element.append(tbl)
+                    return Table(tbl, cell._parent)
+
+                # Usage (replace your existing code):
+                new_para = left_cell.add_paragraph()
+    
+                # Create nested table in the NEW paragraph
+                nested_table = add_nested_table(new_para, 1, 2, total_width_inches=6.5)
+                
+                # Insert BEFORE plot
+                left_cell = nested_table.cell(0, 0)
+                left_cell_paragraph = left_cell.paragraphs[0]
+                left_cell_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run_before_plot = left_cell_paragraph.add_run()
+                run_before_plot.add_picture(before_path, width=Inches(2.5))
+                
+                # Insert AFTER plot  
+                right_cell_nested = nested_table.cell(0, 1)
+                right_cell_paragraph = right_cell_nested.paragraphs[0]
+                right_cell_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                run_after_plot = right_cell_paragraph.add_run()
+                run_after_plot.add_picture(after_path, width=Inches(3.5))
+                                
+            except Exception as e:
+                print(f"[LEFT COLUMN INDIVIDUAL UPSET ERROR] {e}")
+                # If plot fails, just add a text note
+                para.add_run("\n[Individual concepts plots could not be generated]")
+
+            page_height_inches = 8.5  # 8.5 inches * 72 points per inch
+            margin_inches = 0.0  # 1 inch margins
+            available_height_inches = page_height_inches - (2 * margin_inches)
+
             # Right column for the plot
             right_cell = plot_table.rows[0].cells[1]
-            right_cell.width = docx.shared.Inches(7)  # Width for plot
-            right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-            run = right_cell.paragraphs[0].add_run()
             
-            # Calculate height to fit page
-            page_height_inches = 8.5  # 8.5 inches * 72 points per inch
-            margin_inches = 1.0  # 1 inch margins
-            available_height_inches = page_height_inches - (2 * margin_inches)
-            
-            run.add_picture(upset_plot_path, height=Inches(available_height_inches))
-                
-            # Add Group Presence Matrix on the second page
+            # Cell properties for better control
+            right_cell_paragraph = right_cell.paragraphs[0]            
+            right_cell_paragraph.alignment = WD_ALIGN_PARAGRAPH.LEFT
+            # Clear any existing content
+            right_cell_paragraph.clear()
 
-            doc.add_page_break()
+            # Create run for the image
+            run = right_cell_paragraph.add_run()
+        
+            # Cap the height to a reasonable maximum to prevent layout issues
+            max_plot_height = min(available_height_inches, 7)  # Max 7 inche
+
+            run.add_picture(upset_plot_path, height=Inches(max_plot_height))  # Use most of the right column width
+
+            # Create and add the individual concepts upset plot            
+            # This upset plot shows individual concepts (not grouped) and which folders they appear in
+            try:
+                # Create data for individual concepts upset plot
+                concept_data = []
+                concept_names = []
+                
+                # Get all individual concepts from color_to_concepts
+                all_individual_concepts = []
+                for color, concepts in color_to_concepts.items():
+                    all_individual_concepts.extend(concepts)
+                
+                # Remove duplicates while preserving order
+                seen = set()
+                unique_concepts = []
+                for concept in all_individual_concepts:
+                    if concept not in seen:
+                        seen.add(concept)
+                        unique_concepts.append(concept)
+                
+                # Create row for each individual concept
+                for concept in unique_concepts:
+                    concept_names.append(concept)
+                    row = [concept]
+                    for folder in valid_folders:
+                        present = concept in folder_concepts[folder]
+                        row.append(1 if present else 0)
+                    concept_data.append(row)
+                
+                # Create DataFrame for individual concepts upset plot
+                df_concepts = pd.DataFrame(concept_data, columns=['Concept'] + folder_names)
+                
+                # Create the final DataFrame with concepts as columns (like the group upset plot)
+                concept_columns = df_concepts[folder_names].T  # Transpose to get concepts as columns
+                concept_columns.columns = concept_names  # Set concept names as column headers
+                
+                # Convert to boolean and reset index to get default integer index
+                df_concepts_for_upset = concept_columns.astype(bool).reset_index(drop=True)
+                
+                print(f"[INDIVIDUAL UPSET DEBUG] Final DataFrame shape: {df_concepts_for_upset.shape}")
+                print(f"[INDIVIDUAL UPSET DEBUG] Final DataFrame columns: {df_concepts_for_upset.columns.tolist()}")
+                
+                # Create individual concepts upset plot
+                individual_upset_data = from_indicators(df_concepts_for_upset, df_concepts_for_upset.columns)
+                print('[INDIVIDUAL UPSET DEBUG] Individual UpSet data created successfully')
+                
+                # Create figure for individual concepts upset plot
+                fig_individual, axes_individual = plt.subplots(1, 1, figsize=(12, max(6, 0.4 * len(df_concepts_for_upset))))
+                
+                upset_individual = UpSet(individual_upset_data, show_counts=True)
+                axes_individual = upset_individual.plot(fig=fig_individual)
+                bar_ax_individual = axes_individual['intersections']
+                matrix_ax_individual = axes_individual['matrix']
+                
+                # Add concept colors to the y-axis labels (concept names)
+                for label, concept_name in zip(matrix_ax_individual.get_yticklabels(), df_concepts_for_upset.columns):
+                    concept_color = group_colors.get(concept_name, '#000000')
+                    if concept_color and concept_color.startswith('#') and len(concept_color) == 7:
+                        label.set_color(concept_color)
+                    else:
+                        label.set_color('black')
+                    label.set_weight('bold')
+                    label.set_fontsize(8)
+                
+                # Add red column labels based on Folder Unique Words for each concept
+                for bar_idx, bar in enumerate(bar_ax_individual.patches):
+                    if bar.get_height() == 0:
+                        continue
+                    x = bar.get_x() + bar.get_width() / 2
+                    intersection = individual_upset_data.index[bar_idx]
+                    present_folders = []
+                    for j, present in enumerate(intersection):
+                        if present and j < len(folder_names):
+                            concept = df_concepts_for_upset.columns[j]
+                            folders = get_concept_folders(concept, folder_concepts, folder_names, valid_folders)
+                            unique_words = set()
+                            for fname in folders:
+                                unique_words |= folder_unique_map[fname]
+                            if unique_words:
+                                label_txt = ", ".join(sorted(unique_words)).capitalize()
+                            else:
+                                label_txt = folder_names[j].split()[0].capitalize()
+                            present_folders.append(label_txt)
+                    if present_folders:
+                        matrix_ax_individual.text(x, len(df_concepts_for_upset.columns) - 0.3, ", ".join(present_folders), ha='center', va='bottom', fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
+                
+                # Save the individual concepts upset plot
+                individual_upset_plot_path = os.path.join(parent, "individual_concepts_upset_plot.png")
+                plt.savefig(individual_upset_plot_path, dpi=150, bbox_inches='tight', pad_inches=0.5)
+                plt.close()
+                                
+            except Exception as e:
+                print(f"[INDIVIDUAL UPSET ERROR] Failed to create individual concepts UpSet plot: {e}")
+                print(f"[INDIVIDUAL UPSET ERROR] Exception type: {type(e)}")
+                import traceback
+                print(f"[INDIVIDUAL UPSET ERROR] Traceback: {traceback.format_exc()}")
+
+            # --- Individual Concepts UpSet Plot (upset_alt.py style) ---
+            # Prepare data: each row is a concept, columns are folders, value is True if concept in folder
+            concept_data = []
+            for concept in unique_concepts:
+                row = [concept]
+                for folder in valid_folders:
+                    present = concept in folder_concepts[folder]
+                    row.append(1 if present else 0)
+                concept_data.append(row)
+
+            df_concepts = pd.DataFrame(concept_data, columns=['Concept'] + folder_names)
+
+            # Ensure unique concept names for index
+            unique_concept_names = []
+            concept_name_counts = {}
+            for concept in df_concepts['Concept']:
+                if concept in concept_name_counts:
+                    concept_name_counts[concept] += 1
+                    unique_name = f"{concept}_{concept_name_counts[concept]}"
+                else:
+                    concept_name_counts[concept] = 0
+                    unique_name = concept
+                unique_concept_names.append(unique_name)
+            df_concepts['Concept'] = unique_concept_names
+
+            # Set index to concept names, columns to short folder names
+            short_folder_names = [",".join(sorted(folder_unique_map[f])) if folder_unique_map[f] else f for f in folder_names]
+            df_for_upset = df_concepts.set_index('Concept')[folder_names]
+            df_for_upset.columns = short_folder_names
+            df_for_upset = df_for_upset.astype(bool)
+
+            # Plot - PROPER APPROACH FOR ALL CONCEPTS
+            try:
+                # With ALL concepts, UpSet plot becomes impractical - use alternative approach
+                num_concepts = len(df_for_upset)
+                print(f"Processing {num_concepts} concepts...")
+                
+                if num_concepts > 50:
+                    
+                    # Sort concepts by frequency for better visualization
+                    df_sorted = df_for_upset.loc[concept_frequencies.index]
+                    # HEATMAP
+                    import seaborn as sns
+                    sns.heatmap(df_sorted.astype(int), 
+                               annot=False, 
+                               cmap='Blues', 
+                               cbar=True,
+                               xticklabels=True,
+                               yticklabels=True,
+                               ax=ax,
+                               cbar_kws={'label': 'Concept Present'})
+                    
+                    plt.title(f"All {num_concepts} Concepts Across Folders (Sorted by Frequency)", fontsize=14)
+                    plt.xlabel("Folders", fontsize=12)
+                    plt.ylabel("Concepts (sorted by frequency)", fontsize=12)
+                    
+                    # Fix x-axis labels: horizontal, capitalized, from bottom
+                    x_labels = [label.get_text().upper() for label in ax.get_xticklabels()]
+                    ax.set_xticklabels(x_labels, rotation=0, ha='center', fontsize=10)
+                    
+                    # Keep y-axis labels small but readable
+                    y_labels = [label.get_text() for label in ax.get_yticklabels()]
+                    ax.set_yticklabels(y_labels, rotation=0, fontsize=6)
+                    
+                    # Position x-axis labels at bottom
+                    ax.xaxis.set_ticks_position('bottom')
+                    ax.xaxis.set_label_position('bottom')
+                    
+                    # Adjust layout
+                    plt.subplots_adjust(left=0.25, right=0.95, top=0.95, bottom=0.15)
+                    
+                    plt.savefig(os.path.join(parent, "all_concepts_heatmap.png"), 
+                                dpi=150, bbox_inches='tight', pad_inches=0.5)
+                    plt.close()
+                    
+                    print(f"Created UpSet for all {num_concepts} concepts and heatmap for all {num_concepts} concepts")
+                    
+                else:
+                    # For smaller numbers, use original UpSet approach
+                    upset_data = from_indicators(df_for_upset)
+                    fig_height = max(8, 0.4 * num_concepts + 4)
+                    
+                    fig, axes = plt.subplots(1, 1, figsize=(14, fig_height))
+                    upset = UpSet(upset_data, show_counts=True, subset_size='count')
+                    upset.plot(fig=fig)
+                    
+                    plt.title("Individual Concepts Overlap Across Folders", fontsize=14, pad=20)
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(parent, "individual_concepts_upset_alt.png"), 
+                                dpi=150, bbox_inches='tight', pad_inches=0.5)
+                    plt.close()
+                    
+                    print(f"Successfully created UpSet plot with {num_concepts} concepts")
+                
+            except Exception as e:
+                print(f"[UPSET_ALT INDIVIDUAL ERROR] {e}")
+                print(f"Number of concepts: {len(df_for_upset) if 'df_for_upset' in locals() else 'Unknown'}")
+                
+                # Fallback: Create a simple alternative visualization
+                try:
+                    fig, ax = plt.subplots(figsize=(12, max(8, 0.3 * len(df_for_upset))))
+                    
+                    # Create a heatmap showing all concepts
+                    import seaborn as sns
+                    sns.heatmap(df_for_upset.astype(int), 
+                               annot=False, 
+                               cmap='Blues', 
+                               cbar=True,
+                               xticklabels=True,
+                               yticklabels=True,
+                               ax=ax)
+                    
+                    plt.title("Individual Concepts Presence Across Folders (Heatmap Fallback)", fontsize=14)
+                    plt.xticks(rotation=45, ha='right')
+                    plt.yticks(rotation=0, fontsize=8)
+                    plt.tight_layout()
+                    plt.savefig(os.path.join(parent, "individual_concepts_heatmap_fallback.png"), 
+                                dpi=150, bbox_inches='tight')
+                    plt.close()
+                    print("Created fallback heatmap visualization")
+                    
+                except Exception as fallback_error:
+                    print(f"[FALLBACK ERROR] {fallback_error}")
+                    
+                    
+            # Add Group Presence Matrix on the second pag
             doc.add_heading("Group Presence Matrix", level=2)
             group_table = doc.add_table(rows=1, cols=1+len(folder_names))
             group_table.rows[0].cells[0].text = "Group"
             for i, folder_name in enumerate(folder_names):
-                # Use the same folder names as in the Unique/Common Concepts Table
                 group_table.rows[0].cells[1+i].text = folder_name
             
             # Make headings bold and smaller font
@@ -1843,37 +2393,42 @@ class UpSetGUI:
                 for para in cell.paragraphs:
                     for run in para.runs:
                         run.bold = True
-                        run.font.size = docx.shared.Pt(9)  # Smaller font
+                        run.font.size = docx.shared.Pt(9)
             
             # Add data rows with colored concepts and smaller font
-            # Use df_for_upset (same as UpSet diagram) for presence matrix
-            for group_idx, group_name in enumerate(df_for_upset.columns):
+            for i, row_data in enumerate(group_data):
                 row = group_table.add_row().cells
+                # Use the unique group name from the DataFrame
+                group_name = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
                 row[0].text = group_name
+                
                 # Set smaller font for all cells in this row
                 for cell in row:
                     for para in cell.paragraphs:
                         for run in para.runs:
                             run.font.size = docx.shared.Pt(8)
+                
                 # Color the group name based on the group's color
-                group_color = None
                 if self.llm_grouping_var.get():
+                    # For LLM grouping, find the color from llm_group_tuples
                     for color, concepts in llm_group_tuples:
                         if extract_group_name(concepts) == group_name:
-                            group_color = color
+                            if color.startswith('#') and len(color) == 7:
+                                r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                                row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
                             break
                 else:
+                    # For color grouping, find the color from color_to_concepts
                     for color, concepts in color_to_concepts.items():
                         if extract_group_name(concepts) == group_name:
-                            group_color = color
+                            if color.startswith('#') and len(color) == 7:
+                                r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                                row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
                             break
-                if group_color and group_color.startswith('#') and len(group_color) == 7:
-                    r, g, b = tuple(int(group_color[j:j+2], 16) for j in (1, 3, 5))
-                    row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
-                # Add presence indicators from df_for_upset (True=🟢, False=🔴)
-                for folder_idx, folder_name in enumerate(folder_names):
-                    present = bool(df_for_upset[group_name].iloc[folder_idx])
-                    row[1+folder_idx].text = "🟢" if present else "🔴"
+                
+                # Add presence indicators with green/red emoticons
+                for j, present in enumerate(row_data[1:]):
+                    row[1+j].text = "🟢" if present else "🔴"
 
             # --- Unique/Common Concepts Table ---
             doc.add_heading("Unique/Common Concepts Table", level=2)
