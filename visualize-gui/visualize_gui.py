@@ -1905,6 +1905,13 @@ class UpSetGUI:
             run2.bold = True
             para.add_run(".\n\n")
             
+            # Add missing concepts information for LLM grouping
+            if self.llm_grouping_var.get() and missing_concepts:
+                para.add_run("⚠️ Note: ").bold = True
+                run3 = para.add_run(f"{len(missing_concepts)} concepts were not assigned to any group by the LLM and are excluded from the analysis.")
+                run3.bold = True
+                para.add_run("\n\n")
+            
             # Unique/Shared groups per folder
             for i, folder in enumerate(valid_folders):
                 unique_groups = sum(1 for row in color_overlap_table if row[i+1] and sum(row[1:]) == 1)
@@ -1912,7 +1919,14 @@ class UpSetGUI:
                 percent_unique = 100.0 * unique_groups / total_unique_groups if total_unique_groups else 0
                 percent_shared = 100.0 * shared_groups / total_unique_groups if total_unique_groups else 0
                 
-                para.add_run(f"🟢 {folder_names[i]}: ").bold = True
+                # Get unique capitalized folder name
+                folder_unique_words = folder_unique_map.get(folder_names[i], set())
+                if folder_unique_words:
+                    short_folder_name = sorted(folder_unique_words)[0].capitalize()
+                else:
+                    short_folder_name = folder_names[i].split()[0].capitalize()
+                
+                para.add_run(f"🟢 {short_folder_name}: ").bold = True
                 run = para.add_run(f"{unique_groups}")
                 run.bold = True
                 para.add_run(" unique concept groups (")
@@ -2382,11 +2396,18 @@ class UpSetGUI:
                     
                     
             # Add Group Presence Matrix on the second pag
+            doc.add_page_break()
             doc.add_heading("Group Presence Matrix", level=2)
             group_table = doc.add_table(rows=1, cols=1+len(folder_names))
             group_table.rows[0].cells[0].text = "Group"
             for i, folder_name in enumerate(folder_names):
-                group_table.rows[0].cells[1+i].text = folder_name
+                # Get unique capitalized folder name
+                folder_unique_words = folder_unique_map.get(folder_name, set())
+                if folder_unique_words:
+                    short_folder_name = sorted(folder_unique_words)[0].capitalize()
+                else:
+                    short_folder_name = folder_name.split()[0].capitalize()
+                group_table.rows[0].cells[1+i].text = short_folder_name
             
             # Make headings bold and smaller font
             for cell in group_table.rows[0].cells:
@@ -2478,9 +2499,12 @@ class UpSetGUI:
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     
+                    # Get the actual folders where this group appears
                     present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
                     n_present = len(present_folders)
                     n_total = len(folder_names)
+                    
+                    # Set Unique/Shared status based on actual folder presence
                     if n_present == 1:
                         row[2].text = "Unique"
                     elif n_present == n_total:
@@ -2488,10 +2512,16 @@ class UpSetGUI:
                     else:
                         row[2].text = f"Partial in {n_present} / {n_total} authors"
                     
-                    group_unique_words = set()
-                    for concept in concepts:
-                        group_unique_words.update(all_concepts_table.get(concept, []))
-                    row[3].text = ", ".join(sorted(group_unique_words))
+                    # Set Folders column to show the unique capitalized folder names
+                    unique_folder_names = []
+                    for folder_name in sorted(present_folders):
+                        folder_unique_words = folder_unique_map.get(folder_name, set())
+                        if folder_unique_words:
+                            short_name = sorted(folder_unique_words)[0].capitalize()
+                        else:
+                            short_name = folder_name.split()[0].capitalize()
+                        unique_folder_names.append(short_name)
+                    row[3].text = ", ".join(unique_folder_names)
                     row[4].text = str(len(concepts))
             else:
                 for idx, color in enumerate(unique_color_groups):
@@ -2512,9 +2542,12 @@ class UpSetGUI:
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     
+                    # Get the actual folders where this group appears
                     present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
                     n_present = len(present_folders)
                     n_total = len(folder_names)
+                    
+                    # Set Unique/Shared status based on actual folder presence
                     if n_present == 1:
                         row[2].text = "Unique"
                     elif n_present == n_total:
@@ -2522,10 +2555,16 @@ class UpSetGUI:
                     else:
                         row[2].text = f"Partial in {n_present} / {n_total} authors"
                     
-                    group_unique_words = set()
-                    for concept in concepts:
-                        group_unique_words.update(all_concepts_table.get(concept, []))
-                    row[3].text = ", ".join(sorted(group_unique_words))
+                    # Set Folders column to show the unique capitalized folder names
+                    unique_folder_names = []
+                    for folder_name in sorted(present_folders):
+                        folder_unique_words = folder_unique_map.get(folder_name, set())
+                        if folder_unique_words:
+                            short_name = sorted(folder_unique_words)[0].capitalize()
+                        else:
+                            short_name = folder_name.split()[0].capitalize()
+                        unique_folder_names.append(short_name)
+                    row[3].text = ", ".join(unique_folder_names)
                     row[4].text = str(len(concepts))
 
 
