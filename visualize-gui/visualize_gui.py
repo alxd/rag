@@ -1478,9 +1478,7 @@ class UpSetGUI:
             section.right_margin = 0
             section.header_distance = 0
             section.footer_distance = 0
-            # --- Overlap Summary with UpSet Diagram ---
-            doc.add_heading("Overlap Summary", level=1)
-            
+
             # Gather folder/group stats for the left column text
             total_concepts = sum(len(group) for _, group in llm_group_tuples) if self.llm_grouping_var.get() else sum(len(concepts) for concepts in color_to_concepts.values())
             folder_concept_counts = []
@@ -1500,7 +1498,7 @@ class UpSetGUI:
                             concepts_in_folder.update([concept for concept in concepts if concept in folder_concepts[folder]])
                 folder_concept_counts.append(len(concepts_in_folder))
                 folder_group_counts.append(groups_in_folder)
-            
+
             # Regrouping method
             if self.llm_grouping_var.get():
                 method_str = "color grouping based on LLM"
@@ -1626,7 +1624,7 @@ class UpSetGUI:
                 
                 fig, axes = plt.subplots(1, 1, figsize=(12, available_height))
                 
-                upset = UpSet(upset_data, show_counts=True, min_subset_size=1)
+                upset = UpSet(upset_data, show_counts=True)
                 axes = upset.plot(fig=fig)
                 bar_ax = axes['intersections']
                 matrix_ax = axes['matrix']
@@ -1659,13 +1657,44 @@ class UpSetGUI:
                     label.set_fontsize(10)
                 
                 # Add short folder names as red column labels (rotated 90 degrees)
-                for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
-                    if bar.get_height() == 0:  # Skip empty bars
-                        continue
-                    
+                # Fixed logic: Skip first bar but ensure labels match correct intersections
+                
+                # First, collect all non-empty bars with their indices
+                non_empty_bars = []
+                for i, bar in enumerate(bars):
+                    if bar.get_height() > 0:
+                        non_empty_bars.append((i, bar))
+                
+                print(f"[UPSET DEBUG] Total bars: {len(bars)}, Non-empty bars: {len(non_empty_bars)}")
+                
+                # Create a list of all folder names to cycle through
+                all_folder_names = []
+                for folder in folder_names:
+                    folder_unique_words = folder_unique_map.get(folder, set())
+                    if folder_unique_words:
+                        short_name = sorted(folder_unique_words)[0].capitalize()
+                    else:
+                        short_name = folder.split()[0].capitalize()
+                    all_folder_names.append(short_name)
+                
+                # Reverse to match the original logic
+                all_folder_names = all_folder_names[::-1]
+                
+                print(f"[UPSET DEBUG] All folder names for cycling: {all_folder_names}")
+                
+                # Process all non-empty bars except the first one (skip index 0)
+                print(f"[UPSET DEBUG] Non-empty bars indices: {[b[0] for b in non_empty_bars]}")
+                
+                # Filter out the first bar (index 0) and process the rest
+                bars_to_process = [(idx, bar) for idx, bar in non_empty_bars if idx != 0]
+                print(f"[UPSET DEBUG] Bars to process: {[b[0] for b in bars_to_process]}")
+                
+                for bar_idx, (original_index, bar) in enumerate(bars_to_process):
+                    print(f"[UPSET DEBUG] Processing bar_idx={bar_idx}, original_index={original_index}")
                     x = bar.get_x() + bar.get_width() / 2
-                    intersection_idx = i - 1
-                    actual_intersection = upset_index[intersection_idx]
+                    
+                    # Get the intersection data for this specific bar using its original index
+                    actual_intersection = upset_index[original_index]
                     
                     # Find which folders are present in this intersection
                     present_folders = []
@@ -1681,19 +1710,27 @@ class UpSetGUI:
                                 short_name = folder_names[j].split()[0].capitalize()
                             present_folders.append(short_name)
                     
-                    if present_folders:
-                        def check(n): 
-                            if n >= 0 and n < len(present_folders):
-                                return True
-                            else:
-                                return False
-                        if check(i-1):
-                            label = present_folders[i-1]  # Use first folder
-                            y_label = len(df_for_upset.columns) - 0.3
-                            matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=90, clip_on=False, weight='bold')
-                            print(f"[UPSET DEBUG] Drawing folder label: '{label}' at x={x}  all folders: {present_folders}")
-                            matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=90, clip_on=False, weight='bold')
-
+                    print(f"[UPSET DEBUG] Found {len(present_folders)} present folders: {present_folders}")
+                    
+                    # Calculate the correct label index (bar_idx is now correct since we filtered out the first bar)
+                    label_idx = bar_idx
+                    
+                    # Use label_idx to cycle through ALL folder names
+                    if all_folder_names:
+                        label = all_folder_names[label_idx % len(all_folder_names)]
+                        y_label = len(df_for_upset.columns) - 0.3
+                        
+                        # Place the label
+                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', 
+                                      fontsize=10, color='red', rotation=90, 
+                                      clip_on=False, weight='bold')
+                        
+                        print(f"[UPSET DEBUG] Bar (original index: {original_index}, label_idx: {label_idx}): "
+                              f"Drawing folder label: '{label}' at x={x:.2f}, "
+                              f"intersection: {actual_intersection}, "
+                              f"folders in intersection: {present_folders}, "
+                              f"assigned label: {label} (from all_folder_names[{label_idx % len(all_folder_names)}])")
+                
                 # Customize the plot
                 plt.title("Concept Groups Overlap Across Folders", fontsize=14, pad=20)
                 
@@ -1702,92 +1739,134 @@ class UpSetGUI:
                 plt.savefig(upset_plot_path, dpi=150, bbox_inches='tight', pad_inches=0.5)
                 plt.close()
                 
-                # Add the plot to the document inline with text
-                # Create a table to place the plot on the right side and overlap summary on the left
-                plot_table = doc.add_table(rows=1, cols=2)
-                plot_table.autofit = False
-                
-                # Left column for overlap summary text
-                left_cell = plot_table.rows[0].cells[0]
-                left_cell.width = docx.shared.Inches(3)  # Increased width for text
-                
-                # Add overlap summary text to left column
-                # Total concepts
-                para = left_cell.paragraphs[0]
-                para.add_run("📊 Total concepts: ").bold = True
-                run = para.add_run(str(total_concepts))
-                run.bold = True
-                para.add_run("\n\n")
-                
-                # Folder information
-                for i, name in enumerate(folder_names):
-                    folder_line = f"📁 {name}: "
-                    run = para.add_run(folder_line)
-                    run.bold = True
-                    run2 = para.add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups")
-                    run2.bold = True
-                    para.add_run("\n")
-                
-                para.add_run("\n")
-                
-                # Regrouping method
-                para.add_run("🎨 The concepts have been regrouped into ").bold = True
-                run = para.add_run(str(num_groups))
-                run.bold = True
-                para.add_run(" concept groups through the method: ")
-                run2 = para.add_run(method_str)
-                run2.bold = True
-                para.add_run(".\n\n")
-                
-                # Unique/Shared groups per folder
-                for i, folder in enumerate(valid_folders):
-                    unique_groups = sum(1 for row in color_overlap_table if row[i+1] and sum(row[1:]) == 1)
-                    shared_groups = sum(1 for row in color_overlap_table if all(row[1:]))
-                    percent_unique = 100.0 * unique_groups / total_unique_groups if total_unique_groups else 0
-                    percent_shared = 100.0 * shared_groups / total_unique_groups if total_unique_groups else 0
-                    
-                    para.add_run(f"🟢 {folder_names[i]}: ").bold = True
-                    run = para.add_run(f"{unique_groups}")
-                    run.bold = True
-                    para.add_run(" unique concept groups (")
-                    run = para.add_run(f"{percent_unique:.1f}%")
-                    run.bold = True
-                    para.add_run("), ")
-                    run = para.add_run(f"{shared_groups}")
-                    run.bold = True
-                    para.add_run(" shared concept groups (")
-                    run = para.add_run(f"{percent_shared:.1f}%")
-                    run.bold = True
-                    para.add_run(")\n")
-                
-                # Right column for the plot
-                right_cell = plot_table.rows[0].cells[1]
-                right_cell.width = docx.shared.Inches(7)  # Adjusted width for plot
-                right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
-                run = right_cell.paragraphs[0].add_run()
-                
-                # Calculate height to fit page
-                page_height_inches = 8.5  # 8.5 inches * 72 points per inch
-                margin_inches = 1.0  # 1 inch margins
-                available_height_inches = page_height_inches - (2 * margin_inches)
-                
-                run.add_picture(upset_plot_path, height=Inches(available_height_inches))
-                
-                # Add page break after the table
-                doc.add_page_break()
-                
             except Exception as e:
                 print(f"[UPSET ERROR] Failed to create UpSet plot: {e}")
                 print(f"[UPSET ERROR] Exception type: {type(e)}")
                 import traceback
-                print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")
-                # Add error message to document instead
-                doc.add_paragraph(f"Error creating UpSet diagram: {str(e)}")
-                doc.add_paragraph("Group data:")
-                for i, row_data in enumerate(group_data):
-                    doc.add_paragraph(f"  {unique_group_names[i] if i < len(unique_group_names) else row_data[0]}: {row_data[1:]}")
-            
+                print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")                
+                # Add overlap summary text to the first page (before the UpSet diagram)
 
+                            # Add the UpSet diagram in a table format (summary on left, diagram on right)
+            doc.add_heading("Overlap Summary", level=1)
+            plot_table = doc.add_table(rows=1, cols=2)
+            plot_table.autofit = False
+            
+            # Left column for overlap summary text
+            left_cell = plot_table.rows[0].cells[0]
+            left_cell.width = docx.shared.Inches(3)  # Width for text
+            
+            # Add overlap summary text to left column
+            para = left_cell.paragraphs[0]
+            para.add_run("📊 Total concepts: ").bold = True
+            run = para.add_run(str(total_concepts))
+            run.bold = True
+            para.add_run("\n\n")
+            
+            # Folder information
+            for i, name in enumerate(folder_names):
+                folder_line = f"📁 {name}: "
+                run = para.add_run(folder_line)
+                run.bold = True
+                run2 = para.add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups")
+                run2.bold = True
+                para.add_run("\n")
+            
+            para.add_run("\n")
+            
+            # Regrouping method
+            para.add_run("🎨 The concepts have been regrouped into ").bold = True
+            run = para.add_run(str(num_groups))
+            run.bold = True
+            para.add_run(" concept groups through the method: ")
+            run2 = para.add_run(method_str)
+            run2.bold = True
+            para.add_run(".\n\n")
+            
+            # Unique/Shared groups per folder
+            for i, folder in enumerate(valid_folders):
+                unique_groups = sum(1 for row in color_overlap_table if row[i+1] and sum(row[1:]) == 1)
+                shared_groups = sum(1 for row in color_overlap_table if all(row[1:]))
+                percent_unique = 100.0 * unique_groups / total_unique_groups if total_unique_groups else 0
+                percent_shared = 100.0 * shared_groups / total_unique_groups if total_unique_groups else 0
+                
+                para.add_run(f"🟢 {folder_names[i]}: ").bold = True
+                run = para.add_run(f"{unique_groups}")
+                run.bold = True
+                para.add_run(" unique concept groups (")
+                run = para.add_run(f"{percent_unique:.1f}%")
+                run.bold = True
+                para.add_run("), ")
+                run = para.add_run(f"{shared_groups}")
+                run.bold = True
+                para.add_run(" shared concept groups (")
+                run = para.add_run(f"{percent_shared:.1f}%")
+                run.bold = True
+                para.add_run(")\n")
+            
+            # Right column for the plot
+            right_cell = plot_table.rows[0].cells[1]
+            right_cell.width = docx.shared.Inches(7)  # Width for plot
+            right_cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+            run = right_cell.paragraphs[0].add_run()
+            
+            # Calculate height to fit page
+            page_height_inches = 8.5  # 8.5 inches * 72 points per inch
+            margin_inches = 1.0  # 1 inch margins
+            available_height_inches = page_height_inches - (2 * margin_inches)
+            
+            run.add_picture(upset_plot_path, height=Inches(available_height_inches))
+                
+            # Add Group Presence Matrix on the second page
+
+            doc.add_page_break()
+            doc.add_heading("Group Presence Matrix", level=2)
+            group_table = doc.add_table(rows=1, cols=1+len(folder_names))
+            group_table.rows[0].cells[0].text = "Group"
+            for i, folder_name in enumerate(folder_names):
+                # Use the same folder names as in the Unique/Common Concepts Table
+                group_table.rows[0].cells[1+i].text = folder_name
+            
+            # Make headings bold and smaller font
+            for cell in group_table.rows[0].cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.bold = True
+                        run.font.size = docx.shared.Pt(9)  # Smaller font
+            
+            # Add data rows with colored concepts and smaller font
+            for i, row_data in enumerate(group_data):
+                row = group_table.add_row().cells
+                # Use the unique group name from the DataFrame
+                group_name = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
+                row[0].text = group_name
+                
+                # Set smaller font for all cells in this row
+                for cell in row:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.font.size = docx.shared.Pt(8)  # Even smaller font
+                
+                # Color the group name based on the group's color
+                if self.llm_grouping_var.get():
+                    # For LLM grouping, find the color from llm_group_tuples
+                    for color, concepts in llm_group_tuples:
+                        if extract_group_name(concepts) == group_name:
+                            if color.startswith('#') and len(color) == 7:
+                                r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                                row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
+                            break
+                else:
+                    # For color grouping, find the color from color_to_concepts
+                    for color, concepts in color_to_concepts.items():
+                        if extract_group_name(concepts) == group_name:
+                            if color.startswith('#') and len(color) == 7:
+                                r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                                row[0].paragraphs[0].runs[0].font.color.rgb = RGBColor(r, g, b)
+                            break
+                
+                # Add presence indicators with green/red emoticons
+                for j, present in enumerate(row_data[1:]):
+                    row[1+j].text = "🟢" if present else "🔴"
 
             # --- Unique/Common Concepts Table ---
             doc.add_heading("Unique/Common Concepts Table", level=2)
@@ -1887,7 +1966,7 @@ class UpSetGUI:
                     row[3].text = ", ".join(sorted(group_unique_words))
                     row[4].text = str(len(concepts))
 
-            doc.add_page_break()
+
             doc.add_heading("Aggregated Results", level=1)
             # Table of images
             doc.add_heading("UpSet Plots from Each Folder", level=2)
