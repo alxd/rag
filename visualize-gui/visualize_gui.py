@@ -1857,7 +1857,7 @@ class UpSetGUI:
                               f"assigned label: {label} (from all_folder_names[{label_idx % len(all_folder_names)}])")
                 
                 # Customize the plot
-                plt.title("Concept Groups Overlap Across Folders", fontsize=14, pad=20)
+                plt.title("Concept Groups Overlap Across Authors", fontsize=14, pad=20)
                 
                 # Save the plot
                 upset_plot_path = os.path.join(parent, "groups_upset_plot.png")
@@ -1903,13 +1903,13 @@ class UpSetGUI:
             para.add_run(" concept groups through the method: ")
             run2 = para.add_run(method_str)
             run2.bold = True
-            para.add_run(".\n\n")
-            
+                        
             # Add missing concepts information for LLM grouping
             if self.llm_grouping_var.get() and missing_concepts:
                 para.add_run("⚠️ Note: ").bold = True
-                run3 = para.add_run(f"{len(missing_concepts)} concepts were not assigned to any group by the LLM and are excluded from the analysis.")
+                run3 = para.add_run(f"{len(missing_concepts)} concepts were not assigned to any group by the LLM and are excluded from the analysis: ")
                 run3.bold = True
+                para.add_run(", ".join(sorted(missing_concepts)))
                 para.add_run("\n\n")
             
             # Unique/Shared groups per folder
@@ -2048,7 +2048,7 @@ class UpSetGUI:
                         unique_concepts_before.append(concept)
                 
                 # Create BEFORE grouping upset plot
-                before_title = f"ALL {len(unique_concepts_before)} plots BEFORE Grouping"
+                before_title = f"ALL {len(unique_concepts_before)} concepts BEFORE Grouping"
                 before_path = os.path.join(parent, "individual_concepts_upset_before.png")
                 create_individual_upset_plot(unique_concepts_before, before_title, before_path, fig_width=3, fig_height=3)
                 
@@ -2059,7 +2059,7 @@ class UpSetGUI:
                     group_names_after.append(group_name)
                 
                 # Create AFTER grouping upset plot (using group names only)
-                after_title = f"ALL {len(group_names_after)} plots AFTER Grouping"
+                after_title = f"ALL {len(group_names_after)} concepts AFTER Grouping"
                 after_path = os.path.join(parent, "group_upset_after.png")
                 create_group_upset_plot(group_names_after, after_title, after_path, fig_width=3, fig_height=3)
                 
@@ -2322,7 +2322,7 @@ class UpSetGUI:
                                ax=ax,
                                cbar_kws={'label': 'Concept Present'})
                     
-                    plt.title(f"All {num_concepts} Concepts Across Folders (Sorted by Frequency)", fontsize=14)
+                    plt.title(f"All {num_concepts} Concepts Across Authors (Sorted by Frequency)", fontsize=14)
                     plt.xlabel("Folders", fontsize=12)
                     plt.ylabel("Concepts (sorted by frequency)", fontsize=12)
                     
@@ -2356,7 +2356,7 @@ class UpSetGUI:
                     upset = UpSet(upset_data, show_counts=True, subset_size='count')
                     upset.plot(fig=fig)
                     
-                    plt.title("Individual Concepts Overlap Across Folders", fontsize=14, pad=20)
+                    plt.title("Individual Concepts Overlap Across Authors", fontsize=14, pad=20)
                     plt.tight_layout()
                     plt.savefig(os.path.join(parent, "individual_concepts_upset_alt.png"), 
                                 dpi=150, bbox_inches='tight', pad_inches=0.5)
@@ -2382,7 +2382,7 @@ class UpSetGUI:
                                yticklabels=True,
                                ax=ax)
                     
-                    plt.title("Individual Concepts Presence Across Folders (Heatmap Fallback)", fontsize=14)
+                    plt.title("Individual Concepts Presence Across Authors (Heatmap Fallback)", fontsize=14)
                     plt.xticks(rotation=45, ha='right')
                     plt.yticks(rotation=0, fontsize=8)
                     plt.tight_layout()
@@ -2465,7 +2465,7 @@ class UpSetGUI:
             uniq_table.rows[0].cells[0].text = "Group"
             uniq_table.rows[0].cells[1].text = "Concepts"
             uniq_table.rows[0].cells[2].text = "Unique/Shared"
-            uniq_table.rows[0].cells[3].text = "Folders"
+            uniq_table.rows[0].cells[3].text = "Authors"
             uniq_table.rows[0].cells[4].text = "#Concepts"
             
             folder_unique_words_map = {}
@@ -2626,7 +2626,7 @@ class UpSetGUI:
                 row[2].text = ", ".join(sorted(unique_words))
             doc.add_page_break()
             # --- Overlap table: put all concepts in the same color group on the same row ---
-            doc.add_heading("Concept Overlap Across Folders (Grouped)", level=2)
+            doc.add_heading("Concept Overlap Across Authors (Grouped)", level=2)
             overlap_doc_table = doc.add_table(rows=1, cols=1+len(folder_names))
             hdr = overlap_doc_table.rows[0].cells
             hdr[0].text = "Concepts in Group"
