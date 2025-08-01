@@ -328,7 +328,9 @@ class UpSetGUI:
         self.merge_button = ttk.Button(merge_buttons_frame, text="Select & Merge CSVs with One Varying Parameter", command=self.merge_csv_files)
         self.merge_button.grid(row=0, column=0, sticky=tk.W, padx=(0, 5), pady=2)
         self.single_csv_button = ttk.Button(merge_buttons_frame, text="Select Single CSV with Multiple Varying Parameters", command=self.process_single_csv_with_params)
-        self.single_csv_button.grid(row=0, column=1, sticky=tk.W, padx=(5, 0), pady=2)
+        self.single_csv_button.grid(row=0, column=1, sticky=tk.W, padx=(5, 5), pady=2)
+        self.full_analysis_button = ttk.Button(merge_buttons_frame, text="Generate Full Analysis", command=self.generate_full_analysis, state='disabled')
+        self.full_analysis_button.grid(row=0, column=2, sticky=tk.W, padx=(5, 0), pady=2)
         
         # File selection
         ttk.Label(main_frame, text="CSV File:").grid(row=1, column=0, sticky=tk.W, pady=0)
@@ -501,43 +503,91 @@ class UpSetGUI:
         if df is None:
             self.block_info_label.config(text="Could not read CSV to infer blocks.", foreground="red")
             return
-        # Detect block structure
+        
+        # Detect parameter columns
         param_names = [col for col in ['Temperature', 'Top-p', 'Top-k', 'BM25 Weight'] if col in df.columns]
-        block_size = None
+        
+        if len(param_names) != 4:
+            block_info = f"Found {len(param_names)} parameter columns, need 4."
+            self.block_info_label.config(text=block_info, foreground="red")
+            return
+        
+        # Analyze parameter values
+        param_values = {}
+        for param in param_names:
+            unique_vals = sorted(df[param].unique())
+            param_values[param] = unique_vals
+        
+        # Check if we have 5 values for each parameter (5x5x5x5 = 625)
+        expected_combinations = 1
+        for param, values in param_values.items():
+            expected_combinations *= len(values)
+        
+        if expected_combinations != 625:
+            block_info = f"Expected 625 combinations (5x5x5x5), but calculated {expected_combinations}"
+            self.block_info_label.config(text=block_info, foreground="red")
+            return
+        
+        # For 5x5x5x5 combinations, create proper blocks
+        # The data should be organized as: 5 blocks of 125 rows each for the outermost parameter
         blocks = []
-        if len(param_names) == 4:
-            n = len(df)
-            for p in param_names:
-                values = df[p].values
-                first_val = values[0]
-                block_len = 1
-                for v in values[1:]:
-                    if v == first_val:
-                        block_len += 1
-                    else:
-                        break
-                if n % block_len == 0 and block_len > 1:
-                    block_size = block_len
-                    break
-            if block_size is None:
-                block_info = "Could not infer block size."
-            else:
-                num_blocks = n // block_size
-                blocks = []
-                block_strs = []
-                for i in range(num_blocks):
-                    start = i * block_size
-                    end = (i + 1) * block_size
-                    varying_param = None
-                    for p in param_names:
-                        if len(df[p].iloc[start:end].unique()) > 1:
-                            varying_param = p
-                            break
-                    blocks.append((start, end, varying_param if varying_param else '?'))
-                    block_strs.append(f"{start}-{end-1}: {varying_param if varying_param else '?'}")
-                block_info = "Blocks: [" + ", ".join(block_strs) + "]"
-        else:
-            block_info = "Could not detect all required parameters."
+        block_strs = []
+        
+        # Calculate block sizes for each parameter level
+        # For a 5x5x5x5 grid:
+        # - Outermost parameter: 5 blocks of 125 rows each
+        # - Second parameter: 25 blocks of 25 rows each  
+        # - Third parameter: 125 blocks of 5 rows each
+        # - Innermost parameter: 625 blocks of 1 row each
+        
+        block_size_125 = 125  # 5^3
+        block_size_25 = 25    # 5^2
+        block_size_5 = 5      # 5^1
+        block_size_1 = 1      # 5^0
+        
+        # Create blocks for each parameter level
+        current_row = 0
+        
+        # Level 1: 5 blocks of 125 rows each (outermost parameter)
+        for i in range(5):
+            start = current_row
+            end = current_row + block_size_125
+            param_name = param_names[0]  # Outermost parameter
+            blocks.append((start, end, param_name))
+            block_strs.append(f"{start}-{end-1}: {param_name}")
+            current_row = end
+        
+        # Level 2: 25 blocks of 25 rows each (second parameter)
+        current_row = 0
+        for i in range(25):
+            start = current_row
+            end = current_row + block_size_25
+            param_name = param_names[1]  # Second parameter
+            blocks.append((start, end, param_name))
+            block_strs.append(f"{start}-{end-1}: {param_name}")
+            current_row = end
+        
+        # Level 3: 125 blocks of 5 rows each (third parameter)
+        current_row = 0
+        for i in range(125):
+            start = current_row
+            end = current_row + block_size_5
+            param_name = param_names[2]  # Third parameter
+            blocks.append((start, end, param_name))
+            block_strs.append(f"{start}-{end-1}: {param_name}")
+            current_row = end
+        
+        # Level 4: 625 blocks of 1 row each (innermost parameter)
+        current_row = 0
+        for i in range(625):
+            start = current_row
+            end = current_row + block_size_1
+            param_name = param_names[3]  # Innermost parameter
+            blocks.append((start, end, param_name))
+            block_strs.append(f"{start}-{end-1}: {param_name}")
+            current_row = end
+        
+        block_info = "Blocks: [" + ", ".join(block_strs) + "]"
         self.block_info_label.config(text=block_info, foreground="blue")
         self.detected_blocks = blocks
             
@@ -1046,6 +1096,12 @@ class UpSetGUI:
         if not file_path:
             return
             
+        # Store the file path and enable buttons
+        self.csv_file = file_path
+        self.file_label.config(text=os.path.basename(file_path), foreground="black")
+        self.process_btn.config(state='normal')
+        self.full_analysis_button.config(state='normal')
+        
         try:
             # Read the CSV file
             df = pd.read_csv(file_path, encoding='utf-8')
@@ -1112,78 +1168,378 @@ class UpSetGUI:
             output_dir = os.path.join(os.getcwd(), "single_csv_parameter_analysis")
             os.makedirs(output_dir, exist_ok=True)
             
-            # Process each parameter separately
+            # Process each parameter separately for UpSet plots
             param_results = {}
             
             for i, param in enumerate(expected_params):
                 print(f"Processing parameter {i+1}/{len(expected_params)}: {param}")
                 self.merge_label.config(text=f"Processing parameter {i+1}/{len(expected_params)}: {param}", foreground="blue")
                 self.root.update()  # Update the UI
+                
                 # Get unique values for this parameter
                 unique_values = sorted(df[param].unique())
+                print(f"Unique values for {param}: {unique_values}")
                 
-                # Create blocks for this parameter
-                blocks = []
+                # Create concept sets for each value of this parameter
+                concept_sets = {}
+                
                 for value in unique_values:
-                    # Find rows where this parameter has this value
+                    # Get rows where this parameter has this value
                     param_rows = df[df[param] == value]
-                    if len(param_rows) > 0:
-                        start_idx = param_rows.index[0]
-                        end_idx = param_rows.index[-1] + 1
-                        blocks.append((start_idx, end_idx, param))
+                    print(f"Processing {param}={value}: {len(param_rows)} rows")
+                    
+                    # Extract all concepts from these rows
+                    all_concepts = []
+                    for _, row in param_rows.iterrows():
+                        concepts = row['Concepts']
+                        if concepts:
+                            all_concepts.extend(concepts)
+                    
+                    # Remove duplicates and create a set
+                    concept_sets[f"{param}={value}"] = set(all_concepts)
+                    print(f"  Found {len(set(all_concepts))} unique concepts")
                 
-                # Create a subset DataFrame for this parameter
-                param_df = df.copy()
-                
-                # Generate plots and analysis for this parameter
+                # Create UpSet plot for this parameter
                 param_output_dir = os.path.join(output_dir, f"{param.replace(' ', '_').replace('-', '_')}_analysis")
                 os.makedirs(param_output_dir, exist_ok=True)
                 
-                # Create color mapping
-                all_concepts = []
-                for concepts in param_df['Concepts']:
-                    all_concepts.extend(concepts)
-                all_concepts = list(set(all_concepts))
+                # Create DataFrame for UpSet
+                all_concepts = set()
+                for concepts in concept_sets.values():
+                    all_concepts.update(concepts)
                 
-                color_mapping = self.create_color_mapping(all_concepts)
+                # Create indicator matrix
+                upset_df = pd.DataFrame(index=list(all_concepts))
+                for set_name, concepts in concept_sets.items():
+                    upset_df[set_name] = [concept in concepts for concept in all_concepts]
+            
+            # Generate UpSet plot
+            try:
+                from upsetplot import from_indicators, UpSet
+                import matplotlib.pyplot as plt
                 
-                # Generate plots
-                self.generate_parameter_plots(param_df, blocks, color_mapping, param_output_dir, param)
+                # Create a proper indicator DataFrame for UpSet
+                # Convert to boolean and ensure proper structure
+                upset_df = upset_df.astype(bool)
                 
-                # Clean up memory after processing each parameter
-                import gc
-                del param_df, color_mapping
-                gc.collect()
+                # Only create UpSet if we have multiple sets and concepts
+                if len(concept_sets) > 1 and len(all_concepts) > 0:
+                    try:
+                        # Ensure proper DataFrame structure for upsetplot
+                        upset_df = upset_df.astype(bool)
+                        upset_df = upset_df.reset_index(drop=True)  # Reset index to avoid index issues
+                        
+                        upset_data = from_indicators(upset_df, upset_df.columns)
+                        
+                        fig, axes = plt.subplots(1, 1, figsize=(12, 8))
+                        upset = UpSet(upset_data, show_counts=True)
+                        upset.plot(fig=fig)
+                        
+                        plt.title(f"UpSet Plot for {param}")
+                        plt.tight_layout()
+                        
+                        plot_path = os.path.join(param_output_dir, f"upset_plot_{param.replace(' ', '_')}.png")
+                        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+                        plt.close()
+                        
+                        print(f"UpSet plot saved: {plot_path}")
+                    except Exception as plot_error:
+                        print(f"Error creating UpSet plot for {param}: {plot_error}")
+                        print(f"DataFrame shape: {upset_df.shape}, columns: {list(upset_df.columns)}")
+                        
+                else:
+                    print(f"Skipping UpSet plot for {param}: insufficient data (sets: {len(concept_sets)}, concepts: {len(all_concepts)})")
                 
-                param_results[param] = {
-                    'df': None,  # Don't store the full DataFrame to save memory
-                    'blocks': blocks,
-                    'output_dir': param_output_dir,
-                    'unique_values': unique_values
-                }
+                param_results[param] = concept_sets
+                
+            except Exception as e:
+                print(f"Error creating UpSet plot for {param}: {e}")
+                param_results[param] = concept_sets
             
             # Create summary report
-            self.create_parameter_summary_report(param_results, output_dir)
+            summary_path = os.path.join(output_dir, "parameter_analysis_summary.txt")
+            with open(summary_path, 'w', encoding='utf-8') as f:
+                f.write("Parameter Analysis Summary\n")
+                f.write("=" * 50 + "\n\n")
+                
+                for param, concept_sets in param_results.items():
+                    f.write(f"{param}:\n")
+                    f.write("-" * 20 + "\n")
+                    for set_name, concepts in concept_sets.items():
+                        f.write(f"  {set_name}: {len(concepts)} concepts\n")
+                        if concepts:
+                            sample_concepts = list(concepts)[:5]
+                            safe_concepts = []
+                            for concept in sample_concepts:
+                                try:
+                                    concept.encode('utf-8').decode('utf-8')
+                                    safe_concepts.append(concept)
+                                except UnicodeError:
+                                    safe_concepts.append(concept.encode('ascii', 'replace').decode('ascii'))
+                            f.write(f"    Sample: {', '.join(safe_concepts)}\n")
+                    f.write("\n")
             
-            # Update UI
-            self.csv_file = file_path
-            self.file_label.config(text=os.path.basename(file_path), foreground="black")
-            self.merge_label.config(text=f"Processed single CSV with {len(expected_params)} parameters\nOutput: {output_dir}", foreground="black")
-            self.process_btn.config(state='normal')
+            print(f"Analysis complete. Results saved to: {output_dir}")
+            self.merge_label.config(text=f"Analysis complete. Results saved to: {output_dir}", foreground="green")
             
-            # Show success message
-            messagebox.showinfo("Processing Complete", 
-                              f"Successfully processed CSV file with {len(expected_params)} parameters.\n"
-                              f"Output saved to: {output_dir}")
-            
+            # Open the output directory
+            import subprocess
+            import platform
+            if platform.system() == "Windows":
+                subprocess.run(["explorer", output_dir])
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", output_dir])
+            else:  # Linux
+                subprocess.run(["xdg-open", output_dir])
+                
         except Exception as e:
-            import sys
+            error_msg = f"Error processing CSV: {str(e)}"
+            print(error_msg)
+            self.merge_label.config(text=f"Error: {str(e)}", foreground="red")
+            messagebox.showerror("Processing Error", error_msg)
+
+    def generate_full_analysis(self):
+        """Generate full analysis with all files (HTML, DOCX, stats, etc.) for the selected single CSV"""
+        if not hasattr(self, 'csv_file') or not self.csv_file:
+            messagebox.showerror("Error", "No CSV file selected. Please use 'Select Single CSV' first.")
+            return
+            
+        try:
+            # Start progress
+            self.progress.start()
+            self.full_analysis_button.config(state='disabled')
+            self.merge_label.config(text="Generating full analysis...", foreground="blue")
+            self.root.update()
+            
+            # Read the CSV file
+            df = pd.read_csv(self.csv_file, encoding='utf-8')
+            
+            # Check if the file has the expected parameter columns
+            expected_params = ['Temperature', 'Top-p', 'Top-k', 'BM25 Weight']
+            missing_params = [param for param in expected_params if param not in df.columns]
+            
+            if missing_params:
+                msg = f"CSV file is missing required parameter columns: {', '.join(missing_params)}"
+                self.merge_label.config(text=msg, foreground="red")
+                messagebox.showerror("Parameter Error", msg)
+                return
+            
+            # Extract concepts from the Main Answer column
+            if 'Main Answer' not in df.columns:
+                msg = "CSV file is missing 'Main Answer' column"
+                self.merge_label.config(text=msg, foreground="red")
+                messagebox.showerror("Column Error", msg)
+                return
+            
+            # Extract concepts from each row
+            df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
+            
+            # Create color mapping
+            all_concepts = set()
+            for concepts in df['Concepts']:
+                all_concepts.update(concepts)
+            self.create_color_mapping(list(all_concepts))
+            
+            # Create output directory
+            output_dir = os.path.join(os.getcwd(), "single_csv_full_analysis")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Set up parameters and labels
+            param_labels = {'Temperature': 'Temp', 'Top-p': 'Topp', 'Top-k': 'Topk', 'BM25 Weight': 'BM25'}
+            
+            # Get detected blocks or create default blocks
+            blocks = getattr(self, 'detected_blocks', None)
+            if not blocks or len(blocks) == 0:
+                # Create default blocks for 5x5x5x5 structure
+                n = len(df)
+                if n == 625:  # 5x5x5x5
+                    block_size = 125  # 5^3
+                    blocks = [(i*block_size, (i+1)*block_size, expected_params[i] if i < len(expected_params) else '?') for i in range(4)]
+                else:
+                    block_size = n // 4 if n % 4 == 0 else 5
+                    blocks = [(i*block_size, (i+1)*block_size, expected_params[i] if i < len(expected_params) else '?') for i in range(4)]
+            
+            # Generate all files like the original process_data function
+            output_files = []
+            
+            # Generate UpSet plots for each block
+            for start, end, varying_param in blocks:
+                print(f'Processing block: {varying_param} ({start}-{end})')
+                subset = df.iloc[start:end].copy()
+                if subset.empty:
+                    print('Subset empty, skipping')
+                    continue
+                
+                # Create concept matrix
+                from sklearn.preprocessing import MultiLabelBinarizer
+                mlb = MultiLabelBinarizer()
+                concept_matrix = pd.DataFrame(mlb.fit_transform(subset['Concepts']), columns=mlb.classes_)
+                
+                # Add parameter columns
+                for p in expected_params:
+                    concept_matrix[p] = subset[p].values
+                
+                concept_matrix_reset = concept_matrix.drop(expected_params, axis=1).astype(bool).reset_index(drop=True)
+                
+                # Apply color grouping if enabled
+                if self.use_colors.get() and self.group_by_same_color.get():
+                    from collections import defaultdict
+                    color_map = {col: self.color_mapping.get(col, None) for col in concept_matrix_reset.columns}
+                    color_groups = defaultdict(list)
+                    for col, color in color_map.items():
+                        color_groups[color].append(col)
+                    
+                    merged = pd.DataFrame(index=concept_matrix_reset.index)
+                    for color, cols in color_groups.items():
+                        if color is None or len(cols) == 0:
+                            continue
+                        if len(cols) == 1:
+                            merged[cols[0]] = concept_matrix_reset[cols[0]]
+                        else:
+                            group_name = "/".join(cols)
+                            group_name_wrapped = wrap_label(group_name, width=self.get_wrap_width())
+                            merged[group_name_wrapped] = concept_matrix_reset[cols].any(axis=1)
+                    concept_matrix_reset = merged
+                
+                # Create UpSet plot
+                from upsetplot import from_indicators, UpSet
+                import matplotlib.pyplot as plt
+                import numpy as np
+                
+                upset_data = from_indicators(concept_matrix_reset, concept_matrix_reset.columns)
+                fig = plt.figure(figsize=(12, 8))
+                upset = UpSet(upset_data, show_counts=True)
+                axes = upset.plot(fig=fig)
+                bar_ax = axes['intersections']
+                matrix_ax = axes['matrix']
+                bars = bar_ax.patches
+                upset_index = upset_data.index
+                
+                # Apply color and label logic
+                wrap_width = self.get_wrap_width()
+                if self.use_colors.get():
+                    yticks = matrix_ax.get_yticklabels()
+                    wrapped_labels = []
+                    for label in yticks:
+                        concept = label.get_text()
+                        wrapped = wrap_label(concept, width=wrap_width)
+                        wrapped_labels.append(wrapped)
+                    matrix_ax.set_yticklabels(wrapped_labels)
+                    for label, concept in zip(matrix_ax.get_yticklabels(), [l.get_text().replace('\n', ' ') for l in yticks]):
+                        if concept in self.color_mapping:
+                            color = self.color_mapping[concept]
+                        else:
+                            first_concept = concept.split('/')[0]
+                            color = self.color_mapping.get(first_concept, 'black')
+                        label.set_color(color)
+                        label.set_weight('bold')
+                        label.set_fontsize(10)
+                else:
+                    yticks = matrix_ax.get_yticklabels()
+                    wrapped_labels = [wrap_label(label.get_text(), width=wrap_width) for label in yticks]
+                    matrix_ax.set_yticklabels(wrapped_labels)
+                    for label in matrix_ax.get_yticklabels():
+                        label.set_color('black')
+                        label.set_weight('normal')
+                        label.set_fontsize(10)
+                
+                # Add parameter value labels
+                significant_bars = []
+                for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
+                    if i == 0:
+                        continue
+                    if bar.get_height() > 0:
+                        significant_bars.append((i, bar, intersection))
+                
+                max_labels = min(20, len(significant_bars))
+                if len(significant_bars) > max_labels:
+                    significant_bars.sort(key=lambda x: x[1].get_height(), reverse=True)
+                    significant_bars = significant_bars[:max_labels]
+                
+                for i, bar, intersection in significant_bars:
+                    x = bar.get_x() + bar.get_width() / 2
+                    intersection_idx = i - 1
+                    actual_intersection = upset_index[intersection_idx]
+                    mask = np.ones(len(concept_matrix), dtype=bool)
+                    for col, present in zip(concept_matrix_reset.columns, actual_intersection):
+                        original_cols = col.split('/') if '/' in col else [col]
+                        if present:
+                            for orig_col in original_cols:
+                                if orig_col in concept_matrix.columns:
+                                    mask &= concept_matrix[orig_col] == 1
+                        else:
+                            for orig_col in original_cols:
+                                if orig_col in concept_matrix.columns:
+                                    mask &= concept_matrix[orig_col] == 0
+                    param_vals = concept_matrix.loc[mask, varying_param].unique()
+                    
+                    def fmt(v):
+                        try:
+                            f = float(v)
+                            return f"{f:.1f}"
+                        except Exception:
+                            return str(v)
+                    
+                    label = ','.join(fmt(v) for v in param_vals) if len(param_vals) > 0 else ''
+                    if label:
+                        print(f"Drawing parameter label: '{label}' at x={x}")
+                        y_label = len(concept_matrix_reset.columns) - 0.3
+                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=0, clip_on=False, weight='bold')
+                
+                # Add title and subtitle
+                other_params = [p for p in expected_params if p != varying_param]
+                fixed_vals = {param_labels[p]: subset[p].iloc[0] for p in other_params}
+                fixed_str = ' | '.join(f"{p}={v}" for p, v in fixed_vals.items())
+                plt.suptitle(f"UpSet Diagram: {param_labels[varying_param]} sweep\nOther Params: {fixed_str}", fontsize=14, y=0.98)
+                plt.subplots_adjust(top=0.88, bottom=0.12)
+                plt.tight_layout(rect=[0, 0.12, 1, 0.88])
+                
+                outpath = f"{output_dir}/compare_{param_labels[varying_param]}_composed.png"
+                try:
+                    plt.savefig(outpath, dpi=150, bbox_inches='tight', pad_inches=0.5, format='png')
+                except Exception as e:
+                    print(f"Error saving PNG diagram: {e}")
+                plt.close('all')
+                
+                output_files.append(outpath)
+                
+                # Clean up memory
+                import gc
+                del concept_matrix, concept_matrix_reset, upset_data, upset, fig, axes, bars, upset_index
+                gc.collect()
+            
+            # Generate additional files
+            self.generate_html_table(blocks, df, self.color_mapping, output_dir, param_labels)
+            self.generate_docx_and_csv(blocks, df, self.color_mapping, output_dir, param_labels)
+            self.generate_stats_files(blocks, df, self.color_mapping, output_dir, param_labels)
+            
+            # Update results display
+            self.root.after(0, self.update_results, output_files)
+            
+            # Update status
+            self.merge_label.config(text=f"Full analysis complete. Results saved to: {output_dir}", foreground="green")
+            
+            # Open the output directory
+            import subprocess
+            import platform
+            if platform.system() == "Windows":
+                subprocess.run(["explorer", output_dir])
+            elif platform.system() == "Darwin":  # macOS
+                subprocess.run(["open", output_dir])
+            else:  # Linux
+                subprocess.run(["xdg-open", output_dir])
+                
+        except Exception as e:
+            error_msg = f"Error generating full analysis: {str(e)}"
+            print(error_msg)
             import traceback
-            tb_str = traceback.format_exc()
-            print(f"Failed to process single CSV: {e}\nTraceback:\n{tb_str}")
-            error_detail = f"Failed to process single CSV: {e}\nFile: {os.path.basename(file_path)}\nTraceback (see shell):\n{tb_str}"
-            self.merge_label.config(text=error_detail, foreground="red")
-            messagebox.showerror("Processing Error", error_detail)
+            traceback.print_exc()
+            self.merge_label.config(text=f"Error: {str(e)}", foreground="red")
+            messagebox.showerror("Processing Error", error_msg)
+        finally:
+            # Stop progress and re-enable button
+            self.progress.stop()
+            self.full_analysis_button.config(state='normal')
 
     def generate_parameter_plots(self, df, blocks, color_mapping, output_dir, param_name):
         """Generate plots for a specific parameter variation"""
