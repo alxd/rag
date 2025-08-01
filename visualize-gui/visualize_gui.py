@@ -23,6 +23,10 @@ import random
 import json
 import openai
 try:
+    import seaborn as sns
+except ImportError:
+    sns = None
+try:
     from mistralai import Mistral
 except ImportError:
     Mistral = None
@@ -318,9 +322,13 @@ class UpSetGUI:
         merge_frame.grid(row=0, column=0, columnspan=3, sticky=(tk.W, tk.E), pady=(0,2))
         self.merge_label = ttk.Label(merge_frame, text="No files selected", foreground="gray")
         self.merge_label.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
-        # Place the button below the label, natural width
-        self.merge_button = ttk.Button(merge_frame, text="Select & Merge CSVs", command=self.merge_csv_files)
-        self.merge_button.grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=2)
+        # Place the buttons below the label, natural width
+        merge_buttons_frame = ttk.Frame(merge_frame)
+        merge_buttons_frame.grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=2)
+        self.merge_button = ttk.Button(merge_buttons_frame, text="Select & Merge CSVs with One Varying Parameter", command=self.merge_csv_files)
+        self.merge_button.grid(row=0, column=0, sticky=tk.W, padx=(0, 5), pady=2)
+        self.single_csv_button = ttk.Button(merge_buttons_frame, text="Select Single CSV with Multiple Varying Parameters", command=self.process_single_csv_with_params)
+        self.single_csv_button.grid(row=0, column=1, sticky=tk.W, padx=(5, 0), pady=2)
         
         # File selection
         ttk.Label(main_frame, text="CSV File:").grid(row=1, column=0, sticky=tk.W, pady=0)
@@ -683,6 +691,18 @@ class UpSetGUI:
     def process_data(self):
         try:
             print('Starting process_data')
+            
+            # Memory monitoring function
+            def log_memory_usage(stage):
+                try:
+                    import psutil
+                    process = psutil.Process()
+                    memory_mb = process.memory_info().rss / 1024 / 1024
+                    print(f"Memory usage at {stage}: {memory_mb:.1f} MB")
+                except ImportError:
+                    print(f"Memory monitoring not available - psutil not installed")
+            
+            log_memory_usage("start")
             encodings_to_try = ['utf-8', 'windows-1252', 'cp1253', 'latin1']
             for enc in encodings_to_try:
                 try:
@@ -698,6 +718,18 @@ class UpSetGUI:
             df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
             print('First 10 Concepts values:')
             print(df['Concepts'].head(10).to_list())
+            
+            # Check dataset size to prevent memory issues
+            total_rows = len(df)
+            if total_rows > 1000:
+                print(f"Warning: Large dataset detected ({total_rows} rows). This may cause memory issues.")
+                response = messagebox.askyesno("Large Dataset Warning", 
+                                             f"Dataset has {total_rows} rows which may cause memory issues.\n"
+                                             "Consider processing a smaller subset or ensure you have sufficient RAM.\n\n"
+                                             "Continue anyway?")
+                if not response:
+                    return
+            
             all_concepts = set()
             for concepts in df['Concepts']:
                 all_concepts.update(concepts)
@@ -716,6 +748,7 @@ class UpSetGUI:
             output_files = []
             for start, end, varying_param in blocks:
                 print(f'Processing block: {varying_param} ({start}-{end})')
+                log_memory_usage(f"before block {varying_param}")
                 subset = df.iloc[start:end].copy()
                 if subset.empty:
                     print('Subset empty, skipping')
@@ -784,12 +817,22 @@ class UpSetGUI:
                         label.set_color('black')
                         label.set_weight('normal')
                         label.set_fontsize(10)
-                # Add parameter value labels in red
+                # Add parameter value labels in red - only for significant bars to save memory
+                significant_bars = []
                 for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
                     if i == 0:
                         continue
-                    if bar.get_height() == 0:
-                        continue
+                    if bar.get_height() > 0:
+                        significant_bars.append((i, bar, intersection))
+                
+                # Limit the number of labels to prevent memory issues
+                max_labels = min(20, len(significant_bars))  # Only show labels for top 20 bars
+                if len(significant_bars) > max_labels:
+                    # Sort by bar height and take the top ones
+                    significant_bars.sort(key=lambda x: x[1].get_height(), reverse=True)
+                    significant_bars = significant_bars[:max_labels]
+                
+                for i, bar, intersection in significant_bars:
                     x = bar.get_x() + bar.get_width() / 2
                     intersection_idx = i - 1
                     actual_intersection = upset_index[intersection_idx]
@@ -812,9 +855,10 @@ class UpSetGUI:
                         except Exception:
                             return str(v)
                     label = ','.join(fmt(v) for v in param_vals) if len(param_vals) > 0 else ''
-                    print(f"Drawing parameter label: '{label}' at x={x}")
-                    y_label = len(concept_matrix_reset.columns) - 0.3
-                    matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=10, color='red', rotation=0, clip_on=False, weight='bold')
+                    if label:  # Only draw if there's a label
+                        print(f"Drawing parameter label: '{label}' at x={x}")
+                        y_label = len(concept_matrix_reset.columns) - 0.3
+                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=0, clip_on=False, weight='bold')
                 # Add title and subtitle
                 other_params = [p for p in params if p != varying_param]
                 fixed_vals = {param_labels[p]: subset[p].iloc[0] for p in other_params}
@@ -828,6 +872,13 @@ class UpSetGUI:
                 except Exception as e:
                     print(f"Error saving PNG diagram: {e}")
                 plt.close('all')
+                
+                # Clean up memory after each block
+                import gc
+                del concept_matrix, concept_matrix_reset, upset_data, upset, fig, axes, bars, upset_index
+                gc.collect()
+                log_memory_usage(f"after block {varying_param}")
+                
                 output_files.append(outpath)
             self.root.after(0, self.update_results, output_files)
             self.generate_html_table(blocks, df, self.color_mapping, outdir, param_labels)
@@ -981,6 +1032,398 @@ class UpSetGUI:
             error_detail = f"Failed to merge files: {e}\nFiles attempted: {', '.join([os.path.basename(fp) for fp in file_paths])}\nTraceback (see shell):\n{tb_str}"
             self.merge_label.config(text=error_detail, foreground="red")
             messagebox.showerror("Merge Error", error_detail)
+
+    def process_single_csv_with_params(self):
+        """Process a single CSV file that contains multiple parameter variations"""
+        import re
+        import traceback
+        
+        file_path = filedialog.askopenfilename(
+            title="Select CSV file with parameter variations",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")]
+        )
+        
+        if not file_path:
+            return
+            
+        try:
+            # Read the CSV file
+            df = pd.read_csv(file_path, encoding='utf-8')
+            
+            # Check if the file has the expected parameter columns
+            expected_params = ['Temperature', 'Top-p', 'Top-k', 'BM25 Weight']
+            missing_params = [param for param in expected_params if param not in df.columns]
+            
+            if missing_params:
+                msg = f"CSV file is missing required parameter columns: {', '.join(missing_params)}"
+                self.merge_label.config(text=msg, foreground="red")
+                messagebox.showerror("Parameter Error", msg)
+                return
+            
+            # Check for error patterns in the data
+            error_patterns = [
+                r"error generating response:",
+                r"api error occurred:",
+                r"bad gateway",
+                r"cloudflare",
+                r"server disconnected without sending a response",
+                r"getaddrinfo failed"
+            ]
+            
+            error_found = False
+            error_msgs = []
+            
+            for idx, row in df.iterrows():
+                for col in df.columns:
+                    val = str(row[col]).lower()
+                    for pat in error_patterns:
+                        if re.search(pat, val):
+                            error_found = True
+                            error_msgs.append(f"Row: {idx+2}, Column: '{col}', Error: {row[col]}")
+            
+            if error_found:
+                msg = "Processing aborted due to invalid data in the following locations:\n" + "\n".join(error_msgs)
+                self.merge_label.config(text=msg, foreground="red")
+                messagebox.showerror("Processing Error", msg)
+                return
+            
+            # Extract concepts from the Main Answer column
+            if 'Main Answer' not in df.columns:
+                msg = "CSV file is missing 'Main Answer' column"
+                self.merge_label.config(text=msg, foreground="red")
+                messagebox.showerror("Column Error", msg)
+                return
+            
+            # Extract concepts from each row
+            df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
+            
+            # Check dataset size to prevent memory issues
+            total_rows = len(df)
+            if total_rows > 1000:
+                print(f"Warning: Large dataset detected ({total_rows} rows). This may cause memory issues.")
+                response = messagebox.askyesno("Large Dataset Warning", 
+                                             f"Dataset has {total_rows} rows which may cause memory issues.\n"
+                                             "Consider processing a smaller subset or ensure you have sufficient RAM.\n\n"
+                                             "Continue anyway?")
+                if not response:
+                    return
+            
+            # Create output directory
+            output_dir = os.path.join(os.getcwd(), "single_csv_parameter_analysis")
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Process each parameter separately
+            param_results = {}
+            
+            for i, param in enumerate(expected_params):
+                print(f"Processing parameter {i+1}/{len(expected_params)}: {param}")
+                self.merge_label.config(text=f"Processing parameter {i+1}/{len(expected_params)}: {param}", foreground="blue")
+                self.root.update()  # Update the UI
+                # Get unique values for this parameter
+                unique_values = sorted(df[param].unique())
+                
+                # Create blocks for this parameter
+                blocks = []
+                for value in unique_values:
+                    # Find rows where this parameter has this value
+                    param_rows = df[df[param] == value]
+                    if len(param_rows) > 0:
+                        start_idx = param_rows.index[0]
+                        end_idx = param_rows.index[-1] + 1
+                        blocks.append((start_idx, end_idx, param))
+                
+                # Create a subset DataFrame for this parameter
+                param_df = df.copy()
+                
+                # Generate plots and analysis for this parameter
+                param_output_dir = os.path.join(output_dir, f"{param.replace(' ', '_').replace('-', '_')}_analysis")
+                os.makedirs(param_output_dir, exist_ok=True)
+                
+                # Create color mapping
+                all_concepts = []
+                for concepts in param_df['Concepts']:
+                    all_concepts.extend(concepts)
+                all_concepts = list(set(all_concepts))
+                
+                color_mapping = self.create_color_mapping(all_concepts)
+                
+                # Generate plots
+                self.generate_parameter_plots(param_df, blocks, color_mapping, param_output_dir, param)
+                
+                # Clean up memory after processing each parameter
+                import gc
+                del param_df, color_mapping
+                gc.collect()
+                
+                param_results[param] = {
+                    'df': None,  # Don't store the full DataFrame to save memory
+                    'blocks': blocks,
+                    'output_dir': param_output_dir,
+                    'unique_values': unique_values
+                }
+            
+            # Create summary report
+            self.create_parameter_summary_report(param_results, output_dir)
+            
+            # Update UI
+            self.csv_file = file_path
+            self.file_label.config(text=os.path.basename(file_path), foreground="black")
+            self.merge_label.config(text=f"Processed single CSV with {len(expected_params)} parameters\nOutput: {output_dir}", foreground="black")
+            self.process_btn.config(state='normal')
+            
+            # Show success message
+            messagebox.showinfo("Processing Complete", 
+                              f"Successfully processed CSV file with {len(expected_params)} parameters.\n"
+                              f"Output saved to: {output_dir}")
+            
+        except Exception as e:
+            import sys
+            import traceback
+            tb_str = traceback.format_exc()
+            print(f"Failed to process single CSV: {e}\nTraceback:\n{tb_str}")
+            error_detail = f"Failed to process single CSV: {e}\nFile: {os.path.basename(file_path)}\nTraceback (see shell):\n{tb_str}"
+            self.merge_label.config(text=error_detail, foreground="red")
+            messagebox.showerror("Processing Error", error_detail)
+
+    def generate_parameter_plots(self, df, blocks, color_mapping, output_dir, param_name):
+        """Generate plots for a specific parameter variation"""
+        try:
+            import matplotlib.pyplot as plt
+            from upsetplot import UpSet, from_indicators
+            import pandas as pd
+            import gc  # For garbage collection
+            
+            # Check if sklearn is available
+            try:
+                from sklearn.preprocessing import MultiLabelBinarizer
+                sklearn_available = True
+            except ImportError:
+                print("Warning: sklearn not available, using fallback method for concept matrix")
+                sklearn_available = False
+            
+            # Create concept matrix for UpSet plot
+            all_concepts = []
+            for concepts in df['Concepts']:
+                all_concepts.extend(concepts)
+            all_concepts = list(set(all_concepts))
+            
+            # Create concept matrix - use MultiLabelBinarizer for proper format
+            if sklearn_available:
+                mlb = MultiLabelBinarizer()
+                concept_matrix = mlb.fit_transform(df['Concepts'])
+                concept_df = pd.DataFrame(concept_matrix, columns=mlb.classes_)
+            else:
+                # Fallback method without sklearn
+                concept_matrix = []
+                for idx, row in df.iterrows():
+                    row_concepts = set(row['Concepts'])
+                    concept_row = [1 if concept in row_concepts else 0 for concept in all_concepts]
+                    concept_matrix.append(concept_row)
+                concept_df = pd.DataFrame(concept_matrix, columns=all_concepts)
+            
+            # Add parameter value as index
+            param_values = df[param_name].values
+            concept_df.index = [f"{param_name}={val}" for val in param_values]
+            
+            # Create UpSet plot - only if we have data
+            if len(concept_df) > 0 and len(concept_df.columns) > 0:
+                try:
+                    # Use the correct format for upsetplot
+                    concept_df_bool = concept_df.astype(bool)
+                    upset_data = from_indicators(concept_df_bool)
+                    upset = UpSet(upset_data, min_subset_size=1, show_counts=True)
+                    fig = plt.figure(figsize=(12, 8))
+                    upset.plot()
+                    plt.title(f"Concept Overlaps by {param_name} Values")
+                    plt.tight_layout()
+                except Exception as upset_error:
+                    print(f"Error creating UpSet plot for {param_name}: {upset_error}")
+                    # Skip UpSet plot if it fails
+                    fig = None
+            else:
+                print(f"No valid data for UpSet plot in {param_name}")
+                fig = None
+            
+            # Save plot
+            if fig is not None:
+                plot_path = os.path.join(output_dir, f"{param_name.replace(' ', '_').replace('-', '_')}_upset_plot.png")
+                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+                plt.close(fig)
+                del fig
+                gc.collect()  # Force garbage collection
+            else:
+                print(f"Skipping UpSet plot save for {param_name} - no valid figure")
+            
+            # Create parameter value vs concept count plot
+            concept_counts = [len(concepts) for concepts in df['Concepts']]
+            param_values = df[param_name].values
+            
+            fig2 = plt.figure(figsize=(10, 6))
+            plt.scatter(param_values, concept_counts, alpha=0.7, s=50)
+            plt.xlabel(param_name)
+            plt.ylabel('Number of Concepts')
+            plt.title(f'Concept Count vs {param_name}')
+            plt.grid(True, alpha=0.3)
+            
+            # Add trend line
+            if len(param_values) > 1:
+                z = np.polyfit(param_values, concept_counts, 1)
+                p = np.poly1d(z)
+                plt.plot(param_values, p(param_values), "r--", alpha=0.8)
+            
+            plot_path = os.path.join(output_dir, f"{param_name.replace(' ', '_').replace('-', '_')}_concept_count.png")
+            plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+            plt.close(fig2)
+            del fig2
+            gc.collect()  # Force garbage collection
+            
+            # Create heatmap of concept frequency by parameter value
+            concept_freq_matrix = []
+            unique_param_values = sorted(df[param_name].unique())
+            
+            for param_val in unique_param_values:
+                param_rows = df[df[param_name] == param_val]
+                concept_freq = {}
+                for concepts in param_rows['Concepts']:
+                    for concept in concepts:
+                        concept_freq[concept] = concept_freq.get(concept, 0) + 1
+                
+                freq_row = [concept_freq.get(concept, 0) for concept in all_concepts]
+                concept_freq_matrix.append(freq_row)
+            
+            if concept_freq_matrix:
+                freq_df = pd.DataFrame(concept_freq_matrix, 
+                                     index=[f"{param_name}={val}" for val in unique_param_values],
+                                     columns=all_concepts)
+                
+                # Create heatmap using matplotlib if seaborn is not available
+                if sns is not None:
+                    fig3 = plt.figure(figsize=(max(12, len(all_concepts) * 0.3), 8))
+                    sns.heatmap(freq_df.T, annot=True, fmt='d', cmap='YlOrRd', cbar_kws={'label': 'Frequency'})
+                    plt.title(f'Concept Frequency by {param_name}')
+                    plt.xlabel(param_name)
+                    plt.ylabel('Concepts')
+                    plt.xticks(rotation=45)
+                    plt.yticks(rotation=0)
+                    plt.tight_layout()
+                else:
+                    # Fallback to matplotlib heatmap
+                    fig3 = plt.figure(figsize=(max(12, len(all_concepts) * 0.3), 8))
+                    plt.imshow(freq_df.T.values, cmap='YlOrRd', aspect='auto')
+                    plt.colorbar(label='Frequency')
+                    plt.title(f'Concept Frequency by {param_name}')
+                    plt.xlabel(param_name)
+                    plt.ylabel('Concepts')
+                    plt.xticks(range(len(unique_param_values)), [f"{param_name}={val}" for val in unique_param_values], rotation=45)
+                    plt.yticks(range(len(all_concepts)), all_concepts)
+                    
+                    # Add text annotations - limit to prevent memory issues
+                    max_annotations = 100  # Limit annotations to prevent memory issues
+                    annotation_count = 0
+                    for i in range(len(all_concepts)):
+                        for j in range(len(unique_param_values)):
+                            if annotation_count >= max_annotations:
+                                break
+                            plt.text(j, i, str(freq_df.T.values[i, j]), ha='center', va='center')
+                            annotation_count += 1
+                        if annotation_count >= max_annotations:
+                            break
+                    
+                    plt.tight_layout()
+                
+                plot_path = os.path.join(output_dir, f"{param_name.replace(' ', '_').replace('-', '_')}_heatmap.png")
+                plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+                plt.close(fig3)
+                del fig3
+                gc.collect()  # Force garbage collection
+            
+            # Clean up variables to free memory
+            del concept_matrix, concept_df
+            if 'freq_df' in locals():
+                del freq_df
+            gc.collect()
+            
+        except Exception as e:
+            print(f"Error generating plots for {param_name}: {e}")
+            import traceback
+            traceback.print_exc()
+            # Clean up any remaining matplotlib objects
+            plt.close('all')
+            gc.collect()
+
+    def create_parameter_summary_report(self, param_results, output_dir):
+        """Create a summary report of all parameter analyses"""
+        try:
+            import docx
+            from docx.shared import RGBColor
+            
+            doc = docx.Document()
+            doc.add_heading('Parameter Variation Analysis Summary', 0)
+            
+            # Add summary table
+            table = doc.add_table(rows=1, cols=4)
+            hdr_cells = table.rows[0].cells
+            hdr_cells[0].text = 'Parameter'
+            hdr_cells[1].text = 'Unique Values'
+            hdr_cells[2].text = 'Value Range'
+            hdr_cells[3].text = 'Output Directory'
+            
+            for param_name, results in param_results.items():
+                row_cells = table.add_row().cells
+                row_cells[0].text = param_name
+                row_cells[1].text = str(len(results['unique_values']))
+                row_cells[2].text = f"{min(results['unique_values'])} - {max(results['unique_values'])}"
+                row_cells[3].text = os.path.basename(results['output_dir'])
+            
+            # Add detailed analysis for each parameter
+            for param_name, results in param_results.items():
+                doc.add_heading(f'{param_name} Analysis', level=1)
+                
+                # Parameter statistics
+                doc.add_paragraph(f"Parameter: {param_name}")
+                doc.add_paragraph(f"Number of unique values: {len(results['unique_values'])}")
+                doc.add_paragraph(f"Value range: {min(results['unique_values'])} - {max(results['unique_values'])}")
+                
+                # Concept statistics by parameter value
+                doc.add_heading('Concept Statistics by Parameter Value', level=2)
+                
+                stats_table = doc.add_table(rows=1, cols=3)
+                stats_hdr = stats_table.rows[0].cells
+                stats_hdr[0].text = f'{param_name} Value'
+                stats_hdr[1].text = 'Number of Rows'
+                stats_hdr[2].text = 'Average Concepts per Row'
+                
+                for value in results['unique_values']:
+                    # Skip detailed analysis if DataFrame is not available (to save memory)
+                    row_cells = stats_table.add_row().cells
+                    row_cells[0].text = str(value)
+                    row_cells[1].text = "N/A"  # We don't have the DataFrame anymore
+                    row_cells[2].text = "N/A"  # We don't have the DataFrame anymore
+                
+                doc.add_paragraph()  # Add spacing
+            
+            # Save the report
+            report_path = os.path.join(output_dir, 'parameter_analysis_summary.docx')
+            doc.save(report_path)
+            
+        except Exception as e:
+            print(f"Error creating summary report: {e}")
+            import traceback
+            traceback.print_exc()
+            # Create a simple text report as fallback
+            try:
+                report_path = os.path.join(output_dir, 'parameter_analysis_summary.txt')
+                with open(report_path, 'w') as f:
+                    f.write("Parameter Variation Analysis Summary\n")
+                    f.write("=" * 40 + "\n\n")
+                    for param_name, results in param_results.items():
+                        f.write(f"Parameter: {param_name}\n")
+                        f.write(f"Unique values: {len(results['unique_values'])}\n")
+                        f.write(f"Value range: {min(results['unique_values'])} - {max(results['unique_values'])}\n")
+                        f.write(f"Output directory: {os.path.basename(results['output_dir'])}\n\n")
+                print(f"Created fallback text report: {report_path}")
+            except Exception as fallback_error:
+                print(f"Error creating fallback report: {fallback_error}")
 
     def generate_docx_and_csv(self, blocks, df, color_mapping, outdir, param_labels):
         try:
@@ -1733,9 +2176,9 @@ class UpSetGUI:
             print(f"[UPSET DEBUG] Final DataFrame dtypes: {df_for_upset.dtypes}")
             print(f"[UPSET DEBUG] Final DataFrame head:")
             print(df_for_upset.head())
-            
+                        
             upset_plot_path = ""
-            # Create UpSet plot with error handling
+             # Create UpSet plot with error handling
             try:
                 # Use the same pattern as the existing code
                 upset_data = from_indicators(df_for_upset, df_for_upset.columns)
@@ -1792,7 +2235,7 @@ class UpSetGUI:
                 
                 print(f"[UPSET DEBUG] Total bars: {len(bars)}, Non-empty bars: {len(non_empty_bars)}")
                 
-                # Create a list of all folder names to cycle through
+                # Create a list of all folder names to cycle through (same as before)
                 all_folder_names = []
                 for folder in folder_names:
                     folder_unique_words = folder_unique_map.get(folder, set())
@@ -1801,9 +2244,6 @@ class UpSetGUI:
                     else:
                         short_name = folder.split()[0].capitalize()
                     all_folder_names.append(short_name)
-                
-                # Reverse to match the original logic
-                all_folder_names = all_folder_names[::-1]
                 
                 print(f"[UPSET DEBUG] All folder names for cycling: {all_folder_names}")
                 
@@ -1814,47 +2254,87 @@ class UpSetGUI:
                 bars_to_process = [(idx, bar) for idx, bar in non_empty_bars if idx != 0]
                 print(f"[UPSET DEBUG] Bars to process: {[b[0] for b in bars_to_process]}")
                 
+                # Create a mapping from original bar indices to the correct folder assignment
+                # This ensures proper ordering by analyzing the UpSet data structure
+                bar_to_folder_mapping = {}
+                
+                # Analyze each bar to understand the pattern
                 for bar_idx, (original_index, bar) in enumerate(bars_to_process):
-                    print(f"[UPSET DEBUG] Processing bar_idx={bar_idx}, original_index={original_index}")
-                    x = bar.get_x() + bar.get_width() / 2
-                    
-                    # Get the intersection data for this specific bar using its original index
                     actual_intersection = upset_index[original_index]
-                    
-                    # Find which folders are present in this intersection
                     present_folders = []
                     for j, present in enumerate(actual_intersection):
                         if present and j < len(folder_names):
-                            # Get the short folder name from the unique words
-                            folder_unique_words = folder_unique_map.get(folder_names[j], set())
-                            if folder_unique_words:
-                                # Use the first unique word as short name
-                                short_name = sorted(folder_unique_words)[0].capitalize()
-                            else:
-                                # Fallback to first word of folder name
-                                short_name = folder_names[j].split()[0].capitalize()
-                            present_folders.append(short_name)
+                            present_folders.append(j)  # Store folder indices
                     
-                    print(f"[UPSET DEBUG] Found {len(present_folders)} present folders: {present_folders}")
+                    print(f"[UPSET DEBUG] Bar original_index={original_index}, intersection={actual_intersection}, folder_indices={present_folders}")
                     
-                    # Calculate the correct label index (bar_idx is now correct since we filtered out the first bar)
-                    label_idx = bar_idx
+                    # Determine which folder label to assign based on intersection pattern
+                    if len(present_folders) == 1:
+                        # Single folder intersection - use that folder's index
+                        folder_idx = present_folders[0]
+                    else:
+                        # Multi-folder intersection - use a systematic approach
+                        # For now, use the first folder in the intersection
+                        folder_idx = present_folders[0] if present_folders else bar_idx
                     
-                    # Use label_idx to cycle through ALL folder names
-                    if all_folder_names:
-                        label = all_folder_names[label_idx % len(all_folder_names)]
-                        y_label = len(df_for_upset.columns) - 0.3
-                        
-                        # Place the label
-                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', 
-                                      fontsize=10, color='red', rotation=90, 
-                                      clip_on=False, weight='bold')
-                        
-                        print(f"[UPSET DEBUG] Bar (original index: {original_index}, label_idx: {label_idx}): "
-                              f"Drawing folder label: '{label}' at x={x:.2f}, "
-                              f"intersection: {actual_intersection}, "
-                              f"folders in intersection: {present_folders}, "
-                              f"assigned label: {label} (from all_folder_names[{label_idx % len(all_folder_names)}])")
+                    bar_to_folder_mapping[bar_idx] = folder_idx
+                
+                print(f"[UPSET DEBUG] Bar to folder mapping: {bar_to_folder_mapping}")
+                
+                # Now assign labels ensuring each folder gets used once if possible
+                used_folder_indices = set()
+                label_assignments = {}
+                
+                # First pass: assign single-folder intersections to their correct folders
+                for bar_idx, folder_idx in bar_to_folder_mapping.items():
+                    original_index = bars_to_process[bar_idx][0]
+                    actual_intersection = upset_index[original_index]
+                    present_count = sum(actual_intersection)
+                    
+                    if present_count == 1 and folder_idx not in used_folder_indices:
+                        label_assignments[bar_idx] = folder_idx
+                        used_folder_indices.add(folder_idx)
+                        print(f"[UPSET DEBUG] Single intersection: bar_idx={bar_idx} -> folder_idx={folder_idx}")
+                
+                # Second pass: assign remaining bars to unused folders
+                available_folder_indices = [i for i in range(len(all_folder_names)) if i not in used_folder_indices]
+                available_idx = 0
+                
+                for bar_idx in range(len(bars_to_process)):
+                    if bar_idx not in label_assignments:
+                        if available_idx < len(available_folder_indices):
+                            folder_idx = available_folder_indices[available_idx]
+                            label_assignments[bar_idx] = folder_idx
+                            used_folder_indices.add(folder_idx)
+                            available_idx += 1
+                            print(f"[UPSET DEBUG] Multi/remaining intersection: bar_idx={bar_idx} -> folder_idx={folder_idx}")
+                        else:
+                            # Fallback if we run out of unique folders
+                            folder_idx = bar_idx % len(all_folder_names)
+                            label_assignments[bar_idx] = folder_idx
+                            print(f"[UPSET DEBUG] Fallback intersection: bar_idx={bar_idx} -> folder_idx={folder_idx}")
+                
+                print(f"[UPSET DEBUG] Final label assignments: {label_assignments}")
+                
+                # Draw the labels
+                for bar_idx, (original_index, bar) in enumerate(bars_to_process):
+                    x = bar.get_x() + bar.get_width() / 2
+                    
+                    # Get the assigned folder index and corresponding label
+                    folder_idx = label_assignments.get(bar_idx, bar_idx % len(all_folder_names))
+                    label = all_folder_names[folder_idx]
+                    
+                    y_label = len(df_for_upset.columns) - 0.3
+                    
+                    # Place the label
+                    matrix_ax.text(x, y_label, label, ha='center', va='bottom', 
+                                  fontsize=10, color='red', rotation=90, 
+                                  clip_on=False, weight='bold')
+                    
+                    actual_intersection = upset_index[original_index]
+                    print(f"[UPSET DEBUG] Bar (original index: {original_index}, bar_idx: {bar_idx}): "
+                          f"Drawing folder label: '{label}' (folder_idx={folder_idx}) at x={x:.2f}, "
+                          f"intersection: {actual_intersection}")
                 
                 # Customize the plot
                 plt.title("Concept Groups Overlap Across Authors", fontsize=14, pad=20)
@@ -1870,7 +2350,7 @@ class UpSetGUI:
                 import traceback
                 print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")                
                 # Add overlap summary text to the first page (before the UpSet diagram)
-
+                
             # Add the UpSet diagram in a table format (summary on left, diagram on right)
             doc.add_heading("Overlap Summary", level=1)
             plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[8, 7])
@@ -2481,13 +2961,27 @@ class UpSetGUI:
                         unique_words |= folder_unique_map[fname]
                     all_concepts_table[concept] = [w.capitalize() for w in unique_words]
             
+            # Use the same group data that was used for the Group Presence Matrix
+            # This ensures consistency between the two tables
             if self.llm_grouping_var.get():
-                for idx, (color, concepts) in enumerate(llm_group_tuples):
+                for i, row_data in enumerate(group_data):
                     row = uniq_table.add_row().cells
                     
-                    # Group name column
-                    group_name = extract_group_name(concepts)
+                    # Use the same group name from group_data (which may have suffixes)
+                    group_name = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
                     row[0].text = group_name
+                    
+                    # Find the corresponding concepts and color for this group
+                    concepts = None
+                    color = None
+                    for c, concepts_list in llm_group_tuples:
+                        if extract_group_name(concepts_list) == row_data[0]:  # Use original name without suffix
+                            concepts = concepts_list
+                            color = c
+                            break
+                    
+                    if concepts is None:
+                        continue
                     
                     # Concepts column (colored)
                     para = row[1].paragraphs[0]
@@ -2499,8 +2993,8 @@ class UpSetGUI:
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     
-                    # Get the actual folders where this group appears
-                    present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
+                    # Get the actual folders where this group appears from group_data
+                    present_folders = [folder_names[i] for i, present in enumerate(row_data[1:]) if present]
                     n_present = len(present_folders)
                     n_total = len(folder_names)
                     
@@ -2524,13 +3018,24 @@ class UpSetGUI:
                     row[3].text = ", ".join(unique_folder_names)
                     row[4].text = str(len(concepts))
             else:
-                for idx, color in enumerate(unique_color_groups):
+                for i, row_data in enumerate(group_data):
                     row = uniq_table.add_row().cells
-                    concepts = color_to_concepts[color]
                     
-                    # Group name column
-                    group_name = extract_group_name(concepts)
+                    # Use the same group name from group_data (which may have suffixes)
+                    group_name = unique_group_names[i] if i < len(unique_group_names) else row_data[0]
                     row[0].text = group_name
+                    
+                    # Find the corresponding concepts and color for this group
+                    concepts = None
+                    color = None
+                    for c, concepts_list in color_to_concepts.items():
+                        if extract_group_name(concepts_list) == row_data[0]:  # Use original name without suffix
+                            concepts = concepts_list
+                            color = c
+                            break
+                    
+                    if concepts is None:
+                        continue
                     
                     # Concepts column (colored)
                     para = row[1].paragraphs[0]
@@ -2542,8 +3047,8 @@ class UpSetGUI:
                         if cidx < len(concepts) - 1:
                             para.add_run(", ")
                     
-                    # Get the actual folders where this group appears
-                    present_folders = [folder_names[i] for i, present in enumerate([row2 for row2 in color_overlap_table if row2[0]==color][0][1:]) if present]
+                    # Get the actual folders where this group appears from group_data
+                    present_folders = [folder_names[i] for i, present in enumerate(row_data[1:]) if present]
                     n_present = len(present_folders)
                     n_total = len(folder_names)
                     
