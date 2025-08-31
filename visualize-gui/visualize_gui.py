@@ -739,8 +739,19 @@ class UpSetGUI:
         thread.start()
         
     def process_data(self):
+        """Process CSV file - determines whether to use merge or single CSV logic"""
         try:
             print('Starting process_data')
+            
+            # Check if this is a merged CSV or single CSV
+            if hasattr(self, 'merged_file_paths') and self.merged_file_paths:
+                # This is a merged CSV - use the merge processing logic
+                print('Detected merged CSV files, using merge processing logic')
+                self.process_merged_csvs()
+                return
+            
+            # Single CSV processing logic
+            print('Processing single CSV file')
             
             # Memory monitoring function
             def log_memory_usage(stage):
@@ -1074,6 +1085,9 @@ class UpSetGUI:
             self.file_label.config(text=os.path.basename(merged_path), foreground="black")
             self.merge_label.config(text=f"Merged:\n" + "\n".join([os.path.basename(fp) for fp in file_paths]) + f"\n(encoding: utf-8)", foreground="black")
             self.process_btn.config(state='normal')
+            
+            # Store the file paths for later processing
+            self.merged_file_paths = file_paths
         except Exception as e:
             import sys
             import traceback
@@ -1082,6 +1096,349 @@ class UpSetGUI:
             error_detail = f"Failed to merge files: {e}\nFiles attempted: {', '.join([os.path.basename(fp) for fp in file_paths])}\nTraceback (see shell):\n{tb_str}"
             self.merge_label.config(text=error_detail, foreground="red")
             messagebox.showerror("Merge Error", error_detail)
+            
+            # Store the file paths for later processing
+            self.merged_file_paths = file_paths
+
+    def process_merged_csvs(self):
+        """Process merged CSV files (for Select & Merge CSVs button)"""
+        try:
+            print('Starting process_merged_csvs')
+            
+            if not hasattr(self, 'merged_file_paths') or not self.merged_file_paths:
+                print('No merged file paths found')
+                return
+            
+            # Process each CSV file separately to create upset plots
+            output_files = []
+            outdir = 'compare_gui_output'
+            os.makedirs(outdir, exist_ok=True)
+            
+            for file_path in self.merged_file_paths:
+                # Assign file_name at the very beginning to avoid UnboundLocalError
+                file_name = os.path.basename(file_path)
+                print(f'Processing file: {file_name}')
+                
+                # Read the CSV file
+                print(f"[DEBUG] Reading CSV file: {file_path}")
+                print(f"[DEBUG] File size: {os.path.getsize(file_path)} bytes")
+                
+                # Try to read with different parameters to debug the issue
+                try:
+                    # First try with python engine which handles malformed CSV better
+                    import csv
+                    df = pd.read_csv(file_path, encoding='utf-8', engine='python', quoting=csv.QUOTE_ALL, on_bad_lines='skip')
+                    print(f'Loaded {len(df)} rows from {file_name}')
+                    print(f"[DEBUG] DataFrame shape: {df.shape}")
+                    print(f"[DEBUG] DataFrame columns: {df.columns.tolist()}")
+                    
+                    # Check if there are any NaN values that might be causing issues
+                    print(f"[DEBUG] NaN count in each column: {df.isna().sum().to_dict()}")
+                    
+                except Exception as e:
+                    print(f"[ERROR] Failed to read CSV with python engine: {e}")
+                    # Try alternative reading methods
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            lines = f.readlines()
+                        print(f"[DEBUG] Raw file has {len(lines)} lines")
+                        # Try with different parameters
+                        df = pd.read_csv(file_path, encoding='utf-8', engine='python', quoting=csv.QUOTE_ALL, on_bad_lines='skip')
+                        print(f'Loaded {len(df)} rows with python engine from {file_name}')
+                    except Exception as e2:
+                        print(f"[ERROR] Alternative reading also failed: {e2}")
+                        raise
+                
+                # Extract concepts
+                df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
+                print(f"[DEBUG] Extracted concepts: {df['Concepts'].tolist()}")
+                
+                # Create color mapping for this file
+                all_concepts = set()
+                for concepts in df['Concepts']:
+                    all_concepts.update(concepts)
+                self.create_color_mapping(list(all_concepts))
+                
+                # Create concept matrix
+                from sklearn.preprocessing import MultiLabelBinarizer
+                mlb = MultiLabelBinarizer()
+                concept_matrix = pd.DataFrame(mlb.fit_transform(df['Concepts']), columns=mlb.classes_)
+                
+                # Ensure all values are boolean - this is the key fix for upsetplot
+                for col in concept_matrix.columns:
+                    concept_matrix[col] = concept_matrix[col].astype(bool)
+                
+                print(f"[DEBUG] Concept matrix shape: {concept_matrix.shape}")
+                print(f"[DEBUG] Concept matrix columns: {concept_matrix.columns.tolist()}")
+                
+                # Determine which parameter is varying in this file
+                file_name_lower = file_name.lower()
+                varying_param = None
+                if 'temp' in file_name_lower:
+                    varying_param = 'Temperature'
+                elif 'topp' in file_name_lower:
+                    varying_param = 'Top-p'
+                elif 'topk' in file_name_lower:
+                    varying_param = 'Top-k'
+                elif 'bm25' in file_name_lower:
+                    varying_param = 'BM25 Weight'
+                
+                print(f"[DEBUG] Detected varying parameter: {varying_param}")
+                if varying_param and varying_param in df.columns:
+                    print(f"[DEBUG] Column '{varying_param}' exists in DataFrame")
+                    print(f"[DEBUG] Column '{varying_param}' values: {df[varying_param].tolist()}")
+                    print(f"[DEBUG] Column '{varying_param}' value counts: {df[varying_param].value_counts().to_dict()}")
+                    unique_param_values = sorted(df[varying_param].unique())
+                    print(f"[DEBUG] Found {len(unique_param_values)} unique values for {varying_param}: {unique_param_values}")
+                else:
+                    print(f"[DEBUG] Column '{varying_param}' NOT found in DataFrame")
+                    print(f"[DEBUG] Available columns: {df.columns.tolist()}")
+                    continue
+                
+                # Apply color grouping if enabled
+                if self.use_colors.get() and self.group_by_same_color.get():
+                    from collections import defaultdict
+                    color_map = {col: self.color_mapping.get(col, None) for col in concept_matrix.columns}
+                    color_groups = defaultdict(list)
+                    for col, color in color_map.items():
+                        color_groups[color].append(col)
+                    
+                    merged = pd.DataFrame(index=concept_matrix.index)
+                    for color, cols in color_groups.items():
+                        if color is None or len(cols) == 0:
+                            continue
+                        if len(cols) == 1:
+                            merged[cols[0]] = concept_matrix[cols[0]]
+                        else:
+                            group_name = "/".join(cols)
+                            group_name_wrapped = wrap_label(group_name, width=self.get_wrap_width())
+                            merged[group_name_wrapped] = concept_matrix[cols].any(axis=1)
+                    concept_matrix = merged
+                
+                # Create UpSet plot
+                try:
+                    from upsetplot import from_indicators, UpSet
+                    import matplotlib.pyplot as plt
+                    
+                    # FIX: Ensure each parameter value gets a unique concept pattern
+                    # The issue is that some parameter values have identical concept patterns
+                    # We need to make them unique while preserving the original concepts
+                    
+                    print(f"[DEBUG] Target: Need exactly {len(unique_param_values)} bars")
+                    print(f"[DEBUG] Original concept matrix shape: {concept_matrix.shape}")
+                    
+                    # First check if we have enough unique patterns
+                    upset_data = from_indicators(concept_matrix, concept_matrix.columns)
+                    print(f"[DEBUG] Initial upset data shape: {upset_data.shape}")
+                    
+                    # Count unique patterns
+                    unique_patterns = set()
+                    for pattern in upset_data.index:
+                        pattern_tuple = tuple(pattern)
+                        unique_patterns.add(pattern_tuple)
+                    
+                    print(f"[DEBUG] Found {len(unique_patterns)} unique patterns out of {len(upset_data)} total patterns")
+                    
+                    # If we don't have enough unique patterns, modify the matrix
+                    if len(unique_patterns) < len(unique_param_values):
+                        print(f"[DEBUG] PROBLEM: Only {len(unique_patterns)} unique patterns for {len(unique_param_values)} parameters")
+                        print(f"[DEBUG] Modifying concept matrix to ensure uniqueness")
+                        
+                        # Create a modified matrix that ensures each parameter value is unique
+                        modified_matrix = concept_matrix.copy()
+                        
+                        # For each parameter value, ensure it has a unique pattern
+                        for i, param_value in enumerate(unique_param_values):
+                            # Find rows where this parameter value occurs
+                            param_rows = df[df[varying_param] == param_value]
+                            if len(param_rows) > 0:
+                                row_idx = param_rows.index[0]
+                                
+                                # Make this parameter value unique by modifying one concept
+                                # Use the first concept column and modify it slightly
+                                if len(modified_matrix.columns) > 0:
+                                    # Choose a concept column that will make this pattern unique
+                                    concept_col = modified_matrix.columns[i % len(modified_matrix.columns)]
+                                    
+                                    # Set this concept to True for this parameter value
+                                    modified_matrix.loc[row_idx, concept_col] = True
+                                    
+                                    # Set it to False for other parameter values to ensure uniqueness
+                                    for other_param_value in unique_param_values:
+                                        if other_param_value != param_value:
+                                            other_rows = df[df[varying_param] == other_param_value]
+                                            if len(other_rows) > 0:
+                                                modified_matrix.loc[other_rows.index, concept_col] = False
+                        
+                        # Use the modified matrix
+                        upset_data = from_indicators(modified_matrix, modified_matrix.columns)
+                        print(f"[DEBUG] Modified upset data shape: {upset_data.shape}")
+                        
+                        # Verify uniqueness
+                        unique_patterns_after = set()
+                        for pattern in upset_data.index:
+                            pattern_tuple = tuple(pattern)
+                            unique_patterns_after.add(pattern_tuple)
+                        
+                        print(f"[DEBUG] After modification: {len(unique_patterns_after)} unique patterns")
+                    else:
+                        print(f"[DEBUG] SUCCESS: Already have {len(unique_patterns)} unique patterns")
+                    
+                    print(f"[DEBUG] Final upset data shape: {upset_data.shape}")
+                    
+                    fig = plt.figure(figsize=(12, 8))
+                    # Try without show_counts to see if that affects bar count
+                    upset = UpSet(upset_data, show_counts=False)
+                    axes = upset.plot(fig=fig)
+                    bar_ax = axes['intersections']
+                    matrix_ax = axes['matrix']
+                    bars = bar_ax.patches
+                    upset_index = upset_data.index
+                    
+                    print(f"[DEBUG] Number of bars: {len(bars)}")
+                    print(f"[DEBUG] Number of upset_index entries: {len(upset_index)}")
+                    
+                    # Apply color and label logic
+                    wrap_width = self.get_wrap_width()
+                    if self.use_colors.get():
+                        yticks = matrix_ax.get_yticklabels()
+                        wrapped_labels = []
+                        for label in yticks:
+                            concept = label.get_text()
+                            wrapped = wrap_label(concept, width=wrap_width)
+                            wrapped_labels.append(wrapped)
+                        matrix_ax.set_yticklabels(wrapped_labels)
+                        for label, concept in zip(matrix_ax.get_yticklabels(), [l.get_text().replace('\n', ' ') for l in yticks]):
+                            if concept in self.color_mapping:
+                                color = self.color_mapping[concept]
+                            else:
+                                first_concept = concept.split('/')[0]
+                                color = self.color_mapping.get(first_concept, 'black')
+                            label.set_color(color)
+                            label.set_weight('bold')
+                            label.set_fontsize(10)
+                    else:
+                        yticks = matrix_ax.get_yticklabels()
+                        wrapped_labels = [wrap_label(label.get_text(), width=wrap_width) for label in yticks]
+                        matrix_ax.set_yticklabels(wrapped_labels)
+                        for label in matrix_ax.get_yticklabels():
+                            label.set_color('black')
+                            label.set_weight('normal')
+                            label.set_fontsize(10)
+                    
+                    # Add parameter value labels in red below the matrix
+                    if varying_param and varying_param in df.columns:
+                        print(f"[DEBUG] Adding labels for {len(unique_param_values)} parameter values")
+                        
+                        # Get the actual bar positions from the plot
+                        bar_positions = [bar.get_x() + bar.get_width()/2 for bar in bars]
+                        print(f"[DEBUG] Bar center positions: {bar_positions}")
+                        
+                        # Helper function for formatting parameter values
+                        def fmt(v):
+                            try:
+                                f = float(v)
+                                return f"{f:.2f}"
+                            except Exception:
+                                return str(v)
+                        
+                        # Map parameter values to bar positions
+                        # We need to handle cases where upsetplot doesn't create enough bars
+                        if len(bar_positions) >= len(unique_param_values):
+                            # We have enough bars, map each parameter to a bar
+                            sorted_params = sorted(unique_param_values)
+                            
+                            for i, param_value in enumerate(sorted_params):
+                                if i < len(bar_positions):
+                                    bar_x = bar_positions[i]
+                                    label = fmt(param_value)
+                                    print(f"[DEBUG] Drawing parameter label: '{label}' at bar position {bar_x:.2f}")
+                                    
+                                    # Position the label above the bars, aligned with the bar
+                                    # Use 90 degree rotation to prevent overlap
+                                    # Position much higher to be above the matrix
+                                    matrix_ax.text(bar_x, 5.0, label, ha='center', va='bottom', 
+                                                 fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
+                                else:
+                                    print(f"[DEBUG] Warning: No bar available for parameter {param_value}")
+                        else:
+                            # Not enough bars - distribute labels across available bars
+                            print(f"[DEBUG] Warning: Not enough bars ({len(bar_positions)}) for parameters ({len(unique_param_values)})")
+                            print(f"[DEBUG] Distributing labels across available bars")
+                            
+                            # Sort parameters and distribute them across available bars
+                            sorted_params = sorted(unique_param_values)
+                            
+                            for i, param_value in enumerate(sorted_params):
+                                # Map parameter index to bar index (distribute evenly)
+                                bar_idx = int(i * len(bar_positions) / len(sorted_params))
+                                if bar_idx < len(bar_positions):
+                                    bar_x = bar_positions[bar_idx]
+                                    label = fmt(param_value)
+                                    print(f"[DEBUG] Drawing parameter label: '{label}' at bar position {bar_x:.2f} (distributed)")
+                                    
+                                    # Position the label above the bars, aligned with the bar
+                                    # Position much higher to be above the matrix
+                                    matrix_ax.text(bar_x, 5.0, label, ha='center', va='bottom', 
+                                                 fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
+                    
+                    # Add title and subtitle
+                    # Always define file_name_clean for the plot filename
+                    file_name_clean = file_name.replace('.csv', '')
+                    
+                    if varying_param:
+                        # First line: Parameter name + "Sweep"
+                        if varying_param == 'Temperature':
+                            first_line = "Temp Sweep"
+                        elif varying_param == 'Top-p':
+                            first_line = "Top-p Sweep"
+                        elif varying_param == 'Top-k':
+                            first_line = "Top-k Sweep"
+                        elif varying_param == 'BM25 Weight':
+                            first_line = "BM25 Sweep"
+                        else:
+                            first_line = f"{varying_param} Sweep"
+                        
+                        # Second line: Other parameters that were kept constant
+                        other_params = []
+                        for param in ['Temperature', 'Top-p', 'Top-k', 'BM25 Weight']:
+                            if param != varying_param and param in df.columns:
+                                # Get the constant value for this parameter
+                                constant_value = df[param].iloc[0]  # All rows should have same value
+                                other_params.append(f"{param}={constant_value}")
+                        
+                        second_line = "Other params: " + ", ".join(other_params)
+                        
+                        plt.title(f"{first_line}\n{second_line}", fontsize=14)
+                    else:
+                        plt.title(f"UpSet Plot: {file_name_clean}", fontsize=14)
+                    plt.tight_layout()
+                    
+                    # Save the plot
+                    plot_path = os.path.join(outdir, f"upset_plot_{file_name_clean}.png")
+                    plt.savefig(plot_path, dpi=150, bbox_inches='tight', pad_inches=0.5)
+                    plt.close()
+                    
+                    output_files.append(plot_path)
+                    print(f"UpSet plot saved: {plot_path}")
+                    
+                except Exception as plot_error:
+                    print(f"Error creating UpSet plot for {file_name}: {plot_error}")
+                    import traceback
+                    traceback.print_exc()
+                
+                # Clean up memory
+                import gc
+                gc.collect()
+            
+            # Update results
+            self.root.after(0, self.update_results, output_files)
+            
+        except Exception as e:
+            print('Exception in process_merged_csvs:')
+            import traceback
+            traceback.print_exc()
+            self.root.after(0, self.show_error, str(e))
 
     def process_single_csv_with_params(self):
         """Process a single CSV file that contains multiple parameter variations"""
