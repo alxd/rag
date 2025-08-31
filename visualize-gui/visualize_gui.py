@@ -1443,48 +1443,71 @@ class UpSetGUI:
                         label.set_weight('normal')
                         label.set_fontsize(10)
                 
-                # Add parameter value labels
+                # Add parameter value labels - Improved logic with memory management
                 significant_bars = []
                 for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
-                    if i == 0:
+                    if i == 0:  # Skip the empty intersection
                         continue
                     if bar.get_height() > 0:
                         significant_bars.append((i, bar, intersection))
                 
-                max_labels = min(20, len(significant_bars))
+                # Reduce number of labels to prevent memory issues and improve readability
+                max_labels = min(10, len(significant_bars))  # Reduced from 20 to 10
                 if len(significant_bars) > max_labels:
                     significant_bars.sort(key=lambda x: x[1].get_height(), reverse=True)
                     significant_bars = significant_bars[:max_labels]
                 
+                # Create a mapping from intersection patterns to row indices
+                intersection_to_rows = {}
+                
+                # For each row in the subset, determine which intersection it belongs to
+                for row_idx in range(len(subset)):
+                    row_concepts = subset.iloc[row_idx]['Concepts']
+                    row_pattern = []
+                    
+                    # Check which concepts are present for this row
+                    for col in concept_matrix_reset.columns:
+                        # Handle grouped concepts (split by '/')
+                        original_cols = col.split('/') if '/' in col else [col]
+                        concept_present = any(concept in row_concepts for concept in original_cols)
+                        row_pattern.append(concept_present)
+                    
+                    # Convert pattern to tuple for hashing
+                    pattern_tuple = tuple(row_pattern)
+                    if pattern_tuple not in intersection_to_rows:
+                        intersection_to_rows[pattern_tuple] = []
+                    intersection_to_rows[pattern_tuple].append(row_idx)
+                
+                # Track labels to avoid duplicates and reduce clutter
+                drawn_labels = set()
+                
                 for i, bar, intersection in significant_bars:
                     x = bar.get_x() + bar.get_width() / 2
-                    intersection_idx = i - 1
-                    actual_intersection = upset_index[intersection_idx]
-                    mask = np.ones(len(concept_matrix), dtype=bool)
-                    for col, present in zip(concept_matrix_reset.columns, actual_intersection):
-                        original_cols = col.split('/') if '/' in col else [col]
-                        if present:
-                            for orig_col in original_cols:
-                                if orig_col in concept_matrix.columns:
-                                    mask &= concept_matrix[orig_col] == 1
-                        else:
-                            for orig_col in original_cols:
-                                if orig_col in concept_matrix.columns:
-                                    mask &= concept_matrix[orig_col] == 0
-                    param_vals = concept_matrix.loc[mask, varying_param].unique()
                     
-                    def fmt(v):
-                        try:
-                            f = float(v)
-                            return f"{f:.1f}"
-                        except Exception:
-                            return str(v)
+                    # Find which rows contribute to this intersection
+                    contributing_rows = intersection_to_rows.get(intersection, [])
                     
-                    label = ','.join(fmt(v) for v in param_vals) if len(param_vals) > 0 else ''
-                    if label:
-                        print(f"Drawing parameter label: '{label}' at x={x}")
-                        y_label = len(concept_matrix_reset.columns) - 0.3
-                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=0, clip_on=False, weight='bold')
+                    if contributing_rows:
+                        # Get parameter values from contributing rows
+                        param_vals = subset.iloc[contributing_rows][varying_param].unique()
+                        
+                        def fmt(v):
+                            try:
+                                f = float(v)
+                                return f"{f:.1f}"
+                            except Exception:
+                                return str(v)
+                        
+                        label = ','.join(fmt(v) for v in param_vals) if len(param_vals) > 0 else ''
+                        
+                        # Only draw label if it's not a duplicate and not too long
+                        if label and label not in drawn_labels and len(label) <= 20:
+                            print(f"Drawing parameter label: '{label}' at x={x} (rows: {contributing_rows})")
+                            y_label = len(concept_matrix_reset.columns) - 0.3
+                            matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=0, clip_on=False, weight='bold')
+                            drawn_labels.add(label)
+                    else:
+                        print(f"No contributing rows found for intersection {i} at x={x}")
                 
                 # Add title and subtitle
                 other_params = [p for p in expected_params if p != varying_param]
@@ -1513,11 +1536,8 @@ class UpSetGUI:
             self.generate_docx_and_csv(blocks, df, self.color_mapping, output_dir, param_labels)
             self.generate_stats_files(blocks, df, self.color_mapping, output_dir, param_labels)
             
-            # Update results display
-            self.root.after(0, self.update_results, output_files)
-            
-            # Update status
-            self.merge_label.config(text=f"Full analysis complete. Results saved to: {output_dir}", foreground="green")
+            # Update status (don't call update_results to avoid memory issues)
+            self.merge_label.config(text=f"Full analysis complete. Generated {len(output_files)} plots and additional files. Results saved to: {output_dir}", foreground="green")
             
             # Open the output directory
             import subprocess
@@ -2637,38 +2657,17 @@ class UpSetGUI:
                 
                 print(f"[UPSET DEBUG] Bar to folder mapping: {bar_to_folder_mapping}")
                 
-                # Now assign labels ensuring each folder gets used once if possible
-                used_folder_indices = set()
+                # Fix: Assign labels in the correct order to match matrix columns
+                # The bars should be labeled with folder names in the order they appear in the matrix
                 label_assignments = {}
                 
-                # First pass: assign single-folder intersections to their correct folders
-                for bar_idx, folder_idx in bar_to_folder_mapping.items():
-                    original_index = bars_to_process[bar_idx][0]
-                    actual_intersection = upset_index[original_index]
-                    present_count = sum(actual_intersection)
-                    
-                    if present_count == 1 and folder_idx not in used_folder_indices:
-                        label_assignments[bar_idx] = folder_idx
-                        used_folder_indices.add(folder_idx)
-                        print(f"[UPSET DEBUG] Single intersection: bar_idx={bar_idx} -> folder_idx={folder_idx}")
-                
-                # Second pass: assign remaining bars to unused folders
-                available_folder_indices = [i for i in range(len(all_folder_names)) if i not in used_folder_indices]
-                available_idx = 0
-                
+                # Simply assign labels in order: first bar gets first folder, second bar gets second folder, etc.
                 for bar_idx in range(len(bars_to_process)):
-                    if bar_idx not in label_assignments:
-                        if available_idx < len(available_folder_indices):
-                            folder_idx = available_folder_indices[available_idx]
-                            label_assignments[bar_idx] = folder_idx
-                            used_folder_indices.add(folder_idx)
-                            available_idx += 1
-                            print(f"[UPSET DEBUG] Multi/remaining intersection: bar_idx={bar_idx} -> folder_idx={folder_idx}")
-                        else:
-                            # Fallback if we run out of unique folders
-                            folder_idx = bar_idx % len(all_folder_names)
-                            label_assignments[bar_idx] = folder_idx
-                            print(f"[UPSET DEBUG] Fallback intersection: bar_idx={bar_idx} -> folder_idx={folder_idx}")
+                    # Map bar_idx to the corresponding folder index
+                    # Since we skipped the first bar (index 0), we need to adjust the mapping
+                    folder_idx = (bar_idx + 1) % len(all_folder_names)  # +1 because we skipped first bar
+                    label_assignments[bar_idx] = folder_idx
+                    print(f"[UPSET DEBUG] Label assignment: bar_idx={bar_idx} -> folder_idx={folder_idx}")
                 
                 print(f"[UPSET DEBUG] Final label assignments: {label_assignments}")
                 
