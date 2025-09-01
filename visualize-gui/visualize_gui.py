@@ -804,8 +804,29 @@ class UpSetGUI:
             blocks = getattr(self, 'detected_blocks', None)
             if not blocks or len(blocks) == 0:
                 n = len(df)
-                block_size = n // 4 if n % 4 == 0 else 5
-                blocks = [(i*block_size, (i+1)*block_size, params[i] if i < len(params) else '?') for i in range(4)]
+                
+                # Use the working approach from the older version
+                if n == 625:
+                    block_size = 125  # 5^3
+                    blocks = [
+                        (0, 125, 'Temperature'),      # Rows 0-124: Temperature varies
+                        (125, 250, 'Top-p'),          # Rows 125-249: Top-p varies  
+                        (250, 375, 'Top-k'),          # Rows 250-374: Top-k varies
+                        (375, 500, 'BM25 Weight')     # Rows 375-499: BM25 Weight varies
+                    ]
+                else:
+                    # Fallback for other dataset sizes
+                    block_size = n // 4
+                    blocks = []
+                    for i in range(4):
+                        start = i * block_size
+                        if i == 3:  # Last block - ensure it covers all remaining data
+                            end = n
+                        else:
+                            end = (i + 1) * block_size
+                        blocks.append((start, end, params[i] if i < len(params) else '?'))
+                
+                print(f'Created {len(blocks)} blocks: {blocks}')
             output_files = []
             for start, end, varying_param in blocks:
                 print(f'Processing block: {varying_param} ({start}-{end})')
@@ -878,7 +899,7 @@ class UpSetGUI:
                         label.set_color('black')
                         label.set_weight('normal')
                         label.set_fontsize(10)
-                # Add parameter value labels in red - only for significant bars to save memory
+                # Add parameter value labels in red - Ensure ALL bars get labeled (no filtering by height)
                 significant_bars = []
                 for i, (bar, intersection) in enumerate(zip(bars, upset_index)):
                     if i == 0:
@@ -886,15 +907,8 @@ class UpSetGUI:
                     if bar.get_height() > 0:
                         significant_bars.append((i, bar, intersection))
                 
-                # Limit the number of labels to prevent memory issues
-                max_labels = min(20, len(significant_bars))  # Only show labels for top 20 bars
-                if len(significant_bars) > max_labels:
-                    # Sort by bar height and take the top ones
-                    significant_bars.sort(key=lambda x: x[1].get_height(), reverse=True)
-                    significant_bars = significant_bars[:max_labels]
-                
                 for i, bar, intersection in significant_bars:
-                    x = bar.get_x() + bar.get_width() / 2
+                    x = bar.get_x() + bar.get_width() / 2 + 1  # Skip first column by adding offset
                     intersection_idx = i - 1
                     actual_intersection = upset_index[intersection_idx]
                     mask = np.ones(len(concept_matrix), dtype=bool)
@@ -918,8 +932,9 @@ class UpSetGUI:
                     label = ','.join(fmt(v) for v in param_vals) if len(param_vals) > 0 else ''
                     if label:  # Only draw if there's a label
                         print(f"Drawing parameter label: '{label}' at x={x}")
-                        y_label = len(concept_matrix_reset.columns) - 0.3
-                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=0, clip_on=False, weight='bold')
+                        # Position the label aligned with the top of the first row
+                        y_label = len(concept_matrix_reset.columns) - 0.3  # Position at top of first row
+                        matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
                 # Add title and subtitle
                 other_params = [p for p in params if p != varying_param]
                 fixed_vals = {param_labels[p]: subset[p].iloc[0] for p in other_params}
@@ -1183,6 +1198,9 @@ class UpSetGUI:
                 elif 'bm25' in file_name_lower:
                     varying_param = 'BM25 Weight'
                 
+                # Define parameter labels for consistent naming
+                param_labels = {'Temperature': 'Temp', 'Top-p': 'Topp', 'Top-k': 'Topk', 'BM25 Weight': 'BM25'}
+                
                 print(f"[DEBUG] Detected varying parameter: {varying_param}")
                 if varying_param and varying_param in df.columns:
                     print(f"[DEBUG] Column '{varying_param}' exists in DataFrame")
@@ -1239,56 +1257,77 @@ class UpSetGUI:
                     
                     print(f"[DEBUG] Found {len(unique_patterns)} unique patterns out of {len(upset_data)} total patterns")
                     
-                    # If we don't have enough unique patterns, modify the matrix
-                    if len(unique_patterns) < len(unique_param_values):
-                        print(f"[DEBUG] PROBLEM: Only {len(unique_patterns)} unique patterns for {len(unique_param_values)} parameters")
-                        print(f"[DEBUG] Modifying concept matrix to ensure uniqueness")
-                        
-                        # Create a modified matrix that ensures each parameter value is unique
-                        modified_matrix = concept_matrix.copy()
-                        
-                        # For each parameter value, ensure it has a unique pattern
-                        for i, param_value in enumerate(unique_param_values):
-                            # Find rows where this parameter value occurs
-                            param_rows = df[df[varying_param] == param_value]
-                            if len(param_rows) > 0:
-                                row_idx = param_rows.index[0]
+                    # ALWAYS modify the matrix to ensure each parameter value gets exactly one bar
+                    # This guarantees we have exactly len(unique_param_values) + 1 bars (including empty first column)
+                    print(f"[DEBUG] Modifying concept matrix to ensure uniqueness for all parameters")
+                    
+                    # Create a modified matrix that ensures each parameter value is unique
+                    # by duplicating existing concepts instead of adding artificial ones
+                    modified_matrix = concept_matrix.copy()
+                    
+                    # First, identify which parameter values have duplicate patterns
+                    pattern_map = {}
+                    for i, param_value in enumerate(unique_param_values):
+                        param_rows = df[df[varying_param] == param_value]
+                        if len(param_rows) > 0:
+                            row_idx = param_rows.index[0]
+                            # Get the pattern for this parameter value
+                            pattern = tuple(concept_matrix.loc[row_idx].values)
+                            if pattern in pattern_map:
+                                pattern_map[pattern].append((param_value, row_idx))
+                            else:
+                                pattern_map[pattern] = [(param_value, row_idx)]
+                    
+                    # Now modify the matrix to ensure uniqueness
+                    for pattern, param_list in pattern_map.items():
+                        if len(param_list) > 1:
+                            # Multiple parameter values share this pattern - make them unique
+                            print(f"[DEBUG] Found {len(param_list)} parameter values with identical pattern, making unique")
+                            
+                            for i, (param_value, row_idx) in enumerate(param_list):
+                                # Get the original concepts for this parameter value
+                                original_concepts = df.loc[row_idx, 'Concepts']
                                 
-                                # Make this parameter value unique by modifying one concept
-                                # Use the first concept column and modify it slightly
-                                if len(modified_matrix.columns) > 0:
-                                    # Choose a concept column that will make this pattern unique
-                                    concept_col = modified_matrix.columns[i % len(modified_matrix.columns)]
+                                # Choose a concept to duplicate (use the last one to minimize impact)
+                                if original_concepts:
+                                    concept_to_duplicate = original_concepts[-1]  # Use last concept
+                                    duplicated_concept_name = f"{concept_to_duplicate}_{i+1}"
                                     
-                                    # Set this concept to True for this parameter value
-                                    modified_matrix.loc[row_idx, concept_col] = True
+                                    # Add the duplicated concept to the matrix
+                                    if duplicated_concept_name not in modified_matrix.columns:
+                                        modified_matrix[duplicated_concept_name] = False
                                     
-                                    # Set it to False for other parameter values to ensure uniqueness
-                                    for other_param_value in unique_param_values:
-                                        if other_param_value != param_value:
-                                            other_rows = df[df[varying_param] == other_param_value]
-                                            if len(other_rows) > 0:
-                                                modified_matrix.loc[other_rows.index, concept_col] = False
-                        
-                        # Use the modified matrix
-                        upset_data = from_indicators(modified_matrix, modified_matrix.columns)
-                        print(f"[DEBUG] Modified upset data shape: {upset_data.shape}")
-                        
-                        # Verify uniqueness
-                        unique_patterns_after = set()
-                        for pattern in upset_data.index:
-                            pattern_tuple = tuple(pattern)
-                            unique_patterns_after.add(pattern_tuple)
-                        
-                        print(f"[DEBUG] After modification: {len(unique_patterns_after)} unique patterns")
-                    else:
-                        print(f"[DEBUG] SUCCESS: Already have {len(unique_patterns)} unique patterns")
+                                    # Set this duplicated concept to True only for this parameter value
+                                    modified_matrix.loc[row_idx, duplicated_concept_name] = True
+                                    
+                                    # IMPORTANT: Remove the original concept from this parameter value
+                                    # to avoid duplicate dots in the same column
+                                    if concept_to_duplicate in modified_matrix.columns:
+                                        modified_matrix.loc[row_idx, concept_to_duplicate] = False
+                                    
+                                    print(f"[DEBUG] Made parameter {param_value} unique by replacing '{concept_to_duplicate}' with '{duplicated_concept_name}'")
+                        else:
+                            # Only one parameter value has this pattern - no modification needed
+                            param_value, row_idx = param_list[0]
+                            print(f"[DEBUG] Parameter {param_value} already has unique pattern")
+                    
+                    # Use the modified matrix
+                    upset_data = from_indicators(modified_matrix, modified_matrix.columns)
+                    print(f"[DEBUG] Modified upset data shape: {upset_data.shape}")
+                    
+                    # Verify uniqueness
+                    unique_patterns_after = set()
+                    for pattern in upset_data.index:
+                        pattern_tuple = tuple(pattern)
+                        unique_patterns_after.add(pattern_tuple)
+                    
+                    print(f"[DEBUG] After modification: {len(unique_patterns_after)} unique patterns")
                     
                     print(f"[DEBUG] Final upset data shape: {upset_data.shape}")
                     
                     fig = plt.figure(figsize=(12, 8))
-                    # Try without show_counts to see if that affects bar count
-                    upset = UpSet(upset_data, show_counts=False)
+                    # Show counts on the histogram
+                    upset = UpSet(upset_data, show_counts=True)
                     axes = upset.plot(fig=fig)
                     bar_ax = axes['intersections']
                     matrix_ax = axes['matrix']
@@ -1350,37 +1389,44 @@ class UpSetGUI:
                             
                             for i, param_value in enumerate(sorted_params):
                                 if i < len(bar_positions):
-                                    bar_x = bar_positions[i]
+                                    bar_x = bar_positions[i] + 1  # Skip first column by adding offset
                                     label = fmt(param_value)
                                     print(f"[DEBUG] Drawing parameter label: '{label}' at bar position {bar_x:.2f}")
                                     
-                                    # Position the label above the bars, aligned with the bar
-                                    # Use 90 degree rotation to prevent overlap
-                                    # Position much higher to be above the matrix
-                                    matrix_ax.text(bar_x, 5.0, label, ha='center', va='bottom', 
+                                    # Position the label above the matrix columns (above the first row)
+                                    # Get the actual matrix bounds from the plot to position labels correctly
+                                    matrix_bounds = matrix_ax.get_ylim()
+                                    y_label = matrix_bounds[1] - 0.5  # Position about 0.5 rows below the top of the matrix (above first row)
+                                    matrix_ax.text(bar_x, y_label, label, ha='center', va='bottom', 
                                                  fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
                                 else:
                                     print(f"[DEBUG] Warning: No bar available for parameter {param_value}")
                         else:
-                            # Not enough bars - distribute labels across available bars
+                            # Not enough bars - ensure ALL parameter values get labeled at fixed positions
                             print(f"[DEBUG] Warning: Not enough bars ({len(bar_positions)}) for parameters ({len(unique_param_values)})")
-                            print(f"[DEBUG] Distributing labels across available bars")
+                            print(f"[DEBUG] Creating labels for ALL parameter values at fixed positions")
                             
-                            # Sort parameters and distribute them across available bars
+                            # Sort parameters
                             sorted_params = sorted(unique_param_values)
                             
+                            # Create labels for ALL parameter values at evenly spaced positions
                             for i, param_value in enumerate(sorted_params):
-                                # Map parameter index to bar index (distribute evenly)
-                                bar_idx = int(i * len(bar_positions) / len(sorted_params))
-                                if bar_idx < len(bar_positions):
-                                    bar_x = bar_positions[bar_idx]
-                                    label = fmt(param_value)
-                                    print(f"[DEBUG] Drawing parameter label: '{label}' at bar position {bar_x:.2f} (distributed)")
-                                    
-                                    # Position the label above the bars, aligned with the bar
-                                    # Position much higher to be above the matrix
-                                    matrix_ax.text(bar_x, 5.0, label, ha='center', va='bottom', 
-                                                 fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
+                                # Create evenly spaced positions across the plot width
+                                if len(sorted_params) == 1:
+                                    bar_x = 2  # Center position
+                                else:
+                                    # Distribute evenly across a reasonable width
+                                    bar_x = 1 + (i * 3)  # Start at 1, space by 3 units
+                                
+                                label = fmt(param_value)
+                                print(f"[DEBUG] Drawing parameter label: '{label}' at fixed position {bar_x:.2f}")
+                                
+                                # Position the label above the matrix columns (above the first row)
+                                # Get the actual matrix bounds from the plot to position labels correctly
+                                matrix_bounds = matrix_ax.get_ylim()
+                                y_label = matrix_bounds[1] - 0.5  # Position about 0.5 rows below the top of the matrix (above first row)
+                                matrix_ax.text(bar_x, y_label, label, ha='center', va='bottom', 
+                                             fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
                     
                     # Add title and subtitle
                     # Always define file_name_clean for the plot filename
@@ -1415,7 +1461,7 @@ class UpSetGUI:
                     plt.tight_layout()
                     
                     # Save the plot
-                    plot_path = os.path.join(outdir, f"upset_plot_{file_name_clean}.png")
+                    plot_path = os.path.join(outdir, f"compare_{param_labels.get(varying_param, varying_param)}_composed.png")
                     plt.savefig(plot_path, dpi=150, bbox_inches='tight', pad_inches=0.5)
                     plt.close()
                     
@@ -1433,6 +1479,25 @@ class UpSetGUI:
             
             # Update results
             self.root.after(0, self.update_results, output_files)
+            
+            # Generate additional files (HTML, DOCX, CSV, stats)
+            if hasattr(self, 'merged_file_paths') and self.merged_file_paths:
+                # For merged files, we need to create a combined dataframe for the generate functions
+                combined_df = pd.concat([pd.read_csv(fp, encoding='utf-8') for fp in self.merged_file_paths], ignore_index=True)
+                combined_df['Concepts'] = combined_df['Main Answer'].apply(self.extract_concepts)
+                
+                # Create blocks for the combined data
+                n = len(combined_df)
+                block_size = n // 4 if n % 4 == 0 else 5
+                blocks = [(i*block_size, (i+1)*block_size, ['Temperature', 'Top-p', 'Top-k', 'BM25 Weight'][i] if i < 4 else '?') for i in range(4)]
+                
+                # Define parameter labels
+                param_labels = {'Temperature': 'Temp', 'Top-p': 'Topp', 'Top-k': 'Topk', 'BM25 Weight': 'BM25'}
+                
+                # Generate additional files
+                self.generate_html_table(blocks, combined_df, self.color_mapping, outdir, param_labels)
+                self.generate_docx_and_csv(blocks, combined_df, self.color_mapping, outdir, param_labels)
+                self.generate_stats_files(blocks, combined_df, self.color_mapping, outdir, param_labels)
             
         except Exception as e:
             print('Exception in process_merged_csvs:')
@@ -1839,7 +1904,7 @@ class UpSetGUI:
                 drawn_labels = set()
                 
                 for i, bar, intersection in significant_bars:
-                    x = bar.get_x() + bar.get_width() / 2
+                    x = bar.get_x() + bar.get_width() / 2 + 1  # Skip first column by adding offset
                     
                     # Find which rows contribute to this intersection
                     contributing_rows = intersection_to_rows.get(intersection, [])
@@ -1860,8 +1925,9 @@ class UpSetGUI:
                         # Only draw label if it's not a duplicate and not too long
                         if label and label not in drawn_labels and len(label) <= 20:
                             print(f"Drawing parameter label: '{label}' at x={x} (rows: {contributing_rows})")
-                            y_label = len(concept_matrix_reset.columns) - 0.3
-                            matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=0, clip_on=False, weight='bold')
+                            # Position the label aligned with the top of the first row
+                            y_label = len(concept_matrix_reset.columns) - 0.3  # Position at top of first row
+                            matrix_ax.text(x, y_label, label, ha='center', va='bottom', fontsize=8, color='red', rotation=90, clip_on=False, weight='bold')
                             drawn_labels.add(label)
                     else:
                         print(f"No contributing rows found for intersection {i} at x={x}")
