@@ -3053,55 +3053,76 @@ class UpSetGUI:
                 bars_to_process = [(idx, bar) for idx, bar in non_empty_bars if idx != 0]
                 print(f"[UPSET DEBUG] Bars to process: {[b[0] for b in bars_to_process]}")
                 
-                # Create a mapping from original bar indices to the correct folder assignment
-                # This ensures proper ordering by analyzing the UpSet data structure
-                bar_to_folder_mapping = {}
+
                 
-                # Analyze each bar to understand the pattern
-                for bar_idx, (original_index, bar) in enumerate(bars_to_process):
-                    actual_intersection = upset_index[original_index]
-                    present_folders = []
-                    for j, present in enumerate(actual_intersection):
-                        if present and j < len(folder_names):
-                            present_folders.append(j)  # Store folder indices
+                # Fix: Properly map upset plot bars to folders based on actual data content
+                # Each red label should represent the folder that best matches the intersection pattern
+                
+                # Create a method to find the best folder match for each intersection pattern
+                def find_best_folder_match(intersection_pattern, df_for_upset, folder_names):
+                    """
+                    Find which folder best matches the given intersection pattern.
+                    Returns the folder index that has the highest overlap with the intersection.
+                    """
+                    best_match = -1
+                    best_score = -1
                     
-                    print(f"[UPSET DEBUG] Bar original_index={original_index}, intersection={actual_intersection}, folder_indices={present_folders}")
+                    # For each folder (row in df_for_upset), calculate overlap score
+                    for folder_idx in range(len(folder_names)):
+                        folder_row = df_for_upset.iloc[folder_idx]
+                        
+                        # Calculate how many concept groups match between intersection and folder
+                        matches = 0
+                        total_concepts = 0
+                        
+                        for concept_idx, is_present in enumerate(intersection_pattern):
+                            if concept_idx < len(folder_row):
+                                if is_present and folder_row.iloc[concept_idx]:
+                                    matches += 1
+                                if is_present:
+                                    total_concepts += 1
+                        
+                        # Score based on percentage of intersection concepts that are in this folder
+                        if total_concepts > 0:
+                            score = matches / total_concepts
+                            if score > best_score:
+                                best_score = score
+                                best_match = folder_idx
                     
-                    # Determine which folder label to assign based on intersection pattern
-                    if len(present_folders) == 1:
-                        # Single folder intersection - use that folder's index
-                        folder_idx = present_folders[0]
-                    else:
-                        # Multi-folder intersection - use a systematic approach
-                        # For now, use the first folder in the intersection
-                        folder_idx = present_folders[0] if present_folders else bar_idx
-                    
-                    bar_to_folder_mapping[bar_idx] = folder_idx
+                    return best_match, best_score
                 
-                print(f"[UPSET DEBUG] Bar to folder mapping: {bar_to_folder_mapping}")
+                # Assign labels based on best folder matches
+                folder_label_assignments = {}
+                used_folders = set()
                 
-                # Fix: Assign labels in the correct order to match matrix columns
-                # The bars should be labeled with folder names in the order they appear in the matrix
-                label_assignments = {}
-                
-                # Simply assign labels in order: first bar gets first folder, second bar gets second folder, etc.
-                for bar_idx in range(len(bars_to_process)):
-                    # Map bar_idx to the corresponding folder index
-                    # Since we skipped the first bar (index 0), we need to adjust the mapping
-                    folder_idx = (bar_idx + 1) % len(all_folder_names)  # +1 because we skipped first bar
-                    label_assignments[bar_idx] = folder_idx
-                    print(f"[UPSET DEBUG] Label assignment: bar_idx={bar_idx} -> folder_idx={folder_idx}")
-                
-                print(f"[UPSET DEBUG] Final label assignments: {label_assignments}")
-                
-                # Draw the labels
+                # Process each bar and find its best folder match
                 for bar_idx, (original_index, bar) in enumerate(bars_to_process):
                     x = bar.get_x() + bar.get_width() / 2
                     
-                    # Get the assigned folder index and corresponding label
-                    folder_idx = label_assignments.get(bar_idx, bar_idx % len(all_folder_names))
-                    label = all_folder_names[folder_idx]
+                    # Get the actual intersection pattern for this bar
+                    actual_intersection = upset_index[original_index]
                     
+                    # Find the best matching folder for this intersection
+                    best_folder_idx, match_score = find_best_folder_match(actual_intersection, df_for_upset, folder_names)
+                    
+                    if best_folder_idx != -1 and best_folder_idx not in used_folders:
+                        # Assign this folder to this bar position
+                        folder_label_assignments[bar_idx] = (best_folder_idx, x, original_index, match_score)
+                        used_folders.add(best_folder_idx)
+                        print(f"[UPSET DEBUG] Bar {bar_idx}: Assigned folder {all_folder_names[best_folder_idx]} "
+                              f"(match score: {match_score:.2f})")
+                    else:
+                        # If no good match or folder already used, find next best available folder
+                        for folder_idx in range(len(folder_names)):
+                            if folder_idx not in used_folders:
+                                folder_label_assignments[bar_idx] = (folder_idx, x, original_index, 0.0)
+                                used_folders.add(folder_idx)
+                                print(f"[UPSET DEBUG] Bar {bar_idx}: Assigned remaining folder {all_folder_names[folder_idx]}")
+                                break
+                
+                # Draw the labels
+                for bar_idx, (folder_idx, x, original_index, match_score) in folder_label_assignments.items():
+                    label = all_folder_names[folder_idx]
                     y_label = len(df_for_upset.columns) - 0.3
                     
                     # Place the label
@@ -3110,9 +3131,15 @@ class UpSetGUI:
                                   clip_on=False, weight='bold')
                     
                     actual_intersection = upset_index[original_index]
+                    present_folders = []
+                    for j, present in enumerate(actual_intersection):
+                        if present and j < len(folder_names):
+                            present_folders.append(j)
+                    
                     print(f"[UPSET DEBUG] Bar (original index: {original_index}, bar_idx: {bar_idx}): "
-                          f"Drawing folder label: '{label}' (folder_idx={folder_idx}) at x={x:.2f}, "
-                          f"intersection: {actual_intersection}")
+                          f"Drawing folder label: '{label}' at x={x:.2f}, "
+                          f"intersection: {actual_intersection}, present_folders: {present_folders}, "
+                          f"match_score: {match_score:.2f}")
                 
                 # Customize the plot
                 plt.title("Concept Groups Overlap Across Authors", fontsize=14, pad=20)
