@@ -2578,7 +2578,7 @@ def create_csv_from_batch_results(results: List[Dict], job_id: str,
         clean_name = full_name.split(" ", 1)[-1] if " " in full_name else full_name
         
         # Remove parentheses and replace with underscores, also clean other special characters
-        clean_name = clean_name.replace("(", "_").replace(")", "").replace(" ", "_").replace(",", "").replace("-", "_")
+        clean_name = clean_name.replace("(", "_").replace(")", "").replace(" ", "_").replace(",", "").replace("-", "_").replace("/", "_")
         
         # For embedding models, return the complete suffix after sentence_transformers/
         if "sentence_transformers/" in clean_name:
