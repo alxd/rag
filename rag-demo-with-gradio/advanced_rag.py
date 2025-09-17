@@ -1388,10 +1388,64 @@ def format_response(response: str) -> str:
 
 def reset_app_updated():
     global rag_chain
+    
+    # Properly clean up the existing vector database components
+    if hasattr(rag_chain, 'vector_store'):
+        try:
+            del rag_chain.vector_store
+        except:
+            pass
+    
+    if hasattr(rag_chain, 'faiss_retriever'):
+        try:
+            del rag_chain.faiss_retriever
+        except:
+            pass
+    
+    if hasattr(rag_chain, 'bm25_retriever'):
+        try:
+            del rag_chain.bm25_retriever
+        except:
+            pass
+    
+    if hasattr(rag_chain, 'ensemble_retriever'):
+        try:
+            del rag_chain.ensemble_retriever
+        except:
+            pass
+    
+    # Clear data references
+    if hasattr(rag_chain, 'raw_data'):
+        rag_chain.raw_data = None
+    if hasattr(rag_chain, 'split_data'):
+        rag_chain.split_data = None
+    if hasattr(rag_chain, 'context'):
+        rag_chain.context = ""
+    if hasattr(rag_chain, 'conversation_history'):
+        rag_chain.conversation_history = []
+    
+    # Clear other components
+    if hasattr(rag_chain, 'text_splitter'):
+        try:
+            del rag_chain.text_splitter
+        except:
+            pass
+    
+    if hasattr(rag_chain, 'elevated_rag_chain'):
+        try:
+            del rag_chain.elevated_rag_chain
+        except:
+            pass
+    
+    # Create a new instance
     rag_chain = ElevatedRagChain()
-    debug_print("App reset successfully.")
+    
+    # Force garbage collection to free memory
+    gc.collect()
+    
+    debug_print("App reset successfully. Vector database and all components cleaned up.")
     return (
-        "App reset successfully. You can now load new files",
+        "App reset successfully. Vector database and all components cleaned up. You can now load new files",
         "",
         "Model used: Not selected"
     )
