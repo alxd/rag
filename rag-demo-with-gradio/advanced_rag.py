@@ -570,6 +570,7 @@ def cleanup_old_jobs():
     debug_print(f"Cleaned up {len(to_delete)} old jobs. {len(jobs)} jobs remaining.")
     return f"Cleaned up {len(to_delete)} old jobs", "", ""
 
+
 # Improve the truncate_prompt function to be more aggressive with limiting context
 def truncate_prompt(prompt: str, max_tokens: int = 4096) -> str:
     """Truncate prompt to fit within token limit, preserving the most recent/relevant parts."""
@@ -1444,6 +1445,39 @@ def periodic_update(is_checked):
 def get_interval(is_checked):
     return 2 if is_checked else None
 
+# CSV file management functions (copied exactly from psyllm.py)
+def list_all_csv_files():
+    csv_files = sorted(glob.glob("*.csv"), key=os.path.getmtime, reverse=True)
+    zip_files = sorted(glob.glob("*.zip"), key=os.path.getmtime, reverse=True)
+    all_files = csv_files + zip_files
+    if not all_files:
+        return "No CSV or ZIP files found.", [], [], []
+    # Gather file info: name, date/time, size
+    file_infos = []
+    for f in all_files:
+        stat = os.stat(f)
+        dt = datetime.datetime.fromtimestamp(stat.st_mtime).strftime('%Y-%m-%d %H:%M:%S')
+        size_kb = stat.st_size / 1024
+        file_infos.append({
+            "name": os.path.basename(f),
+            "path": os.path.abspath(f),
+            "datetime": dt,
+            "size_kb": f"{size_kb:.1f} KB"
+        })
+    # HTML table with columns: Name, Date/Time, Size
+    html_links = '<table><thead><tr><th>File</th><th>Date/Time</th><th>Size</th></tr></thead><tbody>'
+    for info in file_infos:
+        html_links += f'<tr><td><a href="/file={info["path"]}" download target="_blank">{info["name"]}</a></td>' \
+                      f'<td>{info["datetime"]}</td><td>{info["size_kb"]}</td></tr>'
+    html_links += '</tbody></table>'
+    # For gradio File, also return a DataFrame-like list for display
+    gradio_table = [[info["name"], info["datetime"], info["size_kb"]] for info in file_infos]
+    return html_links, all_files, [os.path.abspath(f) for f in all_files], gradio_table
+
+def refresh_csv_files():
+    html_links, csv_files, abs_paths, gradio_table = list_all_csv_files()
+    return html_links, abs_paths, gradio_table
+
 # Update the Gradio interface to include job status checking
 with gr.Blocks(css=custom_css, js="""
 document.addEventListener('DOMContentLoaded', function() {
@@ -1905,6 +1939,11 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             with gr.Row():
                 batch_status_tokens1 = gr.Markdown("")
                 batch_status_tokens2 = gr.Markdown("")
+            
+            # --- CSV Refresh and Download ---
+            refresh_csv_button_batch = gr.Button("Refresh CSV Files")
+            csv_download_html_batch = gr.HTML(label="All CSV Download Links")
+            csv_download_file_batch = gr.File(label="All CSV Files", file_types=[".csv"], interactive=True, file_count="multiple")
         
         with gr.TabItem("App Management"):
             with gr.Row():
@@ -1928,6 +1967,9 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
     
     # Add initialization info display
     init_info = gr.Markdown("")
+    
+    # Add a DataFrame to show CSV file info (name, date/time, size)
+    csv_file_info_df_batch = gr.DataFrame(headers=["File Name", "Date/Time", "Size"], label="CSV File Info", interactive=False)
     
     # Update load_button click to include embedding model
     load_button.click(
@@ -2123,6 +2165,13 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         every=2
     )
 
+    # Add CSV refresh functionality
+    refresh_csv_button_batch.click(
+        fn=refresh_csv_files,
+        inputs=[],
+        outputs=[csv_download_html_batch, csv_download_file_batch, csv_file_info_df_batch]
+    )
+
 def create_csv_from_batch_results(results: List[Dict], job_id: str) -> str:
     """Create a CSV file from batch query results and return the file path"""
     # Create a temporary directory for CSV files if it doesn't exist
@@ -2203,6 +2252,7 @@ def format_batch_result_files(results: List[Dict], job_id: str) -> Tuple[str, st
         formatted_results += "---\n\n"
     
     return formatted_results, csv_path
+
 
 if __name__ == "__main__":
     debug_print("Launching Gradio interface.")
