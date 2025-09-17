@@ -21,6 +21,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.vectorstores import FAISS
 from langchain.embeddings import HuggingFaceEmbeddings  
 from langchain_community.retrievers import BM25Retriever
+from langchain.embeddings.base import Embeddings
 from langchain.retrievers import EnsembleRetriever
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser, Document
@@ -269,6 +270,51 @@ def count_tokens(text: str) -> int:
             return len(text.split())
     return len(text.split())
 
+# Add NebiusEmbedding class for Nebius platform embedding models
+class NebiusEmbedding(Embeddings):
+    """Custom embedding class for Nebius platform models"""
+    
+    def __init__(self, model_name: str, api_key: str = None):
+        super().__init__()
+        self.model_name = model_name
+        self.api_key = api_key or os.environ.get("NEBIUS_API_KEY")
+        
+        if not self.api_key:
+            raise ValueError("Please set the NEBIUS_API_KEY environment variable to use Nebius embedding models.")
+        
+        try:
+            from openai import OpenAI
+            self.client = OpenAI(
+                base_url="https://api.studio.nebius.com/v1/",
+                api_key=self.api_key
+            )
+        except ImportError:
+            raise ImportError("openai package is required for Nebius embedding models.")
+    
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed a list of documents"""
+        try:
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=texts
+            )
+            return [data.embedding for data in response.data]
+        except Exception as e:
+            debug_print(f"Error embedding documents with Nebius: {str(e)}")
+            raise e
+    
+    def embed_query(self, text: str) -> List[float]:
+        """Embed a single query"""
+        try:
+            response = self.client.embeddings.create(
+                model=self.model_name,
+                input=[text]
+            )
+            return response.data[0].embedding
+        except Exception as e:
+            debug_print(f"Error embedding query with Nebius: {str(e)}")
+            raise e
+
 
 # Add these imports at the top of your file
 import uuid
@@ -299,13 +345,11 @@ def process_in_background(job_id, function, args):
         debug_print(error_msg)
         results_queue.put((job_id, (error_msg, None, "", "Input tokens: 0", "Output tokens: 0")))
 
-def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p, top_k, max_tokens_slider):
+def load_pdfs_async(file_links, prompt_template, bm25_weight, embedding_model):
     """Asynchronous version of load_pdfs_updated to prevent timeouts"""
     global last_job_id
     if not file_links:
-        return "Please enter non-empty URLs", "", "Model used: N/A", "", "", get_job_list(), ""
-    global slider_max_tokens 
-    slider_max_tokens = max_tokens_slider      
+        return "Please enter non-empty URLs", "", "Model used: N/A", "", "", get_job_list(), ""      
 
     
     job_id = str(uuid.uuid4())
@@ -314,7 +358,7 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
     # Start background thread
     threading.Thread(
         target=process_in_background,
-        args=(job_id, load_pdfs_updated, [file_links, model_choice, prompt_template, bm25_weight, temperature, top_p, top_k])
+        args=(job_id, load_pdfs_updated, [file_links, prompt_template, bm25_weight, embedding_model])
     ).start()
     
     job_query = f"Loading files: {file_links.split()[0]}..." if file_links else "No files"
@@ -333,7 +377,7 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
         f"Files submitted and processing in the background (Job ID: {job_id}).\n\n"
         f"Use 'Check Job Status' tab with this ID to get results.",
         f"Job ID: {job_id}",
-        f"Model requested: {model_choice}",
+        f"Embedding model: {embedding_model}",
         job_id,  # Return job_id to update the job_id_input component
         job_query,  # Return job_query to update the job_query_display component
         get_job_list(),  # Return updated job list
@@ -343,7 +387,20 @@ def load_pdfs_async(file_links, model_choice, prompt_template, bm25_weight, temp
 def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_p, top_k, bm25_weight, use_history):
     """Submit a query asynchronously"""
     try:
-        # ... existing code ...
+        if not query:
+            return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
+        
+        # Update BM25 weight and recreate ensemble retriever if needed
+        if hasattr(rag_chain, 'bm25_weight') and rag_chain.bm25_weight != bm25_weight:
+            rag_chain.bm25_weight = bm25_weight
+            rag_chain.faiss_weight = 1.0 - bm25_weight
+            rag_chain.ensemble_retriever = EnsembleRetriever(
+                retrievers=[rag_chain.bm25_retriever, rag_chain.faiss_retriever],
+                weights=[rag_chain.bm25_weight, rag_chain.faiss_weight]
+            )
+            debug_print(f"Updated ensemble retriever with BM25 weight: {bm25_weight}")
+        
+        # Clear conversation history if checkbox is unchecked
         if not use_history:
             rag_chain.conversation_history = []
             debug_print("Conversation history cleared")
@@ -726,12 +783,11 @@ def load_file_from_google_drive(link: str) -> list:
                 
 class ElevatedRagChain:
     def __init__(self, llm_choice: str = "Meta-Llama-3", prompt_template: str = default_prompt,
-                 bm25_weight: float = 0.6, temperature: float = 0.5, top_p: float = 0.95, top_k: int = 50) -> None:
+                 bm25_weight: float = 0.6, temperature: float = 0.5, top_p: float = 0.95, top_k: int = 50,
+                 embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2") -> None:
         debug_print(f"Initializing ElevatedRagChain with model: {llm_choice}")
-        self.embed_func = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={"device": "cpu"}
-        )
+        self.embedding_model = embedding_model
+        self.embed_func = self._create_embedding_function(embedding_model)
         self.bm25_weight = bm25_weight
         self.faiss_weight = 1.0 - bm25_weight
         self.top_k = top_k
@@ -744,6 +800,57 @@ class ElevatedRagChain:
         self.raw_data = None
         self.split_data = None
         self.elevated_rag_chain = None
+
+    def _create_embedding_function(self, embedding_model: str):
+        """Create the appropriate embedding function based on the model choice"""
+        debug_print(f"Creating embedding function for: {embedding_model}")
+        
+        # Map display names to actual model names
+        model_mapping = {
+            # sentence-transformers Models (Free)
+            "🤗 sentence-transformers/all-MiniLM-L6-v2 (384 dim, fast)": "sentence-transformers/all-MiniLM-L6-v2",
+            "🤗 sentence-transformers/all-mpnet-base-v2 (768 dim, high-quality)": "sentence-transformers/all-mpnet-base-v2",
+            "🤗 sentence-transformers/all-distilroberta-v1 (768 dim, balanced)": "sentence-transformers/all-distilroberta-v1",
+            "🤗 sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (384 dim, multilingual)": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+            "🤗 sentence-transformers/paraphrase-multilingual-mpnet-base-v2 (768 dim, multilingual)": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+            
+            # HuggingFace Models (Free)
+            "🤗 BAAI/bge-small-en-v1.5 (384 dim, efficient)": "BAAI/bge-small-en-v1.5",
+            "🤗 BAAI/bge-base-en-v1.5 (768 dim, excellent)": "BAAI/bge-base-en-v1.5",
+            "🤗 BAAI/bge-large-en-v1.5 (1024 dim, powerful)": "BAAI/bge-large-en-v1.5",
+            "🤗 intfloat/e5-base-v2 (768 dim, general-purpose)": "intfloat/e5-base-v2",
+            "🤗 intfloat/e5-large-v2 (1024 dim, advanced)": "intfloat/e5-large-v2",
+            
+            # Nebius Models (Cost)
+            "🟦 Qwen/Qwen3-Embedding-8B (1024 dim, advanced)": "Qwen/Qwen3-Embedding-8B",
+            "🟦 BAAI/bge-en-icl (1024 dim, instruction-tuned)": "BAAI/bge-en-icl",
+            "🟦 BAAI/bge-multilingual-gemma2 (1024 dim, multilingual)": "BAAI/bge-multilingual-gemma2"
+        }
+        
+        # Get the actual model name
+        actual_model = model_mapping.get(embedding_model, embedding_model)
+        
+        # Check if it's a Nebius model
+        if any(nebius_model in actual_model for nebius_model in [
+            "Qwen/Qwen3-Embedding-8B",
+            "BAAI/bge-en-icl", 
+            "BAAI/bge-multilingual-gemma2"
+        ]):
+            try:
+                return NebiusEmbedding(model_name=actual_model)
+            except Exception as e:
+                debug_print(f"Failed to create Nebius embedding: {e}")
+                debug_print("Falling back to default HuggingFace embedding")
+                return HuggingFaceEmbeddings(
+                    model_name="sentence-transformers/all-MiniLM-L6-v2",
+                    model_kwargs={"device": "cpu"}
+                )
+        else:
+            # Default to HuggingFace embeddings for all other models
+            return HuggingFaceEmbeddings(
+                model_name=actual_model,
+                model_kwargs={"device": "cpu"}
+            )
 
     # Instance method to capture context and conversation history
     def capture_context(self, result):
@@ -761,11 +868,10 @@ class ElevatedRagChain:
         return input_data["question"]
 
     # Improve error handling in the ElevatedRagChain class
-    def create_llm_pipeline(self):
+    def create_llm_pipeline(self, max_tokens_override=None):
         from langchain.llms.base import LLM  # Import LLM here so it's always defined
         from typing import Optional, List, Any
         from pydantic import PrivateAttr
-        global slider_max_tokens
         
         # Extract the model name without the flag emoji prefix
         clean_llm_choice = self.llm_choice.split(" ", 1)[-1] if " " in self.llm_choice else self.llm_choice
@@ -818,7 +924,8 @@ class ElevatedRagChain:
             raise ValueError(f"Unsupported model: {normalized}")
         model = model_map[model_key]   
         max_tokens = model_token_limits.get(model, 4096)
-        max_tokens = min(slider_max_tokens, max_tokens)                 
+        if max_tokens_override is not None:
+            max_tokens = min(max_tokens_override, max_tokens)                 
         pricing_info = model_pricing.get(model_key, {"USD": {"input": 0.00, "output": 0.00}, "RON": {"input": 0.00, "output": 0.00}})
         
         try:
@@ -1145,7 +1252,7 @@ class ElevatedRagChain:
 global rag_chain
 rag_chain = ElevatedRagChain()
 
-def load_pdfs_updated(file_links, model_choice, prompt_template, bm25_weight, temperature, top_p, top_k):
+def load_pdfs_updated(file_links, prompt_template, bm25_weight, embedding_model):
     debug_print("Inside load_pdfs function.")
     if not file_links:
         debug_print("Please enter non-empty URLs")
@@ -1154,31 +1261,35 @@ def load_pdfs_updated(file_links, model_choice, prompt_template, bm25_weight, te
         links = [link.strip() for link in file_links.split("\n") if link.strip()]
         global rag_chain
         if rag_chain.raw_data:
-            rag_chain.update_llm_pipeline(model_choice, temperature, top_p, top_k, prompt_template, bm25_weight)
+            # Files already loaded, just update parameters
+            rag_chain.prompt_template = prompt_template
+            rag_chain.bm25_weight = bm25_weight
+            rag_chain.faiss_weight = 1.0 - bm25_weight
             context_display = rag_chain.get_current_context()
-            response_msg = f"Files already loaded. Chain updated with model: {model_choice}"
+            response_msg = f"Files already loaded. Parameters updated."
             return (
                 response_msg,
                 f"Word count: {word_count(rag_chain.context)}",
-                f"Model used: {rag_chain.llm_choice}",
+                f"Embedding model: {rag_chain.embedding_model}",
                 f"Context:\n{context_display}"
             )
         else:
             rag_chain = ElevatedRagChain(
-                llm_choice=model_choice,
+                llm_choice="Mistral-API",  # Default LLM choice
                 prompt_template=prompt_template,
                 bm25_weight=bm25_weight,
-                temperature=temperature,
-                top_p=top_p,
-                top_k=top_k
+                temperature=0.5,  # Default values
+                top_p=0.95,
+                top_k=50,
+                embedding_model=embedding_model
             )
             rag_chain.add_pdfs_to_vectore_store(links)
             context_display = rag_chain.get_current_context()
-            response_msg = f"Files loaded successfully. Using model: {model_choice}"
+            response_msg = f"Files loaded successfully. Using embedding model: {embedding_model}"
             return (
                 response_msg,
                 f"Word count: {word_count(rag_chain.context)}",
-                f"Model used: {rag_chain.llm_choice}",
+                f"Embedding model: {rag_chain.embedding_model}",
                 f"Context:\n{context_display}"
             )
     except Exception as e:
@@ -1208,6 +1319,16 @@ def submit_query_updated(query, temperature, top_p, top_k, bm25_weight, use_hist
     try:
         if not query:
             return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
+        
+        # Update BM25 weight and recreate ensemble retriever if needed
+        if hasattr(rag_chain, 'bm25_weight') and rag_chain.bm25_weight != bm25_weight:
+            rag_chain.bm25_weight = bm25_weight
+            rag_chain.faiss_weight = 1.0 - bm25_weight
+            rag_chain.ensemble_retriever = EnsembleRetriever(
+                retrievers=[rag_chain.bm25_retriever, rag_chain.faiss_retriever],
+                weights=[rag_chain.bm25_weight, rag_chain.faiss_weight]
+            )
+            debug_print(f"Updated ensemble retriever with BM25 weight: {bm25_weight}")
         
         # Clear conversation history if checkbox is unchecked
         if not use_history:
@@ -1388,7 +1509,13 @@ document.addEventListener('DOMContentLoaded', function() {
     gr.Markdown('''# PhiRAG - Async Version  
 **PhiRAG** Query Your Data with Advanced RAG Techniques
 
-**Model Selection & Parameters:** Choose from the following options:
+**Embedding Models:** Choose from the following options:
+- 🤗 **HuggingFace Models (Free)**: sentence-transformers, BAAI, intfloat models
+- 🟦 **Nebius Models (Cost)**: Qwen, BAAI models via Nebius platform
+- **Dimensions**: 384 (fast), 768 (balanced), 1024 (powerful)
+- **Languages**: English-focused and multilingual options available
+
+**LLM Models:** Choose from the following options in the Query tabs:
 - 🇺🇸 Remote Meta-Llama-3 - has context windows of 8000 tokens
 - 🇪🇺 Mistral-API - has context windows of 32000 tokens
 
@@ -1412,50 +1539,48 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
 **⚠️ IMPORTANT: This app now uses asynchronous processing to avoid timeout issues**
 - When you load files or submit a query, you'll receive a Job ID
 - Use the "Check Job Status" tab to monitor and retrieve your results
+
+**🔑 API Keys Required:**
+- For Nebius embedding models: Set the NEBIUS_API_KEY environment variable
+- For OpenAI models: Set the OPENAI_API_KEY environment variable
+- For Mistral models: Set the MISTRAL_API_KEY environment variable
+- For HuggingFace models: Set the HF_API_TOKEN environment variable
 ''')
 
     with gr.Tabs() as tabs:
         with gr.TabItem("Setup & Load Files"):
             with gr.Row():
-                with gr.Column():
-                    model_dropdown = gr.Dropdown(
-                        choices=[
-                            "🇺🇸 GPT-3.5",
-                            "🇺🇸 GPT-4o",
-                            "🇺🇸 GPT-4o mini",
-                            "🇺🇸 o1-mini", 
-                            "🇺🇸 o3-mini",
-                            "🇺🇸 Remote Meta-Llama-3", 
-                            "🇪🇺 Mistral-API",
-                        ],
-                        value="🇪🇺 Mistral-API",
-                        label="Select Model"
-                    )
-                    temperature_slider = gr.Slider(
-                        minimum=0.1, maximum=1.0, value=0.5, step=0.1,
-                        label="Randomness (Temperature)"
-                    )
-                    top_p_slider = gr.Slider(
-                        minimum=0.1, maximum=0.99, value=0.95, step=0.05,
-                        label="Word Variety (Top-p)"
-                    )
-                    top_k_slider = gr.Slider(
-                        minimum=1, maximum=100, value=50, step=1,
-                        label="Token Selection (Top-k)"
-                    )
-                with gr.Column():
+                with gr.Column(scale=2):  # Expanded to take more space
                     pdf_input = gr.Textbox(
                         label="Enter your file URLs (one per line)",
                         placeholder="Enter one URL per line (.pdf or .txt)",
                         lines=4
                     )
-                    prompt_input = gr.Textbox(
-                        label="Custom Prompt Template",
-                        placeholder="Enter your custom prompt template here",
-                        lines=8,
-                        value=default_prompt
+                with gr.Column(scale=1):  # Smaller column for controls
+                    embedding_dropdown = gr.Dropdown(
+                        choices=[
+                            # sentence-transformers Models (Free)
+                            "🤗 sentence-transformers/all-MiniLM-L6-v2 (384 dim, fast)",
+                            "🤗 sentence-transformers/all-mpnet-base-v2 (768 dim, high-quality)",
+                            "🤗 sentence-transformers/all-distilroberta-v1 (768 dim, balanced)",
+                            "🤗 sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (384 dim, multilingual)",
+                            "🤗 sentence-transformers/paraphrase-multilingual-mpnet-base-v2 (768 dim, multilingual)",
+                            
+                            # HuggingFace Models (Free)
+                            "🤗 BAAI/bge-small-en-v1.5 (384 dim, efficient)",
+                            "🤗 BAAI/bge-base-en-v1.5 (768 dim, excellent)",
+                            "🤗 BAAI/bge-large-en-v1.5 (1024 dim, powerful)",
+                            "🤗 intfloat/e5-base-v2 (768 dim, general-purpose)",
+                            "🤗 intfloat/e5-large-v2 (1024 dim, advanced)",
+                            
+                            # Nebius Models (Cost)
+                            "🟦 Qwen/Qwen3-Embedding-8B (1024 dim, advanced)",
+                            "🟦 BAAI/bge-en-icl (1024 dim, instruction-tuned)",
+                            "🟦 BAAI/bge-multilingual-gemma2 (1024 dim, multilingual)",
+                        ],
+                        value="🤗 sentence-transformers/all-MiniLM-L6-v2 (384 dim, fast)",
+                        label="Select Embedding Model (🤗 = HuggingFace free, 🟦 = Nebius cost)"
                     )
-                with gr.Column():
                     bm25_weight_slider = gr.Slider(
                         minimum=0.0, maximum=1.0, value=0.6, step=0.1,
                         label="Lexical vs Semantics (BM25 Weight)"
@@ -1477,6 +1602,56 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
             
             with gr.Row():
                 model_output = gr.Markdown("**Current Model**: Not selected")
+            
+            # Job Status Section for Setup & Load
+            with gr.Row():
+                with gr.Column(scale=1):
+                    setup_job_list = gr.Markdown(
+                        value="No jobs yet",
+                        label="Job List (Click to select)"
+                    )
+                    setup_refresh_button = gr.Button("Refresh Job List")
+                    setup_auto_refresh_checkbox = gr.Checkbox(
+                        label="Enable Auto Refresh",
+                        value=False
+                    )
+                    setup_df = gr.DataFrame(
+                        value=[],  # Empty initial value
+                        headers=["Number", "Square"],
+                        label="Query Results",
+                        visible=False
+                    )
+                
+                with gr.Column(scale=2):
+                    setup_job_id_input = gr.Textbox(
+                        label="Job ID",
+                        placeholder="Job ID will appear here when selected from the list",
+                        lines=1
+                    )
+                    setup_job_query_display = gr.Textbox(
+                        label="Job Query",
+                        placeholder="The query associated with this job will appear here",
+                        lines=2,
+                        interactive=False
+                    )
+                    setup_check_button = gr.Button("Check Status")
+                    setup_cleanup_button = gr.Button("Cleanup Old Jobs")
+            
+            with gr.Row():
+                setup_status_response = gr.Textbox(
+                    label="Job Result",
+                    placeholder="Job result will appear here",
+                    lines=6
+                )
+                setup_status_context = gr.Textbox(
+                    label="Context Information",
+                    placeholder="Context information will appear here",
+                    lines=6
+                )
+            
+            with gr.Row():
+                setup_status_tokens1 = gr.Markdown("")
+                setup_status_tokens2 = gr.Markdown("")
         
         with gr.TabItem("Submit Query", elem_classes=["query-tab"]):
             with gr.Row():
@@ -1754,11 +1929,18 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
     # Add initialization info display
     init_info = gr.Markdown("")
     
-    # Update load_button click to include top_k
+    # Update load_button click to include embedding model
     load_button.click(
-        load_pdfs_async, 
-        inputs=[pdf_input, model_dropdown, prompt_input, bm25_weight_slider, temperature_slider, top_p_slider, top_k_slider, max_tokens_slider],
-        outputs=[load_response, load_context, model_output, job_id_input, job_query_display, job_list, init_info]
+        lambda file_links, bm25_weight, embedding_model: load_pdfs_async(file_links, default_prompt, bm25_weight, embedding_model),
+        inputs=[pdf_input, bm25_weight_slider, embedding_dropdown],
+        outputs=[load_response, load_context, model_output, setup_job_id_input, setup_job_query_display, setup_job_list, init_info]
+    )
+
+    # Also update Setup & Load job list when files are loaded
+    load_button.click(
+        fn=lambda *args: get_job_list(),
+        inputs=[],
+        outputs=[setup_job_list]
     )
 
     # Add function to sync job IDs between tabs
@@ -1785,30 +1967,14 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         outputs=[query_response, query_context, input_tokens, output_tokens, job_id_input, job_query_display, job_list]
     )
 
-    # Add function to sync all parameters
-    def sync_parameters(temperature, top_p, top_k, bm25_weight):
-        return temperature, top_p, top_k, bm25_weight
+    # Sync BM25 weight between Setup & Load and Query tabs
+    def sync_bm25_weight(bm25_weight):
+        return bm25_weight
 
-    # Sync parameters between tabs
-    temperature_slider.change(
-        fn=sync_parameters,
-        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
-        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
-    )
-    top_p_slider.change(
-        fn=sync_parameters,
-        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
-        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
-    )
-    top_k_slider.change(
-        fn=sync_parameters,
-        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
-        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
-    )
     bm25_weight_slider.change(
-        fn=sync_parameters,
-        inputs=[temperature_slider, top_p_slider, top_k_slider, bm25_weight_slider],
-        outputs=[query_temperature_slider, query_top_p_slider, query_top_k_slider, query_bm25_weight_slider]
+        fn=sync_bm25_weight,
+        inputs=[bm25_weight_slider],
+        outputs=[query_bm25_weight_slider]
     )
 
     # Connect the buttons to their respective functions
@@ -1844,17 +2010,44 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         outputs=[reset_response, reset_context, reset_model]
     )
 
-    model_dropdown.change(
-        fn=sync_model_dropdown,
-        inputs=model_dropdown,
-        outputs=query_model_dropdown
-    )
 
     # Add an event to refresh the job list on page load
     app.load(
         fn=refresh_job_list,
         inputs=None,
         outputs=job_list
+    )
+
+    # Setup & Load Job Status Event Handlers
+    setup_check_button.click(
+        check_job_status,
+        inputs=[setup_job_id_input],
+        outputs=[setup_status_response, setup_status_context, setup_status_tokens1, setup_status_tokens2, setup_job_query_display]
+    )
+
+    setup_refresh_button.click(
+        refresh_job_list,
+        inputs=[],
+        outputs=[setup_job_list]
+    )
+
+    setup_job_id_input.change(
+        job_selected,
+        inputs=[setup_job_id_input],
+        outputs=[setup_job_id_input, setup_job_query_display]
+    )
+
+    setup_cleanup_button.click(
+        cleanup_old_jobs,
+        inputs=[],
+        outputs=[setup_status_response, setup_status_context, setup_status_tokens1]
+    )
+
+    setup_auto_refresh_checkbox.change(
+        fn=periodic_update,
+        inputs=[setup_auto_refresh_checkbox],
+        outputs=[setup_job_list, setup_status_response, setup_df, setup_status_context],
+        every=2
     )
 
     # Use the Checkbox to control the periodic updates
