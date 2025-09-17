@@ -2174,14 +2174,11 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
 
 def create_csv_from_batch_results(results: List[Dict], job_id: str) -> str:
     """Create a CSV file from batch query results and return the file path"""
-    # Create a temporary directory for CSV files if it doesn't exist
-    csv_dir = os.path.join(tempfile.gettempdir(), "rag_batch_results")
-    os.makedirs(csv_dir, exist_ok=True)
-    
+    # Save CSV files in the current directory for HuggingFace Spaces compatibility
     # Create a unique filename using job_id and timestamp
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     csv_filename = f"batch_results_{job_id}_{timestamp}.csv"
-    csv_path = os.path.join(csv_dir, csv_filename)
+    csv_path = os.path.abspath(csv_filename)
     
     # Extract parameters and responses
     data = []
@@ -2256,4 +2253,4 @@ def format_batch_result_files(results: List[Dict], job_id: str) -> Tuple[str, st
 
 if __name__ == "__main__":
     debug_print("Launching Gradio interface.")
-    app.queue().launch(share=False, allowed_paths=[os.path.join(tempfile.gettempdir(), "rag_batch_results")])
+    app.queue().launch(share=False, allowed_paths=[os.getcwd()])
