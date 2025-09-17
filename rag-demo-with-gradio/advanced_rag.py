@@ -105,8 +105,13 @@ def process_batch_query(query, model_choice, max_tokens, param_configs, slider_v
                             "Progress": f"Query {current}/{total_combinations}"
                         })
     
-    # Format results with CSV file links
-    formatted_results, csv_path = format_batch_result_files(results, job_id)
+    # Format results with CSV file links - UPDATED TO PASS ADDITIONAL PARAMETERS
+    formatted_results, csv_path = format_batch_result_files(
+        results, job_id, 
+        embedding_model=getattr(rag_chain, 'embedding_model', 'unknown'),
+        llm_model=model_choice,
+        param_variations=param_configs
+    )
     
     return (
         formatted_results,
@@ -2226,12 +2231,51 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
         outputs=[csv_download_html_batch, csv_download_file_batch, csv_file_info_df_batch]
     )
 
-def create_csv_from_batch_results(results: List[Dict], job_id: str) -> str:
+def create_csv_from_batch_results(results: List[Dict], job_id: str, 
+                                embedding_model: str = None, llm_model: str = None, 
+                                param_variations: Dict = None) -> str:
     """Create a CSV file from batch query results and return the file path"""
     # Save CSV files in the current directory for HuggingFace Spaces compatibility
-    # Create a unique filename using job_id and timestamp
+    
+    # Create a descriptive filename
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    csv_filename = f"batch_results_{job_id}_{timestamp}.csv"
+    
+    # Extract short names for filename
+    def get_short_name(full_name, prefix_length=2):
+        """Extract short name from full model name"""
+        if not full_name:
+            return "unknown"
+        # Remove emojis and get the actual model name
+        clean_name = full_name.split(" ", 1)[-1] if " " in full_name else full_name
+        # Get first few characters and last few characters
+        if len(clean_name) > 8:
+            return clean_name[:4] + clean_name[-4:]
+        return clean_name
+    
+    def get_param_variation_name(param_configs):
+        """Get the parameter that was varied"""
+        if not param_configs:
+            return "const"
+        
+        varied_params = []
+        for param, config in param_configs.items():
+            if config != "Constant":
+                # Extract the number from "Whole range X values"
+                if "values" in config:
+                    num_values = config.split()[2] if len(config.split()) > 2 else "X"
+                    varied_params.append(f"{param}_{num_values}")
+        
+        if not varied_params:
+            return "const"
+        return "_".join(varied_params)
+    
+    # Build filename components
+    embedding_short = get_short_name(embedding_model) if embedding_model else "emb"
+    llm_short = get_short_name(llm_model) if llm_model else "llm"
+    param_short = get_param_variation_name(param_variations) if param_variations else "const"
+    
+    # Create filename: batch_embedding_llm_params_timestamp.csv
+    csv_filename = f"batch_{embedding_short}_{llm_short}_{param_short}_{timestamp}.csv"
     csv_path = os.path.abspath(csv_filename)
     
     # Extract parameters and responses
@@ -2287,10 +2331,12 @@ def create_csv_from_batch_results(results: List[Dict], job_id: str) -> str:
     
     return csv_path
 
-def format_batch_result_files(results: List[Dict], job_id: str) -> Tuple[str, str]:
+def format_batch_result_files(results: List[Dict], job_id: str, 
+                            embedding_model: str = None, llm_model: str = None, 
+                            param_variations: Dict = None) -> Tuple[str, str]:
     """Format batch results with links to CSV files"""
-    # Create CSV file
-    csv_path = create_csv_from_batch_results(results, job_id)
+    # Create CSV file with improved filename
+    csv_path = create_csv_from_batch_results(results, job_id, embedding_model, llm_model, param_variations)
     
     # Format the results
     formatted_results = "### Batch Query Results\n\n"
