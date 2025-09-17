@@ -4,6 +4,7 @@ import datetime
 import functools
 import traceback
 from typing import List, Optional, Any, Dict, Tuple
+from pydantic import Field
 import csv
 import pandas as pd
 import tempfile
@@ -42,6 +43,123 @@ from langchain_community.document_loaders import PyMuPDFLoader  # Updated loader
 import tempfile
 import mimetypes
 
+# Add OpenAI import for NEBIUS with version check
+try:
+    import openai
+    from importlib.metadata import version as pkg_version
+    openai_version = pkg_version("openai")
+    print(f"OpenAI import success, version: {openai_version}")
+    if tuple(map(int, openai_version.split("."))) < (1, 0, 0):
+        print("ERROR: openai version must be >= 1.0.0 for NEBIUS support. Please upgrade with: pip install --upgrade openai")
+        sys.exit(1)
+    from openai import OpenAI
+    OPENAI_AVAILABLE = True
+except ImportError as e:
+    OPENAI_AVAILABLE = False
+    print("OpenAI import failed:", e)
+except Exception as e:
+    print("OpenAI version check failed:", e)
+    OPENAI_AVAILABLE = False
+
+# API Key Configuration
+NEBIUS_API_KEY = os.environ.get("NEBIUS_API_KEY", "")
+
+# Define NebiusLLM class at module level to avoid pickle issues
+class NebiusLLM(LLM):
+    """Nebius LLM wrapper with proper response validation."""
+    
+    model: str = Field(..., description="The model name to use")
+    api_key: str = Field(..., description="API key for Nebius")
+    base_url: str = "https://api.studio.nebius.com/v1"
+    max_tokens: int = 2048
+    temperature: float = 0.7
+    top_p: float = 0.95
+    top_k: int = 50
+    
+    def __init__(self, **data):
+        super().__init__(**data)
+        if not self.model:
+            raise ValueError("Model name cannot be empty")
+    
+    @property
+    def _llm_type(self) -> str:
+        return "nebius"
+    
+    def _call(
+        self,
+        prompt: str,
+        stop: Optional[List[str]] = None,
+        run_manager: Optional[Any] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Call the Nebius API and return the response."""
+        
+        try:
+            from openai import OpenAI
+            
+            debug_print(f"Nebius API call: model={self.model}, max_tokens={self.max_tokens}")
+            
+            # Create OpenAI client with Nebius base URL
+            client = OpenAI(base_url=self.base_url, api_key=self.api_key)
+            
+            completion = client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                temperature=self.temperature,
+                top_p=self.top_p,
+                max_tokens=self.max_tokens
+            )
+            
+            # Extract the text content with proper validation
+            if completion.choices and len(completion.choices) > 0:
+                choice = completion.choices[0]
+                
+                # Handle different response formats
+                if hasattr(choice.message, 'content') and choice.message.content:
+                    text = choice.message.content
+                elif hasattr(choice, 'text'):
+                    text = choice.text
+                else:
+                    debug_print(f"WARNING: Unexpected response format: {choice}")
+                    text = str(choice.message) if hasattr(choice, 'message') else str(choice)
+                
+                # Validate that we got actual text
+                if text is None:
+                    debug_print(f"WARNING: Received None text from API response")
+                    return "I apologize, but I received an empty response. Please try rephrasing your question."
+                
+                if not isinstance(text, str):
+                    text = str(text)
+                
+                if not text.strip():
+                    debug_print(f"WARNING: Received empty text from API")
+                    return "I apologize, but I received an empty response. Please try rephrasing your question."
+                
+                return text.strip()
+            else:
+                debug_print(f"WARNING: No choices in API response")
+                return "I apologize, but I didn't receive a valid response. Please try again."
+                
+        except ImportError:
+            error_msg = "OpenAI package is required for Nebius models. Please install it with: pip install openai"
+            debug_print(error_msg)
+            return error_msg
+        except Exception as e:
+            error_msg = f"Error calling Nebius API: {str(e)}"
+            debug_print(error_msg)
+            return f"API error: {str(e)}"
+
+    @property
+    def _identifying_params(self) -> Dict[str, Any]:
+        """Return identifying parameters."""
+        return {
+            "model": self.model,
+            "temperature": self.temperature,
+            "top_p": self.top_p,
+            "top_k": self.top_k,
+            "max_tokens": self.max_tokens,
+        }
+
 # Add batch processing helper functions
 def generate_parameter_values(min_val, max_val, num_values):
     """Generate evenly spaced values between min and max"""
@@ -53,6 +171,11 @@ def generate_parameter_values(min_val, max_val, num_values):
 def process_batch_query(query, model_choice, max_tokens, param_configs, slider_values, job_id, use_history=True):
     """Process a batch of queries with different parameter combinations"""
     results = []
+    
+    # Update model if it has changed
+    if hasattr(rag_chain, 'llm_choice') and rag_chain.llm_choice != model_choice:
+        rag_chain.update_llm_pipeline(model_choice, rag_chain.temperature, rag_chain.top_p, rag_chain.top_k, rag_chain.prompt_template, rag_chain.bm25_weight, rag_chain.max_tokens)
+        debug_print(f"Model updated to {model_choice}")
     
     # Generate all parameter combinations
     temp_values = [slider_values['temperature']] if param_configs['temperature'] == "Constant" else generate_parameter_values(0.1, 1.0, int(param_configs['temperature'].split()[2]))
@@ -174,10 +297,10 @@ def submit_batch_query_async(query, model_choice, max_tokens, temp_config, top_p
                            temp_slider, top_p_slider, top_k_slider, bm25_slider, use_history):
     """Handle batch query submission with async processing"""
     if not query:
-        return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+        return "Please enter a non-empty query", None, "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
     
     if not hasattr(rag_chain, 'elevated_rag_chain') or not rag_chain.raw_data:
-        return "Please load files first.", "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
+        return "Please load files first.", None, "", "Input tokens: 0", "Output tokens: 0", "", "", get_job_list()
     
     # Get slider values
     slider_values = {
@@ -394,6 +517,11 @@ def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_
     try:
         if not query:
             return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
+        
+        # Update model if it has changed
+        if hasattr(rag_chain, 'llm_choice') and rag_chain.llm_choice != model_choice:
+            rag_chain.update_llm_pipeline(model_choice, temperature, top_p, top_k, rag_chain.prompt_template, bm25_weight, max_tokens_slider)
+            debug_print(f"Model updated to {model_choice}")
         
         # Update BM25 weight and recreate ensemble retriever if needed
         if hasattr(rag_chain, 'bm25_weight') and rag_chain.bm25_weight != bm25_weight:
@@ -790,7 +918,7 @@ def load_file_from_google_drive(link: str) -> list:
 class ElevatedRagChain:
     def __init__(self, llm_choice: str = "Meta-Llama-3", prompt_template: str = default_prompt,
                  bm25_weight: float = 0.6, temperature: float = 0.5, top_p: float = 0.95, top_k: int = 50,
-                 embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2") -> None:
+                 embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2", max_tokens: int = 3000) -> None:
         debug_print(f"Initializing ElevatedRagChain with model: {llm_choice}")
         self.embedding_model = embedding_model
         self.embed_func = self._create_embedding_function(embedding_model)
@@ -800,6 +928,7 @@ class ElevatedRagChain:
         self.llm_choice = llm_choice
         self.temperature = temperature
         self.top_p = top_p
+        self.max_tokens = max_tokens
         self.prompt_template = prompt_template
         self.context = ""
         self.conversation_history: List[Dict[str, str]] = []
@@ -874,12 +1003,185 @@ class ElevatedRagChain:
         return input_data["question"]
 
     # Improve error handling in the ElevatedRagChain class
+    def calculate_safe_max_tokens(self, backend_model, prompt_text="", max_tokens_override=None):
+        """Calculate safe max_tokens based on model context limits and input length."""
+        
+        # Model context limits (total tokens including input + output) - from Nebius documentation
+        nebius_context_limits = {
+            "openai/gpt-oss-120b": 131000,
+            "openai/gpt-oss-20b": 131000,
+            "google/gemma-3-27b-it": 131000,
+            "deepseek-ai/DeepSeek-R1-0528": 164000,
+            "deepseek-ai/DeepSeek-V3": 128000,
+            "llama-3.1-70b-instruct": 128000,
+            "Meta-Llama-3.1-405B-Instruct": 128000,
+            "Qwen/Qwen3-235B-A22B": 262000,
+            "Qwen/Qwen3-32B": 41000,           # Correct limit: 41K context
+            "NousResearch/Hermes-4-405B": 128000,
+            "zai-org/GLM-4.5-Air": 128000
+        }
+        
+        context_limit = nebius_context_limits.get(backend_model, 32768)
+        
+        # Better token estimation
+        def estimate_tokens(text):
+            """Rough token estimation: 1 token ≈ 3.5-4 characters for most models."""
+            if not text:
+                return 0
+            # More conservative estimate
+            return int(len(str(text)) / 3.5)
+        
+        # Estimate input tokens from various sources
+        input_tokens = 0
+        
+        # Add tokens from retrieved documents
+        if hasattr(self, 'retrieved_docs') and self.retrieved_docs:
+            docs_text = ' '.join([doc.page_content for doc in self.retrieved_docs])
+            input_tokens += estimate_tokens(docs_text)
+        
+        # Add tokens from prompt/query
+        input_tokens += estimate_tokens(prompt_text)
+        
+        # Add tokens from system prompts and formatting (rough estimate)
+        input_tokens += 500  # Buffer for system messages, formatting, etc.
+        
+        # Calculate safe max_tokens
+        available_tokens = context_limit - input_tokens
+        
+        # Apply user override if provided, but cap it at available tokens
+        if max_tokens_override:
+            requested_tokens = min(max_tokens_override, available_tokens - 100)  # 100 token safety buffer
+        else:
+            # Default to 25% of available tokens, capped at reasonable limits
+            requested_tokens = min(
+                int(available_tokens * 0.25),  # 25% of available space
+                8192  # Reasonable upper limit for generation
+            )
+        
+        # Ensure minimum viable response length
+        safe_max_tokens = max(512, requested_tokens)
+        
+        debug_print(f"Token calculation for {backend_model}:")
+        debug_print(f"  Context limit: {context_limit}")
+        debug_print(f"  Estimated input tokens: {input_tokens}")
+        debug_print(f"  Available tokens: {available_tokens}")
+        debug_print(f"  Safe max_tokens: {safe_max_tokens}")
+        
+        if safe_max_tokens <= 512:
+            raise ValueError(f"Input too long for model {backend_model}. Input: {input_tokens} tokens, Context limit: {context_limit}")
+        
+        return safe_max_tokens
+
     def create_llm_pipeline(self, max_tokens_override=None):
         from langchain.llms.base import LLM  # Import LLM here so it's always defined
-        from typing import Optional, List, Any
+        from typing import Optional, List, Any, Dict
         from pydantic import PrivateAttr
         
-        # Extract the model name without the flag emoji prefix
+        # Check for Nebius models FIRST (before any normalization)
+        debug_print(f"Checking for Nebius model: {self.llm_choice}")
+        print(f"DEBUG: Checking for Nebius model: {self.llm_choice}")
+        if self.llm_choice in ["🟦 GPT OSS 120b (Nebius)", "🟦 GPT OSS 20b (Nebius)", "🟦 Google Gemma 3 27b-Instruct (Nebius)",
+                              "🟦 DeepSeek-R1-0528 (Nebius)", "🟦 DeepSeek-V3 (Nebius)", "🟦 Meta-Llama-3.1-70B-Instruct (Nebius)",
+                              "🟦 Meta-Llama-3.1-405B-Instruct (Nebius)", "🟦 Qwen3-235B-A22B (Nebius)", "🟦 Qwen3-32B (Nebius)",
+                              "🟦 Hermes 4 405B (Nebius)", "🟦 GLM-4.5 AIR (Nebius)"]:
+            debug_print(f"Found Nebius model: {self.llm_choice}")
+            print(f"DEBUG: Found Nebius model: {self.llm_choice}")
+            
+            if not OPENAI_AVAILABLE:
+                raise ImportError("openai package is required for NEBIUS models.")
+            
+            # Map display names to backend names
+            nebius_model_mapping = {
+                "🟦 GPT OSS 120b (Nebius)": "openai/gpt-oss-120b",
+                "🟦 GPT OSS 20b (Nebius)": "openai/gpt-oss-20b",
+                "🟦 Google Gemma 3 27b-Instruct (Nebius)": "google/gemma-3-27b-it",
+                "🟦 DeepSeek-R1-0528 (Nebius)": "deepseek-ai/DeepSeek-R1-0528",
+                "🟦 DeepSeek-V3 (Nebius)": "deepseek-ai/DeepSeek-V3",
+                "🟦 Meta-Llama-3.1-70B-Instruct (Nebius)": "llama-3.1-70b-instruct",
+                "🟦 Meta-Llama-3.1-405B-Instruct (Nebius)": "Meta-Llama-3.1-405B-Instruct",
+                "🟦 Qwen3-235B-A22B (Nebius)": "Qwen/Qwen3-235B-A22B",
+                "🟦 Qwen3-32B (Nebius)": "Qwen/Qwen3-32B",
+                "🟦 Hermes 4 405B (Nebius)": "NousResearch/Hermes-4-405B",
+                "🟦 GLM-4.5 AIR (Nebius)": "zai-org/GLM-4.5-Air"
+            }
+            
+            # Set appropriate token limits for Nebius models
+            # These are MAXIMUM GENERATION tokens, not total context length
+            nebius_token_limits = {
+                "openai/gpt-oss-120b": 8192,      # Conservative limit
+                "openai/gpt-oss-20b": 8192,       # Conservative limit
+                "google/gemma-3-27b-it": 4096,    # Conservative for 8K context
+                "deepseek-ai/DeepSeek-R1-0528": 8192,
+                "deepseek-ai/DeepSeek-V3": 16384,
+                "meta-llama/Meta-Llama-3.1-70B-Instruct": 32768,
+                "meta-llama/Meta-Llama-3.1-405B-Instruct": 32768,
+                "Qwen/Qwen3-235B-A22B": 8192,
+                "Qwen/Qwen3-32B": 8192,           # Reduced from 32768 - model has 40K total context
+                "NousResearch/Hermes-4-405B": 32768,
+                "zai-org/GLM-4.5-Air": 16384
+            }
+            
+            # Model context limits (total tokens including input + output) - from Nebius documentation
+            nebius_context_limits = {
+                "openai/gpt-oss-120b": 131000,
+                "openai/gpt-oss-20b": 131000,
+                "google/gemma-3-27b-it": 131000,
+                "deepseek-ai/DeepSeek-R1-0528": 164000,
+                "deepseek-ai/DeepSeek-V3": 128000,
+                "meta-llama/Meta-Llama-3.1-70B-Instruct": 128000,
+                "meta-llama/Meta-Llama-3.1-405B-Instruct": 128000,
+                "Qwen/Qwen3-235B-A22B": 262000,
+                "Qwen/Qwen3-32B": 41000,           # Correct limit: 41K context
+                "NousResearch/Hermes-4-405B": 128000,
+                "zai-org/GLM-4.5-Air": 128000
+            }
+            
+            backend_model = nebius_model_mapping[self.llm_choice]
+            
+            # Calculate safe max_tokens based on context limit
+            context_limit = nebius_context_limits.get(backend_model, 32768)
+            
+            # Calculate safe max_tokens dynamically
+            try:
+                # Get current prompt if available
+                current_prompt = getattr(self, 'current_query', '')
+                max_tokens = self.calculate_safe_max_tokens(
+                    backend_model, 
+                    current_prompt, 
+                    max_tokens_override
+                )
+            except ValueError as e:
+                debug_print(f"Token calculation error: {str(e)}")
+                # Fallback to model-specific token limits
+                max_tokens = nebius_token_limits.get(backend_model, 2048)
+            
+            debug_print(f"Creating Nebius LLM for model: {backend_model} with max_tokens: {max_tokens}")
+            print(f"DEBUG: Creating Nebius LLM for model: {backend_model} with max_tokens: {max_tokens}")
+            
+            
+            try:
+                api_key = NEBIUS_API_KEY or os.environ.get("NEBIUS_API_KEY")
+                if not api_key:
+                    raise ValueError("Please set the NEBIUS_API_KEY either in the code or as an environment variable.")
+                
+                nebius_llm = NebiusLLM(
+                    model=backend_model, 
+                    api_key=api_key,
+                    temperature=self.temperature, 
+                    top_p=self.top_p, 
+                    top_k=self.top_k, 
+                    max_tokens=max_tokens
+                )
+                debug_print("Nebius API pipeline created successfully.")
+                print(f"DEBUG: Nebius API pipeline created successfully for {self.llm_choice}")
+                return nebius_llm
+            except Exception as e:
+                error_msg = f"Failed to create Nebius LLM: {str(e)}"
+                debug_print(error_msg)
+                print(f"DEBUG: {error_msg}")
+                raise ValueError(error_msg)
+        
+        # Extract the model name without the flag emoji prefix (for non-Nebius models)
         clean_llm_choice = self.llm_choice.split(" ", 1)[-1] if " " in self.llm_choice else self.llm_choice
         normalized = clean_llm_choice.lower()
         print(f"Normalized model name: {normalized}")
@@ -929,7 +1231,7 @@ class ElevatedRagChain:
         if not model_key:
             raise ValueError(f"Unsupported model: {normalized}")
         model = model_map[model_key]   
-        max_tokens = model_token_limits.get(model, 4096)
+        max_tokens = self.max_tokens
         if max_tokens_override is not None:
             max_tokens = min(max_tokens_override, max_tokens)                 
         pricing_info = model_pricing.get(model_key, {"USD": {"input": 0.00, "output": 0.00}, "RON": {"input": 0.00, "output": 0.00}})
@@ -987,8 +1289,8 @@ class ElevatedRagChain:
                 debug_print(f"OpenAI {model} pipeline created successfully.")
                 return OpenAILLM()
             
-            # Meta-Llama-3 model
-            elif "meta-llama" in normalized or "llama" in normalized:
+            # Meta-Llama-3 model (but not Nebius models)
+            elif ("meta-llama" in normalized or "llama" in normalized) and "nebius" not in normalized:
                 debug_print("Creating remote Meta-Llama-3 pipeline via Hugging Face Inference API...")
                 from huggingface_hub import InferenceClient
                 repo_id = "meta-llama/Meta-Llama-3-8B-Instruct"
@@ -1121,12 +1423,13 @@ class ElevatedRagChain:
             return ErrorLLM()
 
 
-    def update_llm_pipeline(self, new_model_choice: str, temperature: float, top_p: float, top_k: int, prompt_template: str, bm25_weight: float):
+    def update_llm_pipeline(self, new_model_choice: str, temperature: float, top_p: float, top_k: int, prompt_template: str, bm25_weight: float, max_tokens: int = 3000):
         debug_print(f"Updating chain with new model: {new_model_choice}")
         self.llm_choice = new_model_choice
         self.temperature = temperature
         self.top_p = top_p
         self.top_k = top_k
+        self.max_tokens = max_tokens
         self.prompt_template = prompt_template
         self.bm25_weight = bm25_weight
         self.faiss_weight = 1.0 - bm25_weight
@@ -1312,7 +1615,7 @@ def update_model(new_model: str):
     global rag_chain
     if rag_chain and rag_chain.raw_data:
         rag_chain.update_llm_pipeline(new_model, rag_chain.temperature, rag_chain.top_p, rag_chain.top_k,
-                                      rag_chain.prompt_template, rag_chain.bm25_weight)
+                                      rag_chain.prompt_template, rag_chain.bm25_weight, rag_chain.max_tokens)
         debug_print(f"Model updated to {rag_chain.llm_choice}")
         return f"Model updated to: {rag_chain.llm_choice}"
     else:
@@ -1758,6 +2061,18 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                             "🇺🇸 o3-mini",
                             "🇺🇸 Remote Meta-Llama-3", 
                             "🇪🇺 Mistral-API",
+                            # Nebius Models
+                            "🟦 GPT OSS 120b (Nebius)",
+                            "🟦 GPT OSS 20b (Nebius)",
+                            "🟦 Google Gemma 3 27b-Instruct (Nebius)",
+                            "🟦 DeepSeek-R1-0528 (Nebius)",
+                            "🟦 DeepSeek-V3 (Nebius)",
+                            "🟦 Meta-Llama-3.1-70B-Instruct (Nebius)",
+                            "🟦 Meta-Llama-3.1-405B-Instruct (Nebius)",
+                            "🟦 Qwen3-235B-A22B (Nebius)",
+                            "🟦 Qwen3-32B (Nebius)",
+                            "🟦 Hermes 4 405B (Nebius)",
+                            "🟦 GLM-4.5 AIR (Nebius)",
                         ],
                         value="🇪🇺 Mistral-API",
                         label="Query Model"
@@ -1874,6 +2189,18 @@ https://www.gutenberg.org/ebooks/8438.txt.utf-8
                             "🇺🇸 o3-mini",
                             "🇺🇸 Remote Meta-Llama-3", 
                             "🇪🇺 Mistral-API",
+                            # Nebius Models
+                            "🟦 GPT OSS 120b (Nebius)",
+                            "🟦 GPT OSS 20b (Nebius)",
+                            "🟦 Google Gemma 3 27b-Instruct (Nebius)",
+                            "🟦 DeepSeek-R1-0528 (Nebius)",
+                            "🟦 DeepSeek-V3 (Nebius)",
+                            "🟦 Meta-Llama-3.1-70B-Instruct (Nebius)",
+                            "🟦 Meta-Llama-3.1-405B-Instruct (Nebius)",
+                            "🟦 Qwen3-235B-A22B (Nebius)",
+                            "🟦 Qwen3-32B (Nebius)",
+                            "🟦 Hermes 4 405B (Nebius)",
+                            "🟦 GLM-4.5 AIR (Nebius)",
                         ],
                         value="🇪🇺 Mistral-API",
                         label="Query Model"
@@ -2242,15 +2569,35 @@ def create_csv_from_batch_results(results: List[Dict], job_id: str,
     
     # Extract short names for filename
     def get_short_name(full_name, prefix_length=2):
-        """Extract short name from full model name"""
+        """Extract complete name from full model name for better clarity"""
         if not full_name:
             return "unknown"
+        
         # Remove emojis and get the actual model name
         clean_name = full_name.split(" ", 1)[-1] if " " in full_name else full_name
-        # Get first few characters and last few characters
-        if len(clean_name) > 8:
-            return clean_name[:4] + clean_name[-4:]
-        return clean_name
+        
+        # Remove parentheses and replace with underscores, also clean other special characters
+        clean_name = clean_name.replace("(", "_").replace(")", "").replace(" ", "_").replace(",", "").replace("-", "_")
+        
+        # For embedding models, return the complete suffix after sentence_transformers/
+        if "sentence_transformers/" in clean_name:
+            # Extract the complete part after "sentence_transformers/"
+            suffix = clean_name.replace("sentence_transformers/", "")
+            return suffix
+        else:
+            # For other models, return the complete cleaned name
+            if "Nebius" in clean_name:
+                # For Nebius models, return the complete model name without common words
+                parts = clean_name.split("_")
+                # Filter out only the most common words but keep the model name complete
+                meaningful_parts = [p for p in parts if p not in ["Nebius"]]
+                if meaningful_parts:
+                    return "_".join(meaningful_parts)
+                else:
+                    return clean_name
+            else:
+                # For other models, return the complete cleaned name
+                return clean_name
     
     def get_param_variation_name(param_configs):
         """Get the parameter that was varied"""
