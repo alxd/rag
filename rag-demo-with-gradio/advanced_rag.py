@@ -3,6 +3,7 @@ os.environ["TOKENIZERS_PARALLELISM"] = "false"
 import datetime
 import functools
 import traceback
+import gc
 from typing import List, Optional, Any, Dict, Tuple
 from pydantic import Field
 import csv
