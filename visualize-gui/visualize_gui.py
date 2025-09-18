@@ -605,8 +605,14 @@ class UpSetGUI:
             return []
         lines = text.split('\n')
         concepts = []
+        
+        # Detect if this is GPT_OSS_120b format (has table structure)
+        is_gpt_format = '| # |' in text and '| Concept' in text
+        
         for line in lines:
             line = line.strip()
+            
+            # Handle numbered lists (1., 2., etc.) - for DeepSeekV3 format
             if line.startswith(tuple(str(i)+'.' for i in range(1, 21))):
                 # Markdown or plain numbered list
                 if '**' in line:
@@ -617,6 +623,23 @@ class UpSetGUI:
                     c = line.lstrip('0123456789. ').replace(':', '').replace('.', '').strip()
                     if c:
                         concepts.append(c)
+            
+            # Handle markdown table format (| # | Concept | ...) - for GPT_OSS_120b format
+            # Only extract from numbered table rows (| 1 |, | 2 |, etc.)
+            elif line.startswith('|') and '**' in line and any(line.startswith(f'| {i} |') for i in range(1, 21)):
+                # Split by | and look for **bold** text in the second column only
+                parts = line.split('|')
+                if len(parts) >= 3:  # Ensure we have at least 3 parts: | number | concept | description |
+                    concept_part = parts[2].strip()  # Second column should contain the concept
+                    # Only extract if the entire concept_part is wrapped in ** (not just contains **)
+                    if concept_part.startswith('**') and concept_part.endswith('**'):
+                        c = concept_part[2:-2].strip()  # Remove ** from both ends
+                        if c and c not in ['#', 'Concept', 'How the text uses', 'Where the term appears', 'Why it functions as', 'Why it qualifies as', 'Why it counts as', 'Why it ranks among']:
+                            concepts.append(c)
+            
+            # No fallback logic needed - only extract from numbered lines and table rows
+            # This ensures we only extract concepts from lines that start with a number
+        
         return concepts
     
     def normalize_word(self, word):
@@ -1191,9 +1214,9 @@ class UpSetGUI:
                 varying_param = None
                 if 'temp' in file_name_lower:
                     varying_param = 'Temperature'
-                elif 'topp' in file_name_lower:
+                elif 'top_p' in file_name_lower or 'topp' in file_name_lower:
                     varying_param = 'Top-p'
-                elif 'topk' in file_name_lower:
+                elif 'top_k' in file_name_lower or 'topk' in file_name_lower:
                     varying_param = 'Top-k'
                 elif 'bm25' in file_name_lower:
                     varying_param = 'BM25 Weight'
@@ -2962,24 +2985,49 @@ class UpSetGUI:
             
             df_groups['Group'] = unique_group_names
             
-            # Now create the final DataFrame with groups as columns (like concept_matrix_reset)
+            # Create the final DataFrame for UpSet plot
+            # We need: rows = folders, columns = groups, values = boolean presence
             # Extract the boolean data (folder columns) and use group names as column headers
             group_columns = df_groups[folder_names].T  # Transpose to get groups as columns
             group_columns.columns = unique_group_names  # Set group names as column headers
             
-            # Convert to boolean and reset index to get default integer index
-            df_for_upset = group_columns.astype(bool).reset_index(drop=True)
+            # Convert to boolean and ensure proper index alignment for UpSet plot
+            df_for_upset = group_columns.astype(bool)
+            
+            # Reset index to ensure clean integer index for UpSet plot
+            df_for_upset = df_for_upset.reset_index(drop=True)
+            
+            # Ensure all values are boolean and handle any NaN values
+            df_for_upset = df_for_upset.fillna(False).astype(bool)
+            
+            # Debug: Print the structure to understand what we have
+            print(f"[UPSET DEBUG] df_groups shape: {df_groups.shape}")
+            print(f"[UPSET DEBUG] df_groups columns: {df_groups.columns.tolist()}")
+            print(f"[UPSET DEBUG] df_groups head:")
+            print(df_groups.head())
+            print(f"[UPSET DEBUG] group_columns shape after transpose: {group_columns.shape}")
+            print(f"[UPSET DEBUG] group_columns columns: {group_columns.columns.tolist()}")
+            print(f"[UPSET DEBUG] group_columns head:")
+            print(group_columns.head())
             
             print(f"[UPSET DEBUG] Final DataFrame shape: {df_for_upset.shape}")
             print(f"[UPSET DEBUG] Final DataFrame columns: {df_for_upset.columns.tolist()}")
             print(f"[UPSET DEBUG] Final DataFrame dtypes: {df_for_upset.dtypes}")
+            print(f"[UPSET DEBUG] Final DataFrame index: {df_for_upset.index}")
             print(f"[UPSET DEBUG] Final DataFrame head:")
             print(df_for_upset.head())
+            print(f"[UPSET DEBUG] Final DataFrame info:")
+            print(df_for_upset.info())
                         
             upset_plot_path = ""
              # Create UpSet plot with error handling
             try:
                 # Use the same pattern as the existing code
+                print(f"[UPSET DEBUG] Attempting to create UpSet data with shape: {df_for_upset.shape}")
+                print(f"[UPSET DEBUG] DataFrame columns: {list(df_for_upset.columns)}")
+                print(f"[UPSET DEBUG] DataFrame index type: {type(df_for_upset.index)}")
+                print(f"[UPSET DEBUG] DataFrame index values: {list(df_for_upset.index)}")
+                
                 upset_data = from_indicators(df_for_upset, df_for_upset.columns)
                 print('[UPSET DEBUG] UpSet data created successfully')
                 
@@ -3153,12 +3201,30 @@ class UpSetGUI:
                 print(f"[UPSET ERROR] Failed to create UpSet plot: {e}")
                 print(f"[UPSET ERROR] Exception type: {type(e)}")
                 import traceback
-                print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")                
+                print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")
+                
+                # Create a placeholder plot to avoid empty file path error
+                try:
+                    fig, ax = plt.subplots(1, 1, figsize=(12, 6))
+                    ax.text(0.5, 0.5, 'UpSet Plot\nCould Not Be Generated', 
+                           ha='center', va='center', fontsize=16, 
+                           bbox=dict(boxstyle="round,pad=0.3", facecolor="lightgray"))
+                    ax.set_xlim(0, 1)
+                    ax.set_ylim(0, 1)
+                    ax.axis('off')
+                    upset_plot_path = os.path.join(parent, "groups_upset_plot_placeholder.png")
+                    plt.savefig(upset_plot_path, dpi=150, bbox_inches='tight', pad_inches=0.5)
+                    plt.close()
+                    print(f"[UPSET ERROR] Created placeholder plot at: {upset_plot_path}")
+                except Exception as placeholder_error:
+                    print(f"[UPSET ERROR] Failed to create placeholder plot: {placeholder_error}")
+                    upset_plot_path = ""  # Will be handled later
+                
                 # Add overlap summary text to the first page (before the UpSet diagram)
                 
             # Add the UpSet diagram in a table format (summary on left, diagram on right)
             doc.add_heading("Overlap Summary", level=1)
-            plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[8, 7])
+            plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[6, 9])
 
             # Left column for overlap summary text
             left_cell = plot_table.rows[0].cells[0]
@@ -3188,10 +3254,27 @@ class UpSetGUI:
             para.add_run(" concept groups through the method: ")
             run2 = para.add_run(method_str)
             run2.bold = True
+            
+            # Add LLM prompt information if LLM grouping is used - all on one line
+            if self.llm_grouping_var.get():
+                # Extract the instruction part (excluding the concepts list)
+                full_prompt = self.llm_prompt_var.get().strip()
+                # Remove the part that adds concepts list - be more flexible with the pattern
+                concepts_section = "\nConcepts:\n" + "\n".join(f"- {c}" for c in concept_list)
+                if concepts_section in full_prompt:
+                    instruction_part = full_prompt.replace(concepts_section, "").strip()
+                else:
+                    # If the pattern doesn't match exactly, just use the original prompt
+                    instruction_part = full_prompt
+                
+                para.add_run(" 🤖 LLM Model: ").bold = True
+                para.add_run(self.llm_model_var.get()).bold = True
+                para.add_run(" 📝 LLM Instruction: ").bold = True
+                para.add_run(instruction_part)
                         
             # Add missing concepts information for LLM grouping
             if self.llm_grouping_var.get() and missing_concepts:
-                para.add_run("⚠️ Note: ").bold = True
+                para.add_run("\n\n⚠️ Note: ").bold = True
                 run3 = para.add_run(f"{len(missing_concepts)} concepts were not assigned to any group by the LLM and are excluded from the analysis: ")
                 run3.bold = True
                 para.add_run(", ".join(sorted(missing_concepts)))
@@ -3454,9 +3537,14 @@ class UpSetGUI:
             run = right_cell_paragraph.add_run()
         
             # Cap the height to a reasonable maximum to prevent layout issues
-            max_plot_height = min(available_height_inches, 7)  # Max 7 inche
+            max_plot_height = min(available_height_inches, 7)  # Max 7 inches
 
-            run.add_picture(upset_plot_path, height=Inches(max_plot_height))  # Use most of the right column width
+            # Only add the picture if the plot path exists and is not empty
+            if upset_plot_path and os.path.exists(upset_plot_path):
+                run.add_picture(upset_plot_path, height=Inches(max_plot_height))  # Use most of the right column width
+            else:
+                # Add a text message if no plot is available
+                run.add_text("UpSet plot could not be generated due to data processing error.")
 
             # Create and add the individual concepts upset plot            
             # This upset plot shows individual concepts (not grouped) and which folders they appear in
@@ -4189,7 +4277,7 @@ def real_llm_grouping(concepts, prompt, model, output_dir=None):
             if not gemini_api_key:
                 raise RuntimeError("GEMINI_API_KEY not set in environment.")
             genai.configure(api_key=gemini_api_key)
-            model_name = "models/gemini-1.5-pro-latest"
+            model_name = "models/gemini-2.5-pro-latest"
             try:
                 model_gemini = genai.GenerativeModel(model_name)
                 response = model_gemini.generate_content(prompt_full, generation_config={"max_output_tokens": max_tokens})  # 128000

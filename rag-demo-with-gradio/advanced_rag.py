@@ -517,7 +517,7 @@ def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_
     """Submit a query asynchronously"""
     try:
         if not query:
-            return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0"
+            return "Please enter a non-empty query", "", "Input tokens: 0", "Output tokens: 0", "", "", ""
         
         # Update model if it has changed
         if hasattr(rag_chain, 'llm_choice') and rag_chain.llm_choice != model_choice:
@@ -539,7 +539,7 @@ def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_
             rag_chain.conversation_history = []
             debug_print("Conversation history cleared")
         
-        result = rag_chain.chain({"question": query})
+        result = rag_chain.elevated_rag_chain({"question": query})
         response = result["answer"]
         context = rag_chain.get_current_context()
         
@@ -554,12 +554,15 @@ def submit_query_async(query, model_choice, max_tokens_slider, temperature, top_
             formatted_response,
             context,
             f"Input tokens: {input_tokens}",
-            f"Output tokens: {output_tokens}"
+            f"Output tokens: {output_tokens}",
+            "",  # job_id_input
+            "",  # job_query_display  
+            ""   # job_list
         )
     except Exception as e:
         error_msg = f"Error processing query: {str(e)}"
         debug_print(error_msg)
-        return error_msg, "", "Input tokens: 0", "Output tokens: 0"
+        return error_msg, "", "Input tokens: 0", "Output tokens: 0", "", "", ""
 
 def update_ui_with_last_job_id():
     # This function doesn't need to do anything anymore
@@ -1645,7 +1648,7 @@ def submit_query_updated(query, temperature, top_p, top_k, bm25_weight, use_hist
             rag_chain.conversation_history = []
             debug_print("Conversation history cleared")
         
-        result = rag_chain.chain({"question": query})
+        result = rag_chain.elevated_rag_chain({"question": query})
         response = result["answer"]
         context = rag_chain.get_current_context()
         
