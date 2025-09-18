@@ -2670,7 +2670,27 @@ class UpSetGUI:
                 "\nReturn a JSON object where each key is a group name and the value is a list of concepts. Example:\n{\n  \"Character\": [\"Character (1103a17–1103b35)\", ...],\n  \"Intellect\": [\"Intellect (Nous)\", ...]\n}"
             )
             model = self.llm_model_var.get()
-            llm_groups = real_llm_grouping(concept_list, prompt, model, output_dir=parent)
+            print(f"[LLM GROUPING] Starting LLM grouping with model: {model}")
+            print(f"[LLM GROUPING] Number of concepts to group: {len(concept_list)}")
+            print(f"[LLM GROUPING] Prompt preview: {prompt[:200]}...")
+            
+            try:
+                llm_groups = real_llm_grouping(concept_list, prompt, model, output_dir=parent)
+                
+                print(f"[LLM GROUPING] LLM grouping completed. Number of groups returned: {len(llm_groups) if llm_groups else 0}")
+                if llm_groups:
+                    print(f"[LLM GROUPING] First group preview: {llm_groups[0] if llm_groups else 'None'}")
+                else:
+                    print("[LLM GROUPING] WARNING: No groups returned from LLM!")
+                    
+            except Exception as e:
+                print(f"[LLM GROUPING ERROR] Failed to get LLM response: {e}")
+                print(f"[LLM GROUPING ERROR] Exception type: {type(e)}")
+                import traceback
+                print(f"[LLM GROUPING ERROR] Traceback: {traceback.format_exc()}")
+                # Set empty groups and continue with fallback
+                llm_groups = []
+                llm_error = str(e)
             # Only assign colors to concepts present in LLM output
             concepts_in_llm = set()
             for group in llm_groups:
@@ -3201,7 +3221,7 @@ class UpSetGUI:
                 print(f"[UPSET ERROR] Failed to create UpSet plot: {e}")
                 print(f"[UPSET ERROR] Exception type: {type(e)}")
                 import traceback
-                print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")
+                print(f"[UPSET ERROR] Traceback: {traceback.format_exc()}")                
                 
                 # Create a placeholder plot to avoid empty file path error
                 try:
@@ -3271,6 +3291,14 @@ class UpSetGUI:
                 para.add_run(self.llm_model_var.get()).bold = True
                 para.add_run(" 📝 LLM Instruction: ").bold = True
                 para.add_run(instruction_part)
+                
+                # Add LLM response debugging information
+                if 'llm_groups' in locals() and llm_groups:
+                    para.add_run(" 📊 LLM Response: ").bold = True
+                    para.add_run(f"Successfully grouped into {len(llm_groups)} groups")
+                else:
+                    para.add_run(" ❌ LLM Response: ").bold = True
+                    para.add_run("No response received from LLM")
                         
             # Add missing concepts information for LLM grouping
             if self.llm_grouping_var.get() and missing_concepts:
@@ -3278,6 +3306,12 @@ class UpSetGUI:
                 run3 = para.add_run(f"{len(missing_concepts)} concepts were not assigned to any group by the LLM and are excluded from the analysis: ")
                 run3.bold = True
                 para.add_run(", ".join(sorted(missing_concepts)))
+                para.add_run("\n\n")
+            
+            # Add error information if there were any errors during processing
+            if 'llm_error' in locals() and llm_error:
+                para.add_run("❌ LLM Processing Error: ").bold = True
+                para.add_run(str(llm_error))
                 para.add_run("\n\n")
             
             # Unique/Shared groups per folder
@@ -3681,9 +3715,15 @@ class UpSetGUI:
                 print(f"Processing {num_concepts} concepts...")
                 
                 if num_concepts > 50:
+                    # Calculate concept frequencies for sorting
+                    concept_frequencies = df_for_upset.sum(axis=1).sort_values(ascending=False)
                     
                     # Sort concepts by frequency for better visualization
                     df_sorted = df_for_upset.loc[concept_frequencies.index]
+                    
+                    # Create figure and axis for heatmap
+                    fig, ax = plt.subplots(figsize=(12, max(8, 0.3 * num_concepts)))
+                    
                     # HEATMAP
                     import seaborn as sns
                     sns.heatmap(df_sorted.astype(int), 
@@ -3739,6 +3779,9 @@ class UpSetGUI:
                 
             except Exception as e:
                 print(f"[UPSET_ALT INDIVIDUAL ERROR] {e}")
+                print(f"[UPSET_ALT INDIVIDUAL ERROR] Exception type: {type(e)}")
+                import traceback
+                print(f"[UPSET_ALT INDIVIDUAL ERROR] Traceback: {traceback.format_exc()}")
                 print(f"Number of concepts: {len(df_for_upset) if 'df_for_upset' in locals() else 'Unknown'}")
                 
                 # Fallback: Create a simple alternative visualization
@@ -4169,6 +4212,8 @@ def real_llm_grouping(concepts, prompt, model, output_dir=None):
             "meta-llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
             "remote meta-llama-3": "meta-llama/Meta-Llama-3-8B-Instruct",
             "qwen3": "Qwen/Qwen1.5-7B-Chat",
+            "gemini": "gemini-1.5-pro-latest",
+            "claude": "claude-3-5-sonnet-20241022",
             # Add more mappings as needed
         }
         # Max tokens per model (based on public docs)
@@ -4187,32 +4232,38 @@ def real_llm_grouping(concepts, prompt, model, output_dir=None):
             "claude": 200000,
         }
         normalized = model.lower().replace("-api", "").replace("remote ", "").replace(" ", "-")
+        print(f"[LLM GROUPING REAL] Original model: {model}")
+        print(f"[LLM GROUPING REAL] Normalized model: {normalized}")
+        
         model_key = None
         for key in model_map:
             if key in normalized:
                 model_key = key
                 break
+        
+        print(f"[LLM GROUPING REAL] Selected model key: {model_key}")
+        print(f"[LLM GROUPING REAL] Available model keys: {list(model_map.keys())}")
+        
         # Default max tokens
         max_tokens = max_tokens_map.get(model_key, 128000)
+        print(f"[LLM GROUPING REAL] Max tokens: {max_tokens}")
         # --- OpenAI GPT Models ---
         if "gpt" in model.lower() or "o1-mini" in model.lower() or "o3-mini" in model.lower():
-            # Use 128000 for GPT-4o and variants
             openai_api_key = os.environ.get("OPENAI_API_KEY")
             if not openai_api_key:
                 raise RuntimeError("OpenAI API key not available.")
             import openai
             client = openai.OpenAI(api_key=openai_api_key)
-            model_name = model_map.get(model_key, "gpt-3.5-turbo")
             response = client.chat.completions.create(
-                model=model_name,
+                model=model_map.get(model_key, "gpt-3.5-turbo"),
                 messages=[{"role": "user", "content": prompt_full}],
                 temperature=0.3,
-                max_tokens=max_tokens  # 128000 for GPT-4o, 16385 for GPT-3.5
+                max_tokens=max_tokens
             )
             llm_output = response.choices[0].message.content
             try:
                 import tiktoken
-                enc = tiktoken.encoding_for_model(model_name)
+                enc = tiktoken.encoding_for_model(model_map.get(model_key, "gpt-3.5-turbo"))
                 input_tokens = len(enc.encode(prompt_full))
                 output_tokens = len(enc.encode(llm_output))
             except Exception:
@@ -4249,18 +4300,11 @@ def real_llm_grouping(concepts, prompt, model, output_dir=None):
             output_tokens = len(llm_output.split())
         elif "qwen3" in model.lower():
             # Use 128000 for Qwen3
-            try:
-                from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
-            except ImportError:
-                raise RuntimeError("transformers library not installed. Please install with 'pip install transformers'.")
+            from transformers import AutoModelForCausalLM, AutoTokenizer, pipeline
             model_id = model_map.get(model_key, "Qwen/Qwen1.5-7B-Chat")
             hf_token = os.environ.get("HF_API_TOKEN")
-            print(f"[LLM GROUPING REAL] Loading Qwen3 model {model_id} (this may take a while if not cached)...")
-            try:
-                tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
-                model_qwen = AutoModelForCausalLM.from_pretrained(model_id, token=hf_token)
-            except Exception as e:
-                raise RuntimeError(f"Qwen3 model not found or access denied: {e}")
+            tokenizer = AutoTokenizer.from_pretrained(model_id, token=hf_token)
+            model_qwen = AutoModelForCausalLM.from_pretrained(model_id, token=hf_token)
             pipe = pipeline("text-generation", model=model_qwen, tokenizer=tokenizer)
             result = pipe(prompt_full, max_new_tokens=max_tokens, do_sample=True, temperature=0.3)  # 128000
             llm_output = result[0]["generated_text"]
@@ -4268,56 +4312,31 @@ def real_llm_grouping(concepts, prompt, model, output_dir=None):
             output_tokens = len(llm_output.split())
         elif "gemini" in model.lower():
             # Use 128000 for Gemini
-            try:
-                import google.generativeai as genai
-            except ImportError:
-                print("[LLM GROUPING REAL] google-generativeai not installed.")
-                raise RuntimeError("google-generativeai not installed.")
+            import google.generativeai as genai
             gemini_api_key = os.environ.get("GEMINI_API_KEY")
             if not gemini_api_key:
                 raise RuntimeError("GEMINI_API_KEY not set in environment.")
             genai.configure(api_key=gemini_api_key)
-            model_name = "models/gemini-2.5-pro-latest"
-            try:
-                model_gemini = genai.GenerativeModel(model_name)
-                response = model_gemini.generate_content(prompt_full, generation_config={"max_output_tokens": max_tokens})  # 128000
-                llm_output = response.text
-            except Exception as e:
-                raise RuntimeError(f"Gemini API error: {e}")
+            model_name = model_map.get(model_key, "gemini-1.5-pro-latest")
+            model_gemini = genai.GenerativeModel(model_name)
+            response = model_gemini.generate_content(prompt_full, generation_config={"max_output_tokens": max_tokens})  # 128000
+            llm_output = response.text
             input_tokens = len(prompt_full.split())
             output_tokens = len(llm_output.split())
         elif "claude" in model.lower():
             # Use 200000 for Claude
-            try:
-                import anthropic
-            except ImportError:
-                print("[LLM GROUPING REAL] anthropic not installed.")
-                raise RuntimeError("anthropic not installed.")
+            import anthropic
             claude_api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not claude_api_key:
                 raise RuntimeError("ANTHROPIC_API_KEY not set in environment.")
             client = anthropic.Anthropic(api_key=claude_api_key)
-            tried_models = []
-            for model_name in [
-                "claude-3-7-sonnet-20250224",  # Claude 3.7 Sonnet (Feb 2025)
-                "claude-4-sonnet-20250501",    # Claude 4 Sonnet (May 2025)
-                "claude-3-5-sonnet-20241022",  # Claude 3.5 Sonnet (Oct 2024)
-                "claude-3-haiku-20240307"      # Claude 3 Haiku (Mar 2024)
-            ]:
-                tried_models.append(model_name)
-                try:
-                    response = client.messages.create(
-                        model=model_name,
-                        max_tokens=200000,  # Claude max
-                        temperature=0.3,
-                        messages=[{"role": "user", "content": prompt_full}]
-                    )
-                    llm_output = response.content[0].text if hasattr(response.content[0], 'text') else str(response.content)
-                    break
-                except Exception as e:
-                    print(f"[LLM GROUPING REAL] Claude model {model_name} not available: {e}")
-            else:
-                raise RuntimeError(f"Claude API error: None of the tried models are available: {tried_models}")
+            response = client.messages.create(
+                model=model_map.get(model_key, "claude-3-5-sonnet-20241022"),
+                max_tokens=200000,  # Claude max
+                temperature=0.3,
+                messages=[{"role": "user", "content": prompt_full}]
+            )
+            llm_output = response.content[0].text if hasattr(response.content[0], 'text') else str(response.content)
             input_tokens = len(prompt_full.split())
             output_tokens = len(llm_output.split())
         elif "grok" in model.lower():
@@ -4336,37 +4355,100 @@ def real_llm_grouping(concepts, prompt, model, output_dir=None):
             print("[LLM GROUPING REAL] DeepSeek V3 model not yet implemented (no public API).")
             raise RuntimeError("DeepSeek V3 model not yet implemented (no public API).")
         elif "nebius" in model.lower():
-            # --- Mistral (Nebius) (Not available) ---
-            print("[LLM GROUPING REAL] Mistral (Nebius) model not yet implemented (no public API).")
-            raise RuntimeError("Mistral (Nebius) model not yet implemented (no public API).")
+            # --- Nebius Models ---
+            nebius_api_key = os.environ.get("NEBIUS_API_KEY")
+            if not nebius_api_key:
+                raise RuntimeError("NEBIUS_API_KEY not set in environment.")
+            import openai
+            client = openai.OpenAI(
+                api_key=nebius_api_key,
+                base_url="https://api.nebius.com/v1"
+            )
+            response = client.chat.completions.create(
+                model="openai/gpt-oss-120b",  # Default Nebius model
+                messages=[{"role": "user", "content": prompt_full}],
+                temperature=0.3,
+                max_tokens=max_tokens
+            )
+            llm_output = response.choices[0].message.content
+            input_tokens = len(prompt_full.split())
+            output_tokens = len(llm_output.split())
         else:
-            raise RuntimeError(f"Unsupported model: {model}")
+            print(f"[LLM GROUPING REAL] WARNING: Model '{model}' not recognized, trying fallback...")
+            # Try to use the model name directly as a fallback
+            if "gpt" in model.lower():
+                print("[LLM GROUPING REAL] Attempting OpenAI fallback...")
+                try:
+                    openai_api_key = os.environ.get("OPENAI_API_KEY")
+                    if openai_api_key:
+                        import openai
+                        client = openai.OpenAI(api_key=openai_api_key)
+                        response = client.chat.completions.create(
+                            model=model,  # Use the model name directly
+                            messages=[{"role": "user", "content": prompt_full}],
+                            temperature=0.3,
+                            max_tokens=max_tokens
+                        )
+                        llm_output = response.choices[0].message.content
+                        input_tokens = len(prompt_full.split())
+                        output_tokens = len(llm_output.split())
+                    else:
+                        raise RuntimeError("OpenAI API key not available for fallback")
+                except Exception as e:
+                    raise RuntimeError(f"Fallback failed for model '{model}': {e}")
+            else:
+                raise RuntimeError(f"Unsupported model: {model}")
         print("[LLM GROUPING REAL] LLM Output:\n", llm_output)
         print(f"[LLM GROUPING REAL] Input tokens: {input_tokens}, Output tokens: {output_tokens}")
+        print(f"[LLM GROUPING REAL] LLM Output length: {len(llm_output) if llm_output else 0} characters")
+        print(f"[LLM GROUPING REAL] LLM Output type: {type(llm_output)}")
+        if llm_output:
+            print(f"[LLM GROUPING REAL] First 200 characters: {llm_output[:200]}")
+            print(f"[LLM GROUPING REAL] Last 200 characters: {llm_output[-200:]}")
+        else:
+            print("[LLM GROUPING REAL] WARNING: LLM output is empty or None!")
         # Try to parse JSON from the output
         import re
+        print(f"[LLM GROUPING REAL] Attempting to parse JSON from LLM output...")
+        print(f"[LLM GROUPING REAL] Looking for JSON patterns in output...")
+        
         # Extract all JSON arrays or objects from the output
         json_matches = re.findall(r'\{[\s\S]*?\}|\[[\s\S]*?\]', llm_output)
-        for match in json_matches:
+        print(f"[LLM GROUPING REAL] Found {len(json_matches)} potential JSON matches")
+        
+        for i, match in enumerate(json_matches):
+            print(f"[LLM GROUPING REAL] Processing JSON match {i+1}: {match[:100]}...")
             try:
                 obj = json.loads(match)
+                print(f"[LLM GROUPING REAL] Successfully parsed JSON match {i+1}")
                 # If it's a dict of groups, convert to list of lists
                 if isinstance(obj, dict):
                     group_list = list(obj.values())
                     all_extracted_groups.extend(group_list)
+                    print(f"[LLM GROUPING REAL] Added {len(group_list)} groups from dict")
                 elif isinstance(obj, list):
                     all_extracted_groups.extend(obj)
+                    print(f"[LLM GROUPING REAL] Added {len(obj)} groups from list")
             except Exception as e:
-                print("[LLM GROUPING REAL] JSON parse error in match:", e)
+                print(f"[LLM GROUPING REAL] JSON parse error in match {i+1}: {e}")
+                print(f"[LLM GROUPING REAL] Problematic match content: {match}")
+        print(f"[LLM GROUPING REAL] Total extracted groups before processing: {len(all_extracted_groups)}")
+        
         if all_extracted_groups:
+            print(f"[LLM GROUPING REAL] Processing {len(all_extracted_groups)} extracted groups...")
             parsed_groups = extract_groups_from_llm_output(all_extracted_groups, concepts)
+            print(f"[LLM GROUPING REAL] After processing: {len(parsed_groups)} final groups")
         else:
+            print("[LLM GROUPING REAL] No groups extracted, trying fallback JSON parse...")
             # Try to parse the whole output as JSON
             try:
                 parsed_groups = json.loads(llm_output)
+                print(f"[LLM GROUPING REAL] Fallback JSON parse successful: {type(parsed_groups)}")
                 parsed_groups = extract_groups_from_llm_output(parsed_groups, concepts)
+                print(f"[LLM GROUPING REAL] After fallback processing: {len(parsed_groups)} final groups")
             except Exception as e:
-                print("[LLM GROUPING REAL] Fallback JSON parse error:", e)
+                print(f"[LLM GROUPING REAL] Fallback JSON parse error: {e}")
+                print("[LLM GROUPING REAL] Using fallback: all concepts in one group")
                 parsed_groups = [concepts]
         # Warn if output is likely truncated
         if len(llm_output) > 18000 or (llm_output and not llm_output.rstrip().endswith(']') and not llm_output.rstrip().endswith('}')):
