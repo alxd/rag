@@ -3603,7 +3603,7 @@ class UpSetGUI:
         def safe_update_time(msg):
             self.root.after(0, lambda: self.aggregate_time_label.config(text=msg))
         # Define total steps for progress tracking
-        total_steps = 8  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis, saving, completion
+        total_steps = 6  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis
         current_step = 0
         
         safe_update_status("Scanning folders...", "blue")
@@ -4291,7 +4291,13 @@ class UpSetGUI:
             header_cell_left.paragraphs[0].runs[0].bold = True
             
             header_cell_right = summary_table.rows[0].cells[1]
-            header_cell_right.text = "After Regrouping using common words OR " + self.llm_model_var.get()
+            # Determine regrouping method for display
+            if self.llm_grouping_var.get():
+                regrouping_method = self.llm_model_var.get()
+            else:
+                regrouping_method = "common words"
+            
+            header_cell_right.text = f"After Regrouping using {regrouping_method}"
             header_cell_right.paragraphs[0].runs[0].bold = True
             
             # Data rows
@@ -5164,16 +5170,22 @@ class UpSetGUI:
             safe_update_progress(current_step, total_steps, total_elapsed, est_total)
             safe_update_status("Saving document...", "blue")
             
-            # Save with LLM model and date in filename
+            # Save with appropriate filename based on grouping method
             from datetime import datetime
-            model_name = self.llm_model_var.get().replace(" ", "_").replace("/", "_")
             date_str = datetime.now().strftime("%Y%m%d")
-            out_path = os.path.join(parent, f"aggregated_words_or_{model_name}_{date_str}.docx")
+            
+            # Determine filename based on grouping method
+            if self.llm_grouping_var.get():
+                # LLM Grouping selected - use LLM model name
+                model_name = self.llm_model_var.get().replace(" ", "_").replace("/", "_")
+                out_path = os.path.join(parent, f"aggregated_{model_name}_{date_str}.docx")
+            else:
+                # Group by words selected - use "words"
+                out_path = os.path.join(parent, f"aggregated_words_{date_str}.docx")
             doc.save(out_path)
             
-            # Completion
-            current_step += 1
-            safe_update_progress(current_step, total_steps, total_elapsed, total_elapsed)
+            # Completion - don't increment step, just update progress to 100%
+            safe_update_progress(100, total_steps, total_elapsed, total_elapsed)
             safe_update_status(f"Aggregation complete. Saved to {out_path}", "green")
         except Exception as e:
             tb = traceback.format_exc()
@@ -5251,46 +5263,54 @@ class UpSetGUI:
                     )
                 
                 if folder_analyzer.data:
-                    # Time each analysis type individually
+                    # Time the full analysis process including generate_stability_report
+                    analysis_start_time = time.time()
                     folder_timings = {}
                     
-                    # A. Within-Parameter Analysis
-                    if self.within_param_var.get():
-                        start_time = time.time()
-                        within_results = folder_analyzer.analyze_single_parameter_stability('temperature')
-                        end_time = time.time()
-                        folder_timings['within_param'] = end_time - start_time
-                    
-                    # B. Cross-Parameter Analysis  
-                    if self.cross_param_var.get():
-                        start_time = time.time()
-                        cross_results = folder_analyzer.analyze_cross_parameter_stability()
-                        end_time = time.time()
-                        folder_timings['cross_param'] = end_time - start_time
-                    
-                    # C. Parameter Sensitivity Ranking
-                    if self.sensitivity_var.get():
-                        start_time = time.time()
-                        sensitivity_results = folder_analyzer.analyze_single_parameter_stability('temperature')
-                        end_time = time.time()
-                        folder_timings['sensitivity'] = end_time - start_time
-                    
-                    # Generate full report
+                    # Generate full report (this does the actual work)
                     folder_results = folder_analyzer.generate_stability_report(
                         run_within_param=self.within_param_var.get(),
                         run_cross_param=self.cross_param_var.get(),
                         run_sensitivity=self.sensitivity_var.get()
                     )
                     
+                    # Calculate total analysis time
+                    analysis_end_time = time.time()
+                    total_analysis_time = analysis_end_time - analysis_start_time
+                    
+                    # Distribute timing across enabled analyses
+                    enabled_analyses = []
+                    if self.within_param_var.get():
+                        enabled_analyses.append('within_param')
+                    if self.cross_param_var.get():
+                        enabled_analyses.append('cross_param')
+                    if self.sensitivity_var.get():
+                        enabled_analyses.append('sensitivity')
+                    
+                    # Distribute time evenly across enabled analyses
+                    if enabled_analyses:
+                        time_per_analysis = total_analysis_time / len(enabled_analyses)
+                        for analysis in enabled_analyses:
+                            folder_timings[analysis] = time_per_analysis
+                    
+                    folder_timings['total'] = total_analysis_time
+                    
                     folder_analysis_results[folder_name] = folder_results
                     analysis_timings[folder_name] = folder_timings
                     
                     # Debug: Print parameter values found for this folder
-                    print(f"[RAG ANALYSIS] {folder_name} - Found {len(folder_analyzer.data)} data points in {analysis_timings[folder_name]:.2f}s")
-                    for param in ['temperature', 'top_p', 'top_k', 'bm25_weight']:
-                        if param in folder_results['individual_parameters']:
-                            result = folder_results['individual_parameters'][param]
-                            print(f"[RAG ANALYSIS] {folder_name} - {param} values: {result['parameter_values']}")
+                    total_time = folder_timings.get('total', 0.0)
+                    print(f"[RAG ANALYSIS] {folder_name} - Found {len(folder_analyzer.data)} data points in {total_time:.2f}s")
+                    
+                    # Check if individual_parameters exists before accessing it
+                    if 'individual_parameters' in folder_results:
+                        for param in ['temperature', 'top_p', 'top_k', 'bm25_weight']:
+                            if param in folder_results['individual_parameters']:
+                                result = folder_results['individual_parameters'][param]
+                                print(f"[RAG ANALYSIS] {folder_name} - {param} values: {result['parameter_values']}")
+                    else:
+                        print(f"[RAG ANALYSIS] {folder_name} - No individual_parameters found in results")
+                        print(f"[RAG ANALYSIS] {folder_name} - Available keys: {list(folder_results.keys())}")
                 else:
                     print(f"[RAG ANALYSIS] No data for folder: {folder_name}")
             
@@ -5404,8 +5424,8 @@ class UpSetGUI:
                 start_time = time.time()
                 doc.add_heading("A. Within-Parameter Analysis", level=3)
                 para = doc.add_paragraph()
-                para.add_run("Consistency when varying each parameter. Higher values = less impact on concept variation. ").font.size = Inches(0.08)
-                para.add_run("Example: Temperature across 0.1, 0.33, 0.78, 1.0.").font.size = Inches(0.08)
+                para.add_run("Consistency when varying each parameter. Higher values = less impact on concept variation. ").font.size = Inches(0.12)
+                para.add_run("Example: Temperature across 0.1, 0.33, 0.78, 1.0.").font.size = Inches(0.12)
                 
                 # Create within-parameter table
                 within_table = doc.add_table(rows=1, cols=len(valid_folders) + 1)
@@ -5424,11 +5444,12 @@ class UpSetGUI:
                 for i, folder in enumerate(valid_folders):
                     header_cells[i + 1].text = os.path.basename(folder)
                 
-                # Make header bold
+                # Make header bold and set font size
                 for cell in within_table.rows[0].cells:
                     for para in cell.paragraphs:
                         for run in para.runs:
                             run.bold = True
+                            run.font.size = Inches(0.10)  # Smaller font size
                 
                 # Add data rows
                 parameters = ['temperature', 'top_p', 'top_k', 'bm25_weight']
@@ -5439,7 +5460,9 @@ class UpSetGUI:
                     # Add data for each folder
                     for i, folder in enumerate(valid_folders):
                         folder_name = os.path.basename(folder)
-                        if folder_name in folder_analysis_results and param in folder_analysis_results[folder_name]['individual_parameters']:
+                        if (folder_name in folder_analysis_results and 
+                            'individual_parameters' in folder_analysis_results[folder_name] and
+                            param in folder_analysis_results[folder_name]['individual_parameters']):
                             result = folder_analysis_results[folder_name]['individual_parameters'][param]
                             semantic_mean = result.get('overall_semantic_mean', 0.0)
                             exact_mean = result.get('overall_exact_mean', 0.0)
@@ -5447,25 +5470,35 @@ class UpSetGUI:
                             row.cells[i + 1].text = f"S: {semantic_mean:.3f}\nE: {exact_mean:.3f}\nC: {total_comparisons}"
                         else:
                             row.cells[i + 1].text = "N/A"
+                    
+                    # Set font size for all cells in this row
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                run.font.size = Inches(0.10)  # Smaller font size
                 
                 # Add timing information
                 timing_para = doc.add_paragraph()
-                timing_para.add_run("⏱️ Within-Parameter Analysis completed in ").font.size = Inches(0.1)
+                timing_para.add_run("⏱️ Within-Parameter Analysis completed in ").font.size = Inches(0.12)
                 # Get timing from analysis_timings if available
                 if analysis_timings and any('within_param' in timings for timings in analysis_timings.values()):
-                    avg_time = sum(timings.get('within_param', 0) for timings in analysis_timings.values()) / len(analysis_timings)
-                    timing_para.add_run(f"{avg_time:.2f} seconds").font.size = Inches(0.1)
+                    times = [timings.get('within_param', 0) for timings in analysis_timings.values() if 'within_param' in timings]
+                    if times:
+                        avg_time_minutes = sum(times) / len(times) / 60.0
+                        timing_para.add_run(f"{avg_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                    else:
+                        timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
                 else:
-                    timing_para.add_run("X.XX seconds").font.size = Inches(0.1)
-                timing_para.add_run(".").font.size = Inches(0.1)
+                    timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                timing_para.add_run(".").font.size = Inches(0.12)
             
             # B. Cross-Parameter Analysis
             if self.cross_param_var.get():
                 start_time = time.time()
                 doc.add_heading("B. Cross-Parameter Analysis", level=3)
                 para = doc.add_paragraph()
-                para.add_run("Compares ALL parameter combinations pairwise for overall system stability. ").font.size = Inches(0.08)
-                para.add_run("Shows overall consistency across all variations.").font.size = Inches(0.08)
+                para.add_run("Compares ALL parameter combinations pairwise for overall system stability. ").font.size = Inches(0.12)
+                para.add_run("Shows overall consistency across all variations.").font.size = Inches(0.12)
                 
                 # Create cross-parameter table
                 cross_table = doc.add_table(rows=1, cols=len(valid_folders) + 1)
@@ -5484,11 +5517,12 @@ class UpSetGUI:
                 for i, folder in enumerate(valid_folders):
                     header_cells[i + 1].text = os.path.basename(folder)
                 
-                # Make header bold
+                # Make header bold and set font size
                 for cell in cross_table.rows[0].cells:
                     for para in cell.paragraphs:
                         for run in para.runs:
                             run.bold = True
+                            run.font.size = Inches(0.10)  # Smaller font size
                 
                 # Add data rows
                 metrics = [
@@ -5514,17 +5548,27 @@ class UpSetGUI:
                                 row.cells[i + 1].text = f"{mean_val:.0f}" if mean_key == 'total_comparisons' else f"{mean_val:.3f}"
                         else:
                             row.cells[i + 1].text = "N/A"
+                    
+                    # Set font size for all cells in this row
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                run.font.size = Inches(0.10)  # Smaller font size
                 
                 # Add timing information
                 timing_para = doc.add_paragraph()
-                timing_para.add_run("⏱️ Cross-Parameter Analysis completed in ").font.size = Inches(0.1)
+                timing_para.add_run("⏱️ Cross-Parameter Analysis completed in ").font.size = Inches(0.12)
                 # Get timing from analysis_timings if available
                 if analysis_timings and any('cross_param' in timings for timings in analysis_timings.values()):
-                    avg_time = sum(timings.get('cross_param', 0) for timings in analysis_timings.values()) / len(analysis_timings)
-                    timing_para.add_run(f"{avg_time:.2f} seconds").font.size = Inches(0.1)
+                    times = [timings.get('cross_param', 0) for timings in analysis_timings.values() if 'cross_param' in timings]
+                    if times:
+                        avg_time_minutes = sum(times) / len(times) / 60.0
+                        timing_para.add_run(f"{avg_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                    else:
+                        timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
                 else:
-                    timing_para.add_run("X.XX seconds").font.size = Inches(0.1)
-                timing_para.add_run(".").font.size = Inches(0.1)
+                    timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                timing_para.add_run(".").font.size = Inches(0.12)
             
             # C. Parameter Sensitivity Ranking
             if self.sensitivity_var.get():
@@ -5560,7 +5604,8 @@ class UpSetGUI:
                 
                 # Calculate sensitivity rankings (use first folder for ranking order)
                 first_folder = os.path.basename(valid_folders[0]) if valid_folders else None
-                if first_folder and first_folder in folder_analysis_results:
+                if (first_folder and first_folder in folder_analysis_results and 
+                    'individual_parameters' in folder_analysis_results[first_folder]):
                     first_folder_results = folder_analysis_results[first_folder]['individual_parameters']
                     # Sort parameters by sensitivity (lower consistency = higher sensitivity)
                     param_sensitivities = []
@@ -5584,7 +5629,9 @@ class UpSetGUI:
                     # Add data for each folder
                     for i, folder in enumerate(valid_folders):
                         folder_name = os.path.basename(folder)
-                        if folder_name in folder_analysis_results and param in folder_analysis_results[folder_name]['individual_parameters']:
+                        if (folder_name in folder_analysis_results and 
+                            'individual_parameters' in folder_analysis_results[folder_name] and
+                            param in folder_analysis_results[folder_name]['individual_parameters']):
                             result = folder_analysis_results[folder_name]['individual_parameters'][param]
                             semantic_mean = result.get('overall_semantic_mean', 0.0)
                             exact_mean = result.get('overall_exact_mean', 0.0)
@@ -5595,22 +5642,35 @@ class UpSetGUI:
                 
                 # Add timing information
                 timing_para = doc.add_paragraph()
-                timing_para.add_run("⏱️ Parameter Sensitivity Ranking completed in ").font.size = Inches(0.1)
+                timing_para.add_run("⏱️ Parameter Sensitivity Ranking completed in ").font.size = Inches(0.12)
                 # Get timing from analysis_timings if available
                 if analysis_timings and any('sensitivity' in timings for timings in analysis_timings.values()):
-                    avg_time = sum(timings.get('sensitivity', 0) for timings in analysis_timings.values()) / len(analysis_timings)
-                    timing_para.add_run(f"{avg_time:.2f} seconds").font.size = Inches(0.1)
+                    times = [timings.get('sensitivity', 0) for timings in analysis_timings.values() if 'sensitivity' in timings]
+                    if times:
+                        avg_time_minutes = sum(times) / len(times) / 60.0
+                        timing_para.add_run(f"{avg_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                    else:
+                        timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
                 else:
-                    timing_para.add_run("X.XX seconds").font.size = Inches(0.1)
-                timing_para.add_run(".").font.size = Inches(0.1)
+                    timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                timing_para.add_run(".").font.size = Inches(0.12)
             
             # Add overall timing summary
             if analysis_timings:
-                total_time = sum(sum(timings.values()) for timings in analysis_timings.values())
-                timing_para = doc.add_paragraph()
-                timing_para.add_run("⏱️ Total RAG Consistency Analysis completed in ").font.size = Inches(0.1)
-                timing_para.add_run(f"{total_time:.2f} seconds").font.size = Inches(0.1)
-                timing_para.add_run(".").font.size = Inches(0.1)
+                total_times = []
+                for timings in analysis_timings.values():
+                    if 'total' in timings:
+                        total_times.append(timings['total'])
+                    else:
+                        # Fallback: sum all individual timings
+                        total_times.append(sum(timings.values()))
+                
+                if total_times:
+                    total_time_minutes = sum(total_times) / len(total_times) / 60.0  # Average across folders in minutes
+                    timing_para = doc.add_paragraph()
+                    timing_para.add_run("⏱️ Total RAG Consistency Analysis completed in ").font.size = Inches(0.12)
+                    timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                    timing_para.add_run(".").font.size = Inches(0.12)
             
         except Exception as e:
             print(f"Error adding analysis tables to document: {e}")
