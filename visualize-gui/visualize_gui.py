@@ -45,6 +45,233 @@ common_suffixes = [
 
 warnings.filterwarnings("ignore", category=UserWarning)
 warnings.filterwarnings("ignore", category=FutureWarning)
+
+# RAG Consistency Analyzer for semantic similarity and exact matching
+class RAGConsistencyAnalyzer:
+    def __init__(self, model_name='sentence-transformers/all-MiniLM-L6-v2'):
+        try:
+            from sentence_transformers import SentenceTransformer
+            from sklearn.metrics.pairwise import cosine_similarity
+            from scipy.optimize import linear_sum_assignment
+            self.model = SentenceTransformer(model_name)
+            self.data = []
+        except ImportError as e:
+            print(f"Warning: Could not import required libraries for semantic analysis: {e}")
+            self.model = None
+            self.data = []
+    
+    def parse_concepts(self, concept_string):
+        """Extract individual concepts from the string"""
+        if not concept_string:
+            return []
+        
+        # Split by common patterns and clean
+        concepts = []
+        # Handle different formats in your data
+        parts = concept_string.replace('\n', ' ').split()
+        
+        # Simple extraction - you may need to refine based on exact format
+        current_concept = []
+        for part in parts:
+            if any(greek in part for greek in ['ἑκούσιον', 'προαίρεσις', 'φρόνησις', 'ἀρετή']) or \
+               any(term in part for term in ['Voluntary', 'Moral', 'Practical', 'Virtue', 'Justice']):
+                if current_concept:
+                    concepts.append(' '.join(current_concept))
+                    current_concept = []
+            current_concept.append(part)
+        
+        if current_concept:
+            concepts.append(' '.join(current_concept))
+        
+        return concepts[:10]  # Limit to 10 concepts
+    
+    def compute_concept_consistency(self, concepts_list1, concepts_list2):
+        """Compute semantic similarity between two concept lists"""
+        if not self.model or not concepts_list1 or not concepts_list2:
+            return 0.0
+        
+        try:
+            from sklearn.metrics.pairwise import cosine_similarity
+            from scipy.optimize import linear_sum_assignment
+            import numpy as np
+            
+            # Compute embeddings
+            embeds1 = self.model.encode(concepts_list1)
+            embeds2 = self.model.encode(concepts_list2)
+            
+            # Hungarian algorithm for optimal concept matching
+            similarity_matrix = cosine_similarity(embeds1, embeds2)
+            row_ind, col_ind = linear_sum_assignment(-similarity_matrix)
+            matched_similarities = similarity_matrix[row_ind, col_ind]
+            
+            return np.mean(matched_similarities)
+        except Exception as e:
+            print(f"Error computing semantic similarity: {e}")
+            return 0.0
+    
+    def exact_concept_overlap(self, concepts_list1, concepts_list2):
+        """Compute Jaccard similarity for exact concept matching"""
+        if not concepts_list1 or not concepts_list2:
+            return 0.0
+            
+        # Normalize concepts for comparison (remove Greek text, punctuation)
+        def normalize_concept(concept):
+            # Extract main English term
+            concept = concept.split('(')[0].strip()
+            return concept.lower()
+        
+        set1 = {normalize_concept(c) for c in concepts_list1}
+        set2 = {normalize_concept(c) for c in concepts_list2}
+        
+        intersection = len(set1.intersection(set2))
+        union = len(set1.union(set2))
+        
+        return intersection / union if union > 0 else 0.0
+    
+    def add_result(self, temperature, top_p, top_k, bm25_weight, concepts_text):
+        """Add a single experimental result"""
+        concepts = self.parse_concepts(concepts_text)
+        self.data.append({
+            'temperature': temperature,
+            'top_p': top_p, 
+            'top_k': top_k,
+            'bm25_weight': bm25_weight,
+            'concepts': concepts
+        })
+    
+    def analyze_single_parameter_stability(self, parameter_name):
+        """Analyze stability within variations of a single parameter"""
+        # Group by the parameter being varied
+        parameter_groups = {}
+        for row in self.data:
+            param_value = row[parameter_name]
+            if param_value not in parameter_groups:
+                parameter_groups[param_value] = []
+            parameter_groups[param_value].append(row)
+        
+        # For each parameter value, compute consistency with other parameter values
+        group_consistencies = []
+        
+        for param_value, group_data in parameter_groups.items():
+            if len(group_data) < 2:
+                continue
+            
+            # Compute pairwise similarities within this parameter value group
+            similarities = []
+            exact_overlaps = []
+            
+            for i in range(len(group_data)):
+                for j in range(i + 1, len(group_data)):
+                    concepts1 = group_data[i]['concepts']
+                    concepts2 = group_data[j]['concepts']
+                    
+                    semantic_sim = self.compute_concept_consistency(concepts1, concepts2)
+                    exact_overlap = self.exact_concept_overlap(concepts1, concepts2)
+                    
+                    similarities.append(semantic_sim)
+                    exact_overlaps.append(exact_overlap)
+            
+            if similarities:
+                group_consistencies.append({
+                    'parameter_value': param_value,
+                    'semantic_similarity_mean': np.mean(similarities),
+                    'semantic_similarity_std': np.std(similarities),
+                    'exact_overlap_mean': np.mean(exact_overlaps),
+                    'exact_overlap_std': np.std(exact_overlaps),
+                    'n_comparisons': len(similarities)
+                })
+        
+        # Also compute cross-parameter-value consistency (how consistent is this parameter across different values)
+        cross_value_similarities = []
+        cross_value_exact_overlaps = []
+        
+        param_values = list(parameter_groups.keys())
+        for i in range(len(param_values)):
+            for j in range(i + 1, len(param_values)):
+                val1 = param_values[i]
+                val2 = param_values[j]
+                
+                # Compare all combinations between these two parameter values
+                for row1 in parameter_groups[val1]:
+                    for row2 in parameter_groups[val2]:
+                        concepts1 = row1['concepts']
+                        concepts2 = row2['concepts']
+                        
+                        semantic_sim = self.compute_concept_consistency(concepts1, concepts2)
+                        exact_overlap = self.exact_concept_overlap(concepts1, concepts2)
+                        
+                        cross_value_similarities.append(semantic_sim)
+                        cross_value_exact_overlaps.append(exact_overlap)
+        
+        return {
+            'parameter': parameter_name,
+            'parameter_values': param_values,
+            'group_results': group_consistencies,
+            'cross_value_semantic_mean': np.mean(cross_value_similarities) if cross_value_similarities else 0.0,
+            'cross_value_exact_mean': np.mean(cross_value_exact_overlaps) if cross_value_exact_overlaps else 0.0,
+            'overall_semantic_mean': np.mean([g['semantic_similarity_mean'] for g in group_consistencies]) if group_consistencies else 0.0,
+            'overall_exact_mean': np.mean([g['exact_overlap_mean'] for g in group_consistencies]) if group_consistencies else 0.0,
+            'total_comparisons': len(cross_value_similarities)
+        }
+    
+    def analyze_cross_parameter_stability(self):
+        """Analyze stability across all parameter combinations"""
+        all_similarities = []
+        all_exact_overlaps = []
+        
+        # All pairwise comparisons
+        for i in range(len(self.data)):
+            for j in range(i + 1, len(self.data)):
+                concepts1 = self.data[i]['concepts']
+                concepts2 = self.data[j]['concepts']
+                
+                semantic_sim = self.compute_concept_consistency(concepts1, concepts2)
+                exact_overlap = self.exact_concept_overlap(concepts1, concepts2)
+                
+                all_similarities.append(semantic_sim)
+                all_exact_overlaps.append(exact_overlap)
+        
+        return {
+            'overall_semantic_mean': np.mean(all_similarities) if all_similarities else 0.0,
+            'overall_semantic_std': np.std(all_similarities) if all_similarities else 0.0,
+            'overall_exact_mean': np.mean(all_exact_overlaps) if all_exact_overlaps else 0.0,
+            'overall_exact_std': np.std(all_exact_overlaps) if all_exact_overlaps else 0.0,
+            'total_comparisons': len(all_similarities)
+        }
+    
+    def generate_stability_report(self, run_within_param=True, run_cross_param=True, run_sensitivity=True):
+        """Generate comprehensive stability analysis"""
+        if run_within_param or run_cross_param or run_sensitivity:
+            print("=== RAG CONCEPT CONSISTENCY ANALYSIS ===\n")
+        
+        results = {}
+        
+        # Analyze each parameter individually (for within-parameter analysis)
+        if run_within_param:
+            parameters = ['temperature', 'top_p', 'top_k', 'bm25_weight']
+            individual_results = {}
+            
+            for param in parameters:
+                print(f"--- {param.upper()} STABILITY ---")
+                result = self.analyze_single_parameter_stability(param)
+                individual_results[param] = result
+                print(f"Average Semantic Consistency: {result['overall_semantic_mean']:.3f}")
+                print(f"Average Exact Overlap: {result['overall_exact_mean']:.3f}")
+                print(f"Number of parameter groups: {len(result['group_results'])}")
+                print()
+            
+            results['individual_parameters'] = individual_results
+        
+        # Overall cross-parameter analysis
+        if run_cross_param:
+            print("--- OVERALL CROSS-PARAMETER STABILITY ---")
+            overall = self.analyze_cross_parameter_stability()
+            results['cross_parameter'] = overall
+            print(f"Semantic Similarity: {overall['overall_semantic_mean']:.3f} ± {overall['overall_semantic_std']:.3f}")
+            print(f"Exact Overlap: {overall['overall_exact_mean']:.3f} ± {overall['overall_exact_std']:.3f}")
+            print(f"Total comparisons: {overall['total_comparisons']}")
+        
+        return results
 def create_fixed_width_table(doc, rows, cols, col_widths_inches):
     """
     Create a table with fixed column widths that actually work in python-docx.
@@ -387,17 +614,70 @@ class UpSetGUI:
         self.select_aggregate_folder_btn.grid(row=1, column=0, sticky=tk.W, padx=(0, 5), pady=2)
         self.aggregate_btn = ttk.Button(aggregate_frame, text="Aggregate Results", command=self.aggregate_results, state='disabled')
         self.aggregate_btn.grid(row=1, column=1, sticky=tk.W, padx=(5, 0), pady=2)
+        
+        # Embedding model selection
+        ttk.Label(aggregate_frame, text="Embedding Model:").grid(row=1, column=2, sticky=tk.W, padx=(10, 5), pady=2)
+        self.embedding_model_var = tk.StringVar(value="🤗 sentence-transformers/all-MiniLM-L6-v2 (384 dim, fast)")
+        self.embedding_model_combo = ttk.Combobox(aggregate_frame, textvariable=self.embedding_model_var, 
+                                                state="readonly", width=50)
+        self.embedding_model_combo['values'] = [
+            "🤗 sentence-transformers/all-MiniLM-L6-v2 (384 dim, fast)",
+            "🤗 sentence-transformers/all-mpnet-base-v2 (768 dim, high-quality)",
+            "🤗 sentence-transformers/all-distilroberta-v1 (768 dim, balanced)",
+            "🤗 sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (384 dim, multilingual)",
+            "🤗 sentence-transformers/paraphrase-multilingual-mpnet-base-v2 (768 dim, multilingual)",
+            "🤗 BAAI/bge-small-en-v1.5 (384 dim, efficient)",
+            "🤗 BAAI/bge-base-en-v1.5 (768 dim, excellent)",
+            "🤗 BAAI/bge-large-en-v1.5 (1024 dim, powerful)",
+            "🤗 intfloat/e5-base-v2 (768 dim, general-purpose)",
+            "🤗 intfloat/e5-large-v2 (1024 dim, advanced)",
+            "🟦 Qwen/Qwen3-Embedding-8B (1024 dim, advanced)",
+            "🟦 BAAI/bge-en-icl (1024 dim, instruction-tuned)",
+            "🟦 BAAI/bge-multilingual-gemma2 (1024 dim, multilingual)"
+        ]
+        self.embedding_model_combo.grid(row=1, column=3, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
+        
+        # RAG Consistency Analysis Options
+        consistency_frame = ttk.Frame(aggregate_frame)
+        consistency_frame.grid(row=2, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(5,2))
+        
+        # Main consistency checkbox
+        self.analyze_consistency_var = tk.BooleanVar(value=False)
+        self.analyze_consistency_cb = ttk.Checkbutton(consistency_frame, text="Analyze Consistency", 
+                                                    variable=self.analyze_consistency_var, 
+                                                    command=self.on_consistency_toggle)
+        self.analyze_consistency_cb.grid(row=0, column=0, sticky=tk.W, pady=2)
+        
+        # Sub-checkboxes for individual analyses
+        self.consistency_sub_frame = ttk.Frame(consistency_frame)
+        self.consistency_sub_frame.grid(row=1, column=0, sticky=(tk.W, tk.E), pady=(2,0))
+        
+        self.within_param_var = tk.BooleanVar(value=False)
+        self.within_param_cb = ttk.Checkbutton(self.consistency_sub_frame, text="A. Within-Parameter Analysis", 
+                                             variable=self.within_param_var, state='disabled')
+        self.within_param_cb.grid(row=0, column=0, sticky=tk.W, padx=(20, 10), pady=2)
+        
+        self.cross_param_var = tk.BooleanVar(value=False)
+        self.cross_param_cb = ttk.Checkbutton(self.consistency_sub_frame, text="B. Cross-Parameter Analysis", 
+                                            variable=self.cross_param_var, state='disabled')
+        self.cross_param_cb.grid(row=0, column=1, sticky=tk.W, padx=(10, 10), pady=2)
+        
+        self.sensitivity_var = tk.BooleanVar(value=False)
+        self.sensitivity_cb = ttk.Checkbutton(self.consistency_sub_frame, text="C. Parameter Sensitivity Ranking", 
+                                            variable=self.sensitivity_var, state='disabled')
+        self.sensitivity_cb.grid(row=0, column=2, sticky=tk.W, padx=(10, 0), pady=2)
+        
         self.aggregate_status_label = ttk.Label(aggregate_frame, text="", foreground="blue")
-        self.aggregate_status_label.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
+        self.aggregate_status_label.grid(row=3, column=0, columnspan=4, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
         # --- Progress bar for aggregation ---
         self.aggregate_progress = ttk.Progressbar(aggregate_frame, mode='determinate', length=300)
-        self.aggregate_progress.grid(row=4, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(2,2))
+        self.aggregate_progress.grid(row=4, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(2,2))
         self.aggregate_time_label = ttk.Label(aggregate_frame, text="", foreground="gray")
-        self.aggregate_time_label.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
+        self.aggregate_time_label.grid(row=5, column=0, columnspan=4, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
         
         # --- LLM Grouping Controls ---
         llm_grouping_frame = ttk.Frame(aggregate_frame)
-        llm_grouping_frame.grid(row=6, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5,2))
+        llm_grouping_frame.grid(row=6, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(5,2))
         self.llm_grouping_var = tk.BooleanVar(value=False)
         self.llm_grouping_cb = ttk.Checkbutton(llm_grouping_frame, text="LLM Grouping (semantic)", variable=self.llm_grouping_var, command=self.on_llm_grouping_toggle)
         self.llm_grouping_cb.grid(row=0, column=0, sticky=tk.W, pady=0)
@@ -447,7 +727,7 @@ class UpSetGUI:
         
         # Results frame with zoom controls
         results_frame = ttk.LabelFrame(main_frame, text="Results", padding="5")
-        results_frame.grid(row=5, column=0, columnspan=3, sticky=(tk.N, tk.S, tk.E, tk.W), pady=5)
+        results_frame.grid(row=9, column=0, columnspan=3, sticky=(tk.N, tk.S, tk.E, tk.W), pady=5)
         results_frame.columnconfigure(0, weight=1)
         results_frame.rowconfigure(1, weight=1)
         
@@ -472,7 +752,7 @@ class UpSetGUI:
         
         # Status label
         self.status_label = ttk.Label(main_frame, text="Ready")
-        self.status_label.grid(row=6, column=0, columnspan=3, pady=2)
+        self.status_label.grid(row=10, column=0, columnspan=3, pady=2)
         
     def browse_file(self):
         file_path = filedialog.askopenfilename(
@@ -2586,6 +2866,721 @@ class UpSetGUI:
         thread.daemon = True
         thread.start()
 
+    def _add_parameter_comparison_table(self, parent_cell, valid_folders):
+        """Add a comprehensive parameter comparison table based on compare.htm data"""
+        try:
+            print("[PARAMETER COMPARISON] Function called successfully")
+            print(f"[PARAMETER COMPARISON] Parent cell type: {type(parent_cell)}")
+            print(f"[PARAMETER COMPARISON] Valid folders: {valid_folders}")
+            print("[PARAMETER COMPARISON] Starting real implementation")
+            
+            # Implement real logic for first folder only
+            self._create_real_parameter_table(parent_cell, valid_folders)
+            
+            # Try to read the compare.htm file
+            compare_html_path = os.path.join(os.path.dirname(__file__), "CrispClean", "compare.htm")
+            if not os.path.exists(compare_html_path):
+                print(f"[PARAMETER COMPARISON] Compare HTML not found at {compare_html_path}")
+                self._create_fallback_parameter_table(parent_cell, valid_folders)
+                return
+            
+            from bs4 import BeautifulSoup
+            with open(compare_html_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            table = soup.find('table')
+            if not table:
+                print("[PARAMETER COMPARISON] No table found in HTML")
+                self._create_fallback_parameter_table(parent_cell, valid_folders)
+                return
+            
+            # Color to folder mapping (based on the color codes in the data)
+            color_to_folder = {
+                '#9932CC': 'Chase',
+                '#556B2F': 'Kant', 
+                '#6A5ACD': 'Mill',
+                '#C71585': 'Nietzsche',
+                '#800000': 'Rousseau',
+                '#FFD700': 'Smith',
+                '#006400': 'Ross',
+                '#D2691E': 'Irwin',
+                '#B22222': 'Crisp',
+                '#2E8B57': 'Aristotle',
+                '#A0522D': 'Plato',
+                '#FF8C00': 'Hume',
+                '#20B2AA': 'Bentham',
+                '#8B4513': 'Rawls',
+                '#FF4500': 'Kant_2',
+                '#228B22': 'Mill_2',
+                '#8B008B': 'Rousseau_2'
+            }
+            
+            # Parse HTML table rows
+            parameter_stats = {}
+            rows = table.find_all('tr')
+            
+            print(f"[PARAMETER COMPARISON] Processing {len(rows)-1} data rows from HTML")
+            
+            for idx, row in enumerate(rows[1:], 1):  # Skip header row
+                cells = row.find_all('td')
+                if len(cells) < 5:
+                    continue
+                    
+                temp = float(cells[0].text.strip())
+                topp = float(cells[1].text.strip())
+                topk = int(cells[2].text.strip())
+                bm25 = float(cells[3].text.strip())
+                
+                # Parse concepts from the last cell
+                concepts_cell = cells[4]
+                concepts = []
+                concept_boxes = concepts_cell.find_all('span', class_='concept-box')
+                
+                for box in concept_boxes:
+                    concept_name = box.text.strip()
+                    color = box.get('style', '').split('background-color: ')[1].split(';')[0] if 'background-color:' in box.get('style', '') else '#000000'
+                    concepts.append((concept_name, color))
+                
+                print(f"[PARAMETER COMPARISON] Row {idx}: T={temp}, P={topp}, K={topk}, B={bm25}, Concepts={len(concepts)}")
+                
+                # Group concepts by folder
+                folder_concepts = {}
+                for concept, color in concepts:
+                    folder = color_to_folder.get(color, 'Unknown')
+                    if folder not in folder_concepts:
+                        folder_concepts[folder] = set()
+                    folder_concepts[folder].add(concept)
+                
+                print(f"[PARAMETER COMPARISON] Folders found: {list(folder_concepts.keys())}")
+                
+                # Calculate metrics for this parameter combination
+                param_key = f"T{temp}_P{topp}_K{topk}_B{bm25}"
+                parameter_stats[param_key] = {
+                    'params': {'temp': temp, 'topp': topp, 'topk': topk, 'bm25': bm25},
+                    'folder_concepts': folder_concepts,
+                    'total_concepts': len(concepts)
+                }
+            
+            print(f"[PARAMETER COMPARISON] Created {len(parameter_stats)} parameter combinations")
+            
+            # Create the full summary table
+            self._create_full_parameter_table(parent_cell, parameter_stats, valid_folders)
+            
+        except Exception as e:
+            print(f"[PARAMETER COMPARISON ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _create_full_parameter_table(self, parent_cell, parameter_stats, valid_folders):
+        """Create the complete parameter comparison table with all metrics"""
+        try:
+            print(f"[FULL PARAMETER TABLE] Creating table with {len(parameter_stats)} combinations")
+            print(f"[FULL PARAMETER TABLE] Valid folders: {valid_folders}")
+            
+            # Calculate number of columns: 1 (parameter) + 3 metrics per folder + 2 overall metrics
+            num_cols = 1 + (len(valid_folders) * 3) + 2
+            summary_table = parent_cell.add_table(rows=1, cols=num_cols)
+            summary_table.style = 'Table Grid'
+            
+            # Set column widths
+            for row in summary_table.rows:
+                for i, cell in enumerate(row.cells):
+                    if i == 0:  # Parameter name column
+                        cell.width = Inches(1.2)
+                    else:
+                        cell.width = Inches(0.6)
+            
+            # Header row
+            hdr_cells = summary_table.rows[0].cells
+            hdr_cells[0].text = "Parameter"
+            
+            col_idx = 1
+            # Add folder-specific headers
+            for folder in valid_folders:
+                hdr_cells[col_idx].text = f"{folder}\nF Total"
+                col_idx += 1
+                hdr_cells[col_idx].text = f"{folder}\nF Unique"
+                col_idx += 1
+                hdr_cells[col_idx].text = f"{folder}\nF Shared"
+                col_idx += 1
+            
+            # Overall metrics columns
+            hdr_cells[col_idx].text = "Overall\nA Unique"
+            col_idx += 1
+            hdr_cells[col_idx].text = "Overall\nA Shared"
+            
+            # Calculate and fill data for each parameter
+            parameter_rows = [
+                ('Temperature', 'temp'),
+                ('Topp', 'topp'), 
+                ('Topk', 'topk'),
+                ('BM25', 'bm25')
+            ]
+            
+            for param_name, param_key in parameter_rows:
+                row_cells = summary_table.add_row().cells
+                row_cells[0].text = param_name
+                
+                # Calculate metrics for this parameter
+                self._calculate_full_parameter_metrics(row_cells, param_key, parameter_stats, valid_folders)
+                
+        except Exception as e:
+            print(f"[FULL PARAMETER TABLE ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _calculate_full_parameter_metrics(self, row_cells, param_key, parameter_stats, valid_folders):
+        """Calculate full metrics for a specific parameter"""
+        try:
+            col_idx = 1
+            
+            # Get all parameter combinations for this parameter type
+            relevant_combinations = []
+            for param_key_full, stats in parameter_stats.items():
+                if param_key in stats['params']:
+                    relevant_combinations.append(stats)
+            
+            print(f"[FULL METRICS] Found {len(relevant_combinations)} combinations for {param_key}")
+            
+            # Calculate overall unique and shared concepts across all combinations
+            all_concepts = set()
+            for combo in relevant_combinations:
+                for folder_concepts in combo['folder_concepts'].values():
+                    all_concepts.update(folder_concepts)
+            
+            print(f"[FULL METRICS] Total concepts across all combinations: {len(all_concepts)}")
+            
+            # For each folder, calculate metrics
+            for folder in valid_folders:
+                folder_concepts = set()
+                for combo in relevant_combinations:
+                    if folder in combo['folder_concepts']:
+                        folder_concepts.update(combo['folder_concepts'][folder])
+                
+                # F Total - Number of concepts for this parameter in this folder
+                f_total = len(folder_concepts)
+                
+                # F Unique - Concepts unique to this parameter in this folder
+                f_unique = 0
+                for concept in folder_concepts:
+                    concept_count = sum(1 for combo in relevant_combinations 
+                                      if folder in combo['folder_concepts'] and concept in combo['folder_concepts'][folder])
+                    if concept_count == 1:
+                        f_unique += 1
+                
+                # F Shared - Concepts shared by this parameter in this folder
+                f_shared = f_total - f_unique
+                
+                # Fill the cells
+                row_cells[col_idx].text = str(f_total)
+                col_idx += 1
+                row_cells[col_idx].text = str(f_unique)
+                col_idx += 1
+                row_cells[col_idx].text = str(f_shared)
+                col_idx += 1
+                
+                print(f"[FULL METRICS] {folder}: Total={f_total}, Unique={f_unique}, Shared={f_shared}")
+            
+            # Calculate overall A metrics (across all folders)
+            a_unique = 0
+            a_shared = 0
+            for concept in all_concepts:
+                concept_count = sum(1 for combo in relevant_combinations 
+                                  for folder_concepts in combo['folder_concepts'].values() 
+                                  if concept in folder_concepts)
+                if concept_count == 1:
+                    a_unique += 1
+                else:
+                    a_shared += 1
+            
+            # Fill overall metrics
+            row_cells[col_idx].text = str(a_unique)
+            col_idx += 1
+            row_cells[col_idx].text = str(a_shared)
+            
+            print(f"[FULL METRICS] Overall: Unique={a_unique}, Shared={a_shared}")
+            
+        except Exception as e:
+            print(f"[FULL METRICS ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _create_real_parameter_table(self, parent_cell, valid_folders):
+        """Create real parameter table with actual data for first folder only"""
+        try:
+            print("[REAL PARAMETER TABLE] Starting real implementation for first folder")
+            
+            # Get first folder (extract just the folder name from the path)
+            first_folder_full = valid_folders[0] if valid_folders else "Unknown"
+            first_folder = os.path.basename(first_folder_full) if first_folder_full != "Unknown" else "Unknown"
+            print(f"[REAL PARAMETER TABLE] Using first folder: {first_folder} (from {first_folder_full})")
+            
+            # Try to read the compare.htm file
+            compare_html_path = os.path.join(os.path.dirname(__file__), "CrispClean", "compare.htm")
+            if not os.path.exists(compare_html_path):
+                print(f"[REAL PARAMETER TABLE] Compare HTML not found at {compare_html_path}")
+                return
+            
+            from bs4 import BeautifulSoup
+            with open(compare_html_path, 'r', encoding='utf-8') as f:
+                html_content = f.read()
+            
+            soup = BeautifulSoup(html_content, 'html.parser')
+            table = soup.find('table')
+            if not table:
+                print("[REAL PARAMETER TABLE] No table found in HTML")
+                return
+            
+            # Color to folder mapping (based on the color codes in the data)
+            color_to_folder = {
+                '#9932CC': 'Chase',
+                '#556B2F': 'Kant', 
+                '#6A5ACD': 'Mill',
+                '#C71585': 'Nietzsche',
+                '#800000': 'Rousseau',
+                '#FFD700': 'Smith',
+                '#006400': 'Ross',
+                '#D2691E': 'Irwin',
+                '#B22222': 'Crisp',
+                '#2E8B57': 'Aristotle',
+                '#A0522D': 'Plato',
+                '#FF8C00': 'Hume',
+                '#20B2AA': 'Bentham',
+                '#8B4513': 'Rawls',
+                '#FF4500': 'Kant_2',
+                '#228B22': 'Mill_2',
+                '#8B008B': 'Rousseau_2'
+            }
+            
+            # Parse HTML table rows
+            parameter_stats = {}
+            rows = table.find_all('tr')
+            
+            print(f"[REAL PARAMETER TABLE] Processing {len(rows)-1} data rows from HTML")
+            
+            for idx, row in enumerate(rows[1:], 1):  # Skip header row
+                cells = row.find_all('td')
+                if len(cells) < 5:
+                    continue
+                    
+                temp = float(cells[0].text.strip())
+                topp = float(cells[1].text.strip())
+                topk = int(cells[2].text.strip())
+                bm25 = float(cells[3].text.strip())
+                
+                # Parse concepts from the last cell
+                concepts_cell = cells[4]
+                concepts = []
+                concept_boxes = concepts_cell.find_all('span', class_='concept-box')
+                
+                for box in concept_boxes:
+                    concept_name = box.text.strip()
+                    color = box.get('style', '').split('background-color: ')[1].split(';')[0] if 'background-color:' in box.get('style', '') else '#000000'
+                    concepts.append((concept_name, color))
+                
+                print(f"[REAL PARAMETER TABLE] Row {idx}: T={temp}, P={topp}, K={topk}, B={bm25}, Concepts={len(concepts)}")
+                
+                # Group concepts by folder
+                folder_concepts = {}
+                for concept, color in concepts:
+                    folder = color_to_folder.get(color, 'Unknown')
+                    if folder not in folder_concepts:
+                        folder_concepts[folder] = set()
+                    folder_concepts[folder].add(concept)
+                
+                print(f"[REAL PARAMETER TABLE] Folders found: {list(folder_concepts.keys())}")
+                
+                # Calculate metrics for this parameter combination
+                param_key = f"T{temp}_P{topp}_K{topk}_B{bm25}"
+                parameter_stats[param_key] = {
+                    'params': {'temp': temp, 'topp': topp, 'topk': topk, 'bm25': bm25},
+                    'folder_concepts': folder_concepts,
+                    'total_concepts': len(concepts)
+                }
+            
+            print(f"[REAL PARAMETER TABLE] Created {len(parameter_stats)} parameter combinations")
+            
+            # Create real table with actual data
+            self._create_real_data_table(parent_cell, parameter_stats, first_folder, first_folder_full)
+            
+        except Exception as e:
+            print(f"[REAL PARAMETER TABLE ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _create_real_data_table(self, parent_cell, parameter_stats, first_folder, first_folder_full):
+        """Create table with real calculated data for first folder"""
+        try:
+            print(f"[REAL DATA TABLE] Creating table for folder: {first_folder}")
+            
+            # Create table with 4 columns: Parameter, F Total, F Unique, F Shared
+            real_table = parent_cell.add_table(rows=1, cols=4)
+            real_table.style = 'Table Grid'
+            
+            # Add headers
+            hdr_cells = real_table.rows[0].cells
+            hdr_cells[0].text = "Parameter"
+            hdr_cells[1].text = f"{first_folder}\nF Total"
+            hdr_cells[2].text = f"{first_folder}\nF Unique"
+            hdr_cells[3].text = f"{first_folder}\nF Shared"
+            
+            # Calculate and add data for each parameter
+            parameter_rows = [
+                ('Temperature', 'temp'),
+                ('Topp', 'topp'), 
+                ('Topk', 'topk'),
+                ('BM25', 'bm25')
+            ]
+            
+            for param_name, param_key in parameter_rows:
+                print(f"[REAL DATA TABLE] Calculating metrics for {param_name}")
+                
+                # Get all parameter combinations for this parameter type
+                relevant_combinations = []
+                for param_key_full, stats in parameter_stats.items():
+                    if param_key in stats['params']:
+                        relevant_combinations.append(stats)
+                
+                print(f"[REAL DATA TABLE] Found {len(relevant_combinations)} combinations for {param_name}")
+                
+                # Calculate metrics for this parameter and first folder
+                folder_concepts = set()
+                for combo in relevant_combinations:
+                    # Check both the folder name and full path
+                    if first_folder in combo['folder_concepts'] or first_folder_full in combo['folder_concepts']:
+                        folder_key = first_folder if first_folder in combo['folder_concepts'] else first_folder_full
+                        folder_concepts.update(combo['folder_concepts'][folder_key])
+                
+                # F Total - Number of concepts for this parameter in this folder
+                f_total = len(folder_concepts)
+                
+                # F Unique - Concepts unique to this parameter in this folder
+                f_unique = 0
+                for concept in folder_concepts:
+                    concept_count = 0
+                    for combo in relevant_combinations:
+                        # Check both folder name and full path
+                        if first_folder in combo['folder_concepts'] and concept in combo['folder_concepts'][first_folder]:
+                            concept_count += 1
+                        elif first_folder_full in combo['folder_concepts'] and concept in combo['folder_concepts'][first_folder_full]:
+                            concept_count += 1
+                    if concept_count == 1:
+                        f_unique += 1
+                
+                # F Shared - Concepts shared by this parameter in this folder
+                f_shared = f_total - f_unique
+                
+                print(f"[REAL DATA TABLE] {param_name}: Total={f_total}, Unique={f_unique}, Shared={f_shared}")
+                
+                # Add row to table
+                row_cells = real_table.add_row().cells
+                row_cells[0].text = param_name
+                row_cells[1].text = str(f_total)
+                row_cells[2].text = str(f_unique)
+                row_cells[3].text = str(f_shared)
+            
+            print("[REAL DATA TABLE] Real data table created successfully")
+            
+        except Exception as e:
+            print(f"[REAL DATA TABLE ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _create_fallback_parameter_table(self, parent_cell, valid_folders):
+        """Create a simple fallback table when data parsing fails"""
+        try:
+            # Create a simple 3x3 table as fallback
+            fallback_table = parent_cell.add_table(rows=3, cols=3)
+            fallback_table.style = 'Table Grid'
+            
+            # Header row
+            header_row = fallback_table.rows[0]
+            header_row.cells[0].text = "Parameter"
+            header_row.cells[0].paragraphs[0].runs[0].bold = True
+            header_row.cells[1].text = "Status"
+            header_row.cells[1].paragraphs[0].runs[0].bold = True
+            header_row.cells[2].text = "Note"
+            header_row.cells[2].paragraphs[0].runs[0].bold = True
+            
+            # Data rows
+            parameters = ['Temperature', 'Topp', 'Topk', 'BM25']
+            for i, param in enumerate(parameters[:3]):  # Only show first 3
+                row = fallback_table.rows[i + 1]
+                row.cells[0].text = param
+                row.cells[1].text = "Data not available"
+                row.cells[2].text = "CSV parsing failed"
+            
+            print("[PARAMETER COMPARISON] Created fallback table")
+            
+        except Exception as e:
+            print(f"[FALLBACK TABLE ERROR] {e}")
+
+    def _create_parameter_summary_table(self, parent_cell, parameter_stats, valid_folders, color_to_folder):
+        """Create the actual parameter summary table"""
+        try:
+            print(f"[PARAMETER TABLE] Creating table with {len(parameter_stats)} parameter combinations")
+            print(f"[PARAMETER TABLE] Valid folders: {valid_folders}")
+            
+            # Create a simpler table structure
+            # Rows: Temperature, Topp, Topk, BM25
+            # Columns: Parameter + Each folder (F Total, F Unique, F Shared) + Overall (A Unique, A Shared)
+            
+            # Calculate number of columns: 1 (parameter) + 3 metrics per folder + 2 overall metrics
+            num_cols = 1 + (len(valid_folders) * 3) + 2
+            summary_table = parent_cell.add_table(rows=5, cols=num_cols)  # 4 parameter rows + 1 header
+            summary_table.style = 'Table Grid'
+            
+            # Set column widths
+            for row in summary_table.rows:
+                for i, cell in enumerate(row.cells):
+                    if i == 0:  # Parameter name column
+                        cell.width = Inches(1.2)
+                    else:
+                        cell.width = Inches(0.6)
+            
+            # Header row
+            header_row = summary_table.rows[0]
+            
+            # Set parameter column header
+            para = header_row.cells[0].paragraphs[0]
+            run = para.add_run("Parameter")
+            run.bold = True
+            
+            col_idx = 1
+            # Add folder-specific headers
+            for folder in valid_folders:
+                # F Total column
+                para = header_row.cells[col_idx].paragraphs[0]
+                run = para.add_run(f"{folder}\nF Total")
+                run.bold = True
+                para.alignment = 1  # Center
+                col_idx += 1
+                
+                # F Unique column
+                para = header_row.cells[col_idx].paragraphs[0]
+                run = para.add_run(f"{folder}\nF Unique")
+                run.bold = True
+                para.alignment = 1  # Center
+                col_idx += 1
+                
+                # F Shared column
+                para = header_row.cells[col_idx].paragraphs[0]
+                run = para.add_run(f"{folder}\nF Shared")
+                run.bold = True
+                para.alignment = 1  # Center
+                col_idx += 1
+            
+            # Overall metrics columns
+            para = header_row.cells[col_idx].paragraphs[0]
+            run = para.add_run("Overall\nA Unique")
+            run.bold = True
+            para.alignment = 1  # Center
+            col_idx += 1
+            
+            para = header_row.cells[col_idx].paragraphs[0]
+            run = para.add_run("Overall\nA Shared")
+            run.bold = True
+            para.alignment = 1  # Center
+            
+            # Calculate and fill data for each parameter
+            parameter_rows = [
+                ('Temperature', 'temp'),
+                ('Topp', 'topp'), 
+                ('Topk', 'topk'),
+                ('BM25', 'bm25')
+            ]
+            
+            for row_idx, (param_name, param_key) in enumerate(parameter_rows, 1):
+                row = summary_table.rows[row_idx]
+                para = row.cells[0].paragraphs[0]
+                run = para.add_run(param_name)
+                run.bold = True
+                
+                # Calculate metrics for this parameter
+                self._calculate_simple_parameter_metrics(row, param_key, parameter_stats, valid_folders)
+                
+        except Exception as e:
+            print(f"[PARAMETER TABLE ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _calculate_simple_parameter_metrics(self, row, param_key, parameter_stats, valid_folders):
+        """Calculate simple metrics for a specific parameter"""
+        try:
+            col_idx = 1
+            
+            # Get all parameter combinations for this parameter type
+            relevant_combinations = []
+            for param_key_full, stats in parameter_stats.items():
+                if param_key in stats['params']:
+                    relevant_combinations.append(stats)
+            
+            print(f"[PARAMETER METRICS] Found {len(relevant_combinations)} combinations for {param_key}")
+            
+            # Calculate overall unique and shared concepts across all combinations
+            all_concepts = set()
+            for combo in relevant_combinations:
+                for folder_concepts in combo['folder_concepts'].values():
+                    all_concepts.update(folder_concepts)
+            
+            print(f"[PARAMETER METRICS] Total concepts across all combinations: {len(all_concepts)}")
+            
+            # For each folder, calculate metrics
+            for folder in valid_folders:
+                folder_concepts = set()
+                for combo in relevant_combinations:
+                    if folder in combo['folder_concepts']:
+                        folder_concepts.update(combo['folder_concepts'][folder])
+                
+                # F Total - Number of concepts for this parameter in this folder
+                f_total = len(folder_concepts)
+                
+                # F Unique - Concepts unique to this parameter in this folder
+                f_unique = 0
+                for concept in folder_concepts:
+                    concept_count = sum(1 for combo in relevant_combinations 
+                                      if folder in combo['folder_concepts'] and concept in combo['folder_concepts'][folder])
+                    if concept_count == 1:
+                        f_unique += 1
+                
+                # F Shared - Concepts shared by this parameter in this folder
+                f_shared = f_total - f_unique
+                
+                # Fill the cells
+                para = row.cells[col_idx].paragraphs[0]
+                para.add_run(str(f_total))
+                col_idx += 1
+                para = row.cells[col_idx].paragraphs[0]
+                para.add_run(str(f_unique))
+                col_idx += 1
+                para = row.cells[col_idx].paragraphs[0]
+                para.add_run(str(f_shared))
+                col_idx += 1
+                
+                print(f"[PARAMETER METRICS] {folder}: Total={f_total}, Unique={f_unique}, Shared={f_shared}")
+            
+            # Calculate overall A metrics (across all folders)
+            a_unique = 0
+            a_shared = 0
+            for concept in all_concepts:
+                concept_count = sum(1 for combo in relevant_combinations 
+                                  for folder_concepts in combo['folder_concepts'].values() 
+                                  if concept in folder_concepts)
+                if concept_count == 1:
+                    a_unique += 1
+                else:
+                    a_shared += 1
+            
+            # Fill overall metrics
+            row.cells[col_idx].text = str(a_unique)
+            col_idx += 1
+            row.cells[col_idx].text = str(a_shared)
+            
+            print(f"[PARAMETER METRICS] Overall: Unique={a_unique}, Shared={a_shared}")
+            
+        except Exception as e:
+            print(f"[PARAMETER METRICS ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _calculate_parameter_metrics(self, row, param_name, param_values, parameter_stats, valid_folders, color_to_folder):
+        """Calculate metrics for a specific parameter"""
+        try:
+            col_idx = 1
+            
+            # Get all parameter combinations for this parameter type
+            relevant_combinations = []
+            for param_key, stats in parameter_stats.items():
+                if param_name.lower() == 'temperature' and stats['params']['temp'] in param_values:
+                    relevant_combinations.append(stats)
+                elif param_name.lower() == 'topp' and stats['params']['topp'] in param_values:
+                    relevant_combinations.append(stats)
+                elif param_name.lower() == 'topk' and stats['params']['topk'] in param_values:
+                    relevant_combinations.append(stats)
+                elif param_name.lower() == 'bm25' and stats['params']['bm25'] in param_values:
+                    relevant_combinations.append(stats)
+            
+            # Calculate overall unique and shared concepts across all combinations
+            all_concepts = set()
+            for combo in relevant_combinations:
+                for folder_concepts in combo['folder_concepts'].values():
+                    all_concepts.update(folder_concepts)
+            
+            # For each folder, calculate metrics
+            for folder in valid_folders:
+                folder_concepts = set()
+                for combo in relevant_combinations:
+                    if folder in combo['folder_concepts']:
+                        folder_concepts.update(combo['folder_concepts'][folder])
+                
+                # F Total - Number of concepts for this parameter in this folder
+                f_total = len(folder_concepts)
+                
+                # F Unique - Concepts unique to this parameter in this folder
+                f_unique = 0
+                for concept in folder_concepts:
+                    concept_count = sum(1 for combo in relevant_combinations 
+                                      if folder in combo['folder_concepts'] and concept in combo['folder_concepts'][folder])
+                    if concept_count == 1:
+                        f_unique += 1
+                
+                # F Shared - Concepts shared by this parameter in this folder
+                f_shared = f_total - f_unique
+                
+                # F Unique% and F Shared% - Percentages from all concepts across all parameters
+                total_concepts_all_params = len(all_concepts)
+                f_unique_pct = (f_unique / total_concepts_all_params * 100) if total_concepts_all_params > 0 else 0
+                f_shared_pct = (f_shared / total_concepts_all_params * 100) if total_concepts_all_params > 0 else 0
+                
+                # Fill the cells
+                row.cells[col_idx].text = str(f_total)
+                col_idx += 1
+                row.cells[col_idx].text = str(f_unique)
+                col_idx += 1
+                row.cells[col_idx].text = str(f_shared)
+                col_idx += 1
+                row.cells[col_idx].text = f"{f_unique_pct:.1f}%"
+                col_idx += 1
+                row.cells[col_idx].text = f"{f_shared_pct:.1f}%"
+                col_idx += 1
+                
+                # Add empty cells for A metrics (will be filled later)
+                for _ in range(3):
+                    row.cells[col_idx].text = ""
+                    col_idx += 1
+            
+            # Calculate overall A metrics (across all folders)
+            a_unique = 0
+            a_shared = 0
+            for concept in all_concepts:
+                concept_count = sum(1 for combo in relevant_combinations 
+                                  for folder_concepts in combo['folder_concepts'].values() 
+                                  if concept in folder_concepts)
+                if concept_count == 1:
+                    a_unique += 1
+                else:
+                    a_shared += 1
+            
+            a_unique_pct = (a_unique / len(all_concepts) * 100) if all_concepts else 0
+            a_shared_pct = (a_shared / len(all_concepts) * 100) if all_concepts else 0
+            
+            # Fill overall metrics
+            para = row.cells[col_idx].paragraphs[0]
+            para.add_run(str(a_unique))
+            col_idx += 1
+            para = row.cells[col_idx].paragraphs[0]
+            para.add_run(str(a_shared))
+            col_idx += 1
+            row.cells[col_idx].text = f"{a_unique_pct:.1f}%"
+            col_idx += 1
+            row.cells[col_idx].text = f"{a_shared_pct:.1f}%"
+            
+        except Exception as e:
+            print(f"[PARAMETER METRICS ERROR] {e}")
+            import traceback
+            traceback.print_exc()
+
     def _aggregate_results_thread(self):
         import os
         import docx
@@ -2599,13 +3594,22 @@ class UpSetGUI:
         import traceback
         import time
         import string
-        def safe_update_progress(val, elapsed, est_total):
-            self.root.after(0, lambda: self._update_aggregate_progress(val, elapsed, est_total))
+        def safe_update_progress(current_step, total_steps, elapsed, est_total):
+            progress_percent = (current_step / total_steps) * 100 if total_steps > 0 else 0
+            remaining_time = est_total - elapsed if est_total > elapsed else 0
+            self.root.after(0, lambda: self._update_aggregate_progress(progress_percent, elapsed, est_total, current_step, total_steps, remaining_time))
         def safe_update_status(msg, color):
             self.root.after(0, lambda: self.aggregate_status_label.config(text=msg, foreground=color))
         def safe_update_time(msg):
             self.root.after(0, lambda: self.aggregate_time_label.config(text=msg))
+        # Define total steps for progress tracking
+        total_steps = 8  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis, saving, completion
+        current_step = 0
+        
         safe_update_status("Scanning folders...", "blue")
+        current_step += 1
+        safe_update_progress(current_step, total_steps, 0, 60)  # Estimate 60 seconds total
+        
         parent = self.aggregate_folder
         if not parent or not os.path.isdir(parent):
             safe_update_status("Invalid parent folder.", "red")
@@ -2627,6 +3631,9 @@ class UpSetGUI:
             return
         safe_update_status(f"Found {len(valid_folders)} valid folders. Extracting data...", "blue")
         # Step 2: Extract concepts and images
+        current_step += 1
+        safe_update_progress(current_step, total_steps, 0, 60)
+        
         folder_concepts = {}
         all_concepts = set()
         t0 = time.time()
@@ -2655,10 +3662,10 @@ class UpSetGUI:
             # Progress bar update
             elapsed = time.time() - t0
             if idx == 0 and len(valid_folders) > 1:
-                est_total = elapsed * len(valid_folders)
+                est_total = elapsed * len(valid_folders) * 2  # Estimate 2x for remaining steps
             else:
-                est_total = elapsed if idx == 0 else est_total
-            safe_update_progress(100 * (idx+1) / len(valid_folders), elapsed, est_total)
+                est_total = elapsed * 2 if idx == 0 else est_total
+            safe_update_progress(current_step, total_steps, elapsed, est_total)
         total_elapsed = time.time() - t0
         # Step 3: Refined Color Grouping Logic
         concept_list = sorted(all_concepts, key=lambda x: x.lower())
@@ -2874,6 +3881,10 @@ class UpSetGUI:
             imgs = [os.path.join(folder, f) for f in ["compare_BM25_composed.png", "compare_Topk_composed.png", "compare_Topp_composed.png", "compare_Temp_composed.png"]]
             folder_images.append((os.path.basename(folder), imgs))
         # Step 6: Generate DOCX
+        current_step += 1
+        safe_update_progress(current_step, total_steps, total_elapsed, est_total)
+        safe_update_status("Generating DOCX document...", "blue")
+        
         try:
             doc = docx.Document()
             # Set landscape orientation and zero margins
@@ -2890,6 +3901,12 @@ class UpSetGUI:
 
             # Gather folder/group stats for the left column text
             total_concepts = sum(len(group) for _, group in llm_group_tuples) if self.llm_grouping_var.get() else sum(len(concepts) for concepts in color_to_concepts.values())
+            
+            # Calculate original concepts counts from folders (before regrouping)
+            original_folder_concept_counts = []
+            for folder in valid_folders:
+                original_folder_concept_counts.append(len(folder_concepts[folder]))
+            
             folder_concept_counts = []
             folder_group_counts = []
             for folder in valid_folders:
@@ -3244,6 +4261,13 @@ class UpSetGUI:
                 
             # Add the UpSet diagram in a table format (summary on left, diagram on right)
             doc.add_heading("Overlap Summary", level=1)
+            
+            # Add RAG Consistency Analysis Tables
+            current_step += 1
+            safe_update_progress(current_step, total_steps, total_elapsed, est_total)
+            safe_update_status("Running RAG consistency analysis...", "blue")
+            self._add_rag_consistency_analysis(doc, valid_folders, folder_concepts)
+            
             plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[6, 9])
 
             # Left column for overlap summary text
@@ -3251,21 +4275,47 @@ class UpSetGUI:
 
             # Add overlap summary text to left column
             para = left_cell.paragraphs[0]
+            
+            # Create a smaller table with original concepts on left and regrouped info on right
+            summary_table = left_cell.add_table(rows=len(folder_names) + 1, cols=2)
+            summary_table.style = 'Table Grid'
+            
+            # Set column widths (left: original concepts, right: regrouped info)
+            for row in summary_table.rows:
+                row.cells[0].width = Inches(2.5)  # Left column for original concepts
+                row.cells[1].width = Inches(3.5)  # Right column for regrouped info
+            
+            # Header row
+            header_cell_left = summary_table.rows[0].cells[0]
+            header_cell_left.text = "Original Concepts"
+            header_cell_left.paragraphs[0].runs[0].bold = True
+            
+            header_cell_right = summary_table.rows[0].cells[1]
+            header_cell_right.text = "After Regrouping using common words OR " + self.llm_model_var.get()
+            header_cell_right.paragraphs[0].runs[0].bold = True
+            
+            # Data rows
+            for i, name in enumerate(folder_names):
+                # Left column: Original concepts count
+                left_cell_data = summary_table.rows[i + 1].cells[0]
+                left_para = left_cell_data.paragraphs[0]
+                left_para.add_run(f"📁 {name}: ").bold = True
+                left_para.add_run(f"{original_folder_concept_counts[i]} concepts").bold = True
+                
+                # Right column: Regrouped info
+                right_cell_data = summary_table.rows[i + 1].cells[1]
+                right_para = right_cell_data.paragraphs[0]
+                right_para.add_run(f"📁 {name}: ").bold = True
+                right_para.add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups").bold = True
+            
+            # Add total concepts information below the table
+            para = left_cell.add_paragraph()
             para.add_run("📊 Total concepts: ").bold = True
             run = para.add_run(str(total_concepts))
             run.bold = True
-            para.add_run("\n\n")
-            
-            # Folder information
-            for i, name in enumerate(folder_names):
-                folder_line = f"📁 {name}: "
-                run = para.add_run(folder_line)
-                run.bold = True
-                run2 = para.add_run(f"{folder_concept_counts[i]} concepts; {folder_group_counts[i]} groups")
-                run2.bold = True
-                para.add_run("\n")
-            
             para.add_run("\n")
+            
+            # Parameter comparison table removed as requested
             
             # Regrouping method
             para.add_run("🎨 The concepts have been regrouped into ").bold = True
@@ -4109,19 +5159,463 @@ class UpSetGUI:
                     for j, folder in enumerate(valid_folders):
                         present = any(c in folder_concepts[folder] for c in concepts_in_color)
                         doc_row[1+j].text = "✔" if present else ""
-            safe_update_progress(100, total_elapsed, total_elapsed)
-            # Save
-            out_path = os.path.join(parent, "aggregated_results.docx")
+            # Final step: Save document
+            current_step += 1
+            safe_update_progress(current_step, total_steps, total_elapsed, est_total)
+            safe_update_status("Saving document...", "blue")
+            
+            # Save with LLM model and date in filename
+            from datetime import datetime
+            model_name = self.llm_model_var.get().replace(" ", "_").replace("/", "_")
+            date_str = datetime.now().strftime("%Y%m%d")
+            out_path = os.path.join(parent, f"aggregated_words_or_{model_name}_{date_str}.docx")
             doc.save(out_path)
+            
+            # Completion
+            current_step += 1
+            safe_update_progress(current_step, total_steps, total_elapsed, total_elapsed)
             safe_update_status(f"Aggregation complete. Saved to {out_path}", "green")
         except Exception as e:
             tb = traceback.format_exc()
             safe_update_status(f"Error generating DOCX: {e}", "red")
             print(tb)
 
-    def _update_aggregate_progress(self, val, elapsed, est_total):
+    def _update_aggregate_progress(self, val, elapsed, est_total, current_step=None, total_steps=None, remaining_time=None):
         self.aggregate_progress['value'] = val
-        self.aggregate_time_label.config(text=f"Elapsed: {elapsed:.1f}s, Estimated total: {est_total:.1f}s")
+        if current_step is not None and total_steps is not None and remaining_time is not None:
+            self.aggregate_time_label.config(text=f"Step {current_step}/{total_steps} | Elapsed: {elapsed:.1f}s | Remaining: {remaining_time:.1f}s | Total: {est_total:.1f}s")
+        else:
+            self.aggregate_time_label.config(text=f"Elapsed: {elapsed:.1f}s, Estimated total: {est_total:.1f}s")
+    
+    def _add_rag_consistency_analysis(self, doc, valid_folders, folder_concepts):
+        """Add RAG consistency analysis tables to the document"""
+        try:
+            import time
+            
+            # Check which analyses are enabled
+            if not self.analyze_consistency_var.get():
+                return
+            
+            # Get the selected embedding model
+            model_display_name = self.embedding_model_var.get()
+            model_mapping = {
+                "🤗 sentence-transformers/all-MiniLM-L6-v2 (384 dim, fast)": "sentence-transformers/all-MiniLM-L6-v2",
+                "🤗 sentence-transformers/all-mpnet-base-v2 (768 dim, high-quality)": "sentence-transformers/all-mpnet-base-v2",
+                "🤗 sentence-transformers/all-distilroberta-v1 (768 dim, balanced)": "sentence-transformers/all-distilroberta-v1",
+                "🤗 sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 (384 dim, multilingual)": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+                "🤗 sentence-transformers/paraphrase-multilingual-mpnet-base-v2 (768 dim, multilingual)": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+                "🤗 BAAI/bge-small-en-v1.5 (384 dim, efficient)": "BAAI/bge-small-en-v1.5",
+                "🤗 BAAI/bge-base-en-v1.5 (768 dim, excellent)": "BAAI/bge-base-en-v1.5",
+                "🤗 BAAI/bge-large-en-v1.5 (1024 dim, powerful)": "BAAI/bge-large-en-v1.5",
+                "🤗 intfloat/e5-base-v2 (768 dim, general-purpose)": "intfloat/e5-base-v2",
+                "🤗 intfloat/e5-large-v2 (1024 dim, advanced)": "intfloat/e5-large-v2",
+                "🟦 Qwen/Qwen3-Embedding-8B (1024 dim, advanced)": "Qwen/Qwen3-Embedding-8B",
+                "🟦 BAAI/bge-en-icl (1024 dim, instruction-tuned)": "BAAI/bge-en-icl",
+                "🟦 BAAI/bge-multilingual-gemma2 (1024 dim, multilingual)": "BAAI/bge-multilingual-gemma2"
+            }
+            model_name = model_mapping.get(model_display_name, "sentence-transformers/all-MiniLM-L6-v2")
+            
+            # Extract parameter data from HTML files (grouped by folder)
+            folder_data = self._extract_parameter_data_from_html(valid_folders)
+            
+            if not folder_data:
+                print("No parameter data found for RAG consistency analysis")
+                return
+            
+            # Generate folder-specific analysis
+            folder_analysis_results = {}
+            analysis_timings = {}
+            
+            print(f"[RAG ANALYSIS] Analyzing {len(folder_data)} folders individually")
+            
+            for folder in valid_folders:
+                folder_name = os.path.basename(folder)
+                print(f"[RAG ANALYSIS] Processing folder: {folder_name}")
+                
+                if folder_name not in folder_data:
+                    print(f"[RAG ANALYSIS] No data found for folder: {folder_name}")
+                    continue
+                
+                # Create analyzer for this folder
+                folder_analyzer = RAGConsistencyAnalyzer(model_name)
+                
+                # Add data for this folder only
+                for param_combo in folder_data[folder_name]:
+                    concepts_text = " ".join(param_combo['concepts'])
+                    folder_analyzer.add_result(
+                        param_combo['params']['temp'],
+                        param_combo['params']['topp'],
+                        param_combo['params']['topk'],
+                        param_combo['params']['bm25'],
+                        concepts_text
+                    )
+                
+                if folder_analyzer.data:
+                    # Time each analysis type individually
+                    folder_timings = {}
+                    
+                    # A. Within-Parameter Analysis
+                    if self.within_param_var.get():
+                        start_time = time.time()
+                        within_results = folder_analyzer.analyze_single_parameter_stability('temperature')
+                        end_time = time.time()
+                        folder_timings['within_param'] = end_time - start_time
+                    
+                    # B. Cross-Parameter Analysis  
+                    if self.cross_param_var.get():
+                        start_time = time.time()
+                        cross_results = folder_analyzer.analyze_cross_parameter_stability()
+                        end_time = time.time()
+                        folder_timings['cross_param'] = end_time - start_time
+                    
+                    # C. Parameter Sensitivity Ranking
+                    if self.sensitivity_var.get():
+                        start_time = time.time()
+                        sensitivity_results = folder_analyzer.analyze_single_parameter_stability('temperature')
+                        end_time = time.time()
+                        folder_timings['sensitivity'] = end_time - start_time
+                    
+                    # Generate full report
+                    folder_results = folder_analyzer.generate_stability_report(
+                        run_within_param=self.within_param_var.get(),
+                        run_cross_param=self.cross_param_var.get(),
+                        run_sensitivity=self.sensitivity_var.get()
+                    )
+                    
+                    folder_analysis_results[folder_name] = folder_results
+                    analysis_timings[folder_name] = folder_timings
+                    
+                    # Debug: Print parameter values found for this folder
+                    print(f"[RAG ANALYSIS] {folder_name} - Found {len(folder_analyzer.data)} data points in {analysis_timings[folder_name]:.2f}s")
+                    for param in ['temperature', 'top_p', 'top_k', 'bm25_weight']:
+                        if param in folder_results['individual_parameters']:
+                            result = folder_results['individual_parameters'][param]
+                            print(f"[RAG ANALYSIS] {folder_name} - {param} values: {result['parameter_values']}")
+                else:
+                    print(f"[RAG ANALYSIS] No data for folder: {folder_name}")
+            
+            if not folder_analysis_results:
+                print("No folder analysis results available")
+                return
+            
+            # Add analysis tables to document with timings
+            self._add_analysis_tables_to_doc(doc, folder_analysis_results, valid_folders, analysis_timings)
+            
+        except Exception as e:
+            print(f"Error in RAG consistency analysis: {e}")
+            import traceback
+            traceback.print_exc()
+    
+    def _extract_parameter_data_from_html(self, valid_folders):
+        """Extract parameter data from HTML files in the folders"""
+        folder_data = {}
+        
+        try:
+            import bs4
+            
+            for folder in valid_folders:
+                folder_name = os.path.basename(folder)
+                html_path = os.path.join(folder, "compare.htm")
+                
+                if not os.path.exists(html_path):
+                    print(f"HTML file not found: {html_path}")
+                    continue
+                
+                print(f"Processing HTML file: {html_path}")
+                
+                with open(html_path, 'r', encoding='utf-8') as f:
+                    html_content = f.read()
+                
+                soup = bs4.BeautifulSoup(html_content, 'html.parser')
+                table = soup.find('table')
+                
+                if not table:
+                    print(f"No table found in {html_path}")
+                    continue
+                
+                # Initialize folder data
+                folder_data[folder_name] = []
+                
+                # Parse HTML table rows
+                rows = table.find_all('tr')
+                print(f"Found {len(rows)-1} data rows in {html_path}")
+                
+                for idx, row in enumerate(rows[1:], 1):  # Skip header row
+                    cells = row.find_all('td')
+                    if len(cells) < 5:
+                        continue
+                        
+                    temp = float(cells[0].text.strip())
+                    topp = float(cells[1].text.strip())
+                    topk = int(cells[2].text.strip())
+                    bm25 = float(cells[3].text.strip())
+                    
+                    # Parse concepts from the last cell
+                    concepts_cell = cells[4]
+                    concepts = []
+                    concept_boxes = concepts_cell.find_all('span', class_='concept-box')
+                    
+                    for box in concept_boxes:
+                        concept_name = box.text.strip()
+                        concepts.append(concept_name)
+                    
+                    print(f"Row {idx}: T={temp}, P={topp}, K={topk}, B={bm25}, Concepts={len(concepts)}")
+                    
+                    # Store this parameter combination for this folder
+                    folder_data[folder_name].append({
+                        'params': {'temp': temp, 'topp': topp, 'topk': topk, 'bm25': bm25},
+                        'concepts': set(concepts),
+                        'total_concepts': len(concepts)
+                    })
+                
+                # Debug: Print unique parameter values found for this folder
+                if folder_data[folder_name]:
+                    temps = sorted(set([p['params']['temp'] for p in folder_data[folder_name]]))
+                    topps = sorted(set([p['params']['topp'] for p in folder_data[folder_name]]))
+                    topks = sorted(set([p['params']['topk'] for p in folder_data[folder_name]]))
+                    bm25s = sorted(set([p['params']['bm25'] for p in folder_data[folder_name]]))
+                    print(f"[HTML EXTRACTION] {folder_name} - Temp: {temps}, TopP: {topps}, TopK: {topks}, BM25: {bm25s}")
+            
+            print(f"Extracted data for {len(folder_data)} folders")
+            return folder_data
+            
+        except Exception as e:
+            print(f"Error extracting parameter data from HTML: {e}")
+            import traceback
+            traceback.print_exc()
+            return {}
+    
+    def _add_analysis_tables_to_doc(self, doc, folder_analysis_results, valid_folders, analysis_timings=None):
+        """Add the three analysis tables to the document"""
+        try:
+            import time
+            from docx.shared import Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            # Add header explaining what the analysis does
+            doc.add_heading("RAG Parameter Consistency Analysis", level=2)
+            doc.add_paragraph(
+                "Evaluates concept extraction consistency across parameter settings using semantic similarity and exact matching. "
+                "Higher values = more consistent extraction."
+            )
+            
+            # A. Within-Parameter Analysis
+            if self.within_param_var.get():
+                start_time = time.time()
+                doc.add_heading("A. Within-Parameter Analysis", level=3)
+                para = doc.add_paragraph()
+                para.add_run("Consistency when varying each parameter. Higher values = less impact on concept variation. ").font.size = Inches(0.08)
+                para.add_run("Example: Temperature across 0.1, 0.33, 0.78, 1.0.").font.size = Inches(0.08)
+                
+                # Create within-parameter table
+                within_table = doc.add_table(rows=1, cols=len(valid_folders) + 1)
+                within_table.style = 'Table Grid'
+                
+                # Set column widths
+                for i, col in enumerate(within_table.columns):
+                    if i == 0:
+                        col.width = Inches(1.5)  # Parameter column
+                    else:
+                        col.width = Inches(1.0)  # Folder columns
+                
+                # Header row
+                header_cells = within_table.rows[0].cells
+                header_cells[0].text = "Parameter"
+                for i, folder in enumerate(valid_folders):
+                    header_cells[i + 1].text = os.path.basename(folder)
+                
+                # Make header bold
+                for cell in within_table.rows[0].cells:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.bold = True
+                
+                # Add data rows
+                parameters = ['temperature', 'top_p', 'top_k', 'bm25_weight']
+                for param in parameters:
+                    row = within_table.add_row()
+                    row.cells[0].text = param.replace('_', ' ').title()
+                    
+                    # Add data for each folder
+                    for i, folder in enumerate(valid_folders):
+                        folder_name = os.path.basename(folder)
+                        if folder_name in folder_analysis_results and param in folder_analysis_results[folder_name]['individual_parameters']:
+                            result = folder_analysis_results[folder_name]['individual_parameters'][param]
+                            semantic_mean = result.get('overall_semantic_mean', 0.0)
+                            exact_mean = result.get('overall_exact_mean', 0.0)
+                            total_comparisons = result.get('total_comparisons', 0)
+                            row.cells[i + 1].text = f"S: {semantic_mean:.3f}\nE: {exact_mean:.3f}\nC: {total_comparisons}"
+                        else:
+                            row.cells[i + 1].text = "N/A"
+                
+                # Add timing information
+                timing_para = doc.add_paragraph()
+                timing_para.add_run("⏱️ Within-Parameter Analysis completed in ").font.size = Inches(0.1)
+                # Get timing from analysis_timings if available
+                if analysis_timings and any('within_param' in timings for timings in analysis_timings.values()):
+                    avg_time = sum(timings.get('within_param', 0) for timings in analysis_timings.values()) / len(analysis_timings)
+                    timing_para.add_run(f"{avg_time:.2f} seconds").font.size = Inches(0.1)
+                else:
+                    timing_para.add_run("X.XX seconds").font.size = Inches(0.1)
+                timing_para.add_run(".").font.size = Inches(0.1)
+            
+            # B. Cross-Parameter Analysis
+            if self.cross_param_var.get():
+                start_time = time.time()
+                doc.add_heading("B. Cross-Parameter Analysis", level=3)
+                para = doc.add_paragraph()
+                para.add_run("Compares ALL parameter combinations pairwise for overall system stability. ").font.size = Inches(0.08)
+                para.add_run("Shows overall consistency across all variations.").font.size = Inches(0.08)
+                
+                # Create cross-parameter table
+                cross_table = doc.add_table(rows=1, cols=len(valid_folders) + 1)
+                cross_table.style = 'Table Grid'
+                
+                # Set column widths
+                for i, col in enumerate(cross_table.columns):
+                    if i == 0:
+                        col.width = Inches(1.5)  # Metric column
+                    else:
+                        col.width = Inches(1.0)  # Folder columns
+                
+                # Header row
+                header_cells = cross_table.rows[0].cells
+                header_cells[0].text = "Metric"
+                for i, folder in enumerate(valid_folders):
+                    header_cells[i + 1].text = os.path.basename(folder)
+                
+                # Make header bold
+                for cell in cross_table.rows[0].cells:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.bold = True
+                
+                # Add data rows
+                metrics = [
+                    ('Semantic Similarity', 'overall_semantic_mean', 'overall_semantic_std'),
+                    ('Exact Matching', 'overall_exact_mean', 'overall_exact_std'),
+                    ('Total Comparisons', 'total_comparisons', None)
+                ]
+                
+                for metric_name, mean_key, std_key in metrics:
+                    row = cross_table.add_row()
+                    row.cells[0].text = metric_name
+                    
+                    # Add data for each folder
+                    for i, folder in enumerate(valid_folders):
+                        folder_name = os.path.basename(folder)
+                        if folder_name in folder_analysis_results and 'cross_parameter' in folder_analysis_results[folder_name]:
+                            result = folder_analysis_results[folder_name]['cross_parameter']
+                            mean_val = result.get(mean_key, 0.0)
+                            if std_key and std_key in result:
+                                std_val = result.get(std_key, 0.0)
+                                row.cells[i + 1].text = f"{mean_val:.3f} ± {std_val:.3f}"
+                            else:
+                                row.cells[i + 1].text = f"{mean_val:.0f}" if mean_key == 'total_comparisons' else f"{mean_val:.3f}"
+                        else:
+                            row.cells[i + 1].text = "N/A"
+                
+                # Add timing information
+                timing_para = doc.add_paragraph()
+                timing_para.add_run("⏱️ Cross-Parameter Analysis completed in ").font.size = Inches(0.1)
+                # Get timing from analysis_timings if available
+                if analysis_timings and any('cross_param' in timings for timings in analysis_timings.values()):
+                    avg_time = sum(timings.get('cross_param', 0) for timings in analysis_timings.values()) / len(analysis_timings)
+                    timing_para.add_run(f"{avg_time:.2f} seconds").font.size = Inches(0.1)
+                else:
+                    timing_para.add_run("X.XX seconds").font.size = Inches(0.1)
+                timing_para.add_run(".").font.size = Inches(0.1)
+            
+            # C. Parameter Sensitivity Ranking
+            if self.sensitivity_var.get():
+                start_time = time.time()
+                doc.add_heading("C. Parameter Sensitivity Ranking", level=3)
+                doc.add_paragraph(
+                    "Shows which parameters cause the most concept variation. "
+                    "Lower values indicate higher sensitivity (more variation when parameter changes)."
+                )
+                
+                # Create sensitivity table
+                sensitivity_table = doc.add_table(rows=1, cols=len(valid_folders) + 1)
+                sensitivity_table.style = 'Table Grid'
+                
+                # Set column widths
+                for i, col in enumerate(sensitivity_table.columns):
+                    if i == 0:
+                        col.width = Inches(1.5)  # Parameter column
+                    else:
+                        col.width = Inches(1.0)  # Folder columns
+                
+                # Header row
+                header_cells = sensitivity_table.rows[0].cells
+                header_cells[0].text = "Parameter"
+                for i, folder in enumerate(valid_folders):
+                    header_cells[i + 1].text = os.path.basename(folder)
+                
+                # Make header bold
+                for cell in sensitivity_table.rows[0].cells:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.bold = True
+                
+                # Calculate sensitivity rankings (use first folder for ranking order)
+                first_folder = os.path.basename(valid_folders[0]) if valid_folders else None
+                if first_folder and first_folder in folder_analysis_results:
+                    first_folder_results = folder_analysis_results[first_folder]['individual_parameters']
+                    # Sort parameters by sensitivity (lower consistency = higher sensitivity)
+                    param_sensitivities = []
+                    for param in ['temperature', 'top_p', 'top_k', 'bm25_weight']:
+                        if param in first_folder_results:
+                            result = first_folder_results[param]
+                            consistency = result.get('overall_semantic_mean', 0.0)
+                            param_sensitivities.append((param, consistency))
+                    
+                    # Sort by consistency (ascending - most sensitive first)
+                    param_sensitivities.sort(key=lambda x: x[1])
+                    sorted_params = [p[0] for p in param_sensitivities]
+                else:
+                    sorted_params = ['temperature', 'top_p', 'top_k', 'bm25_weight']
+                
+                # Add data rows
+                for param in sorted_params:
+                    row = sensitivity_table.add_row()
+                    row.cells[0].text = param.replace('_', ' ').title()
+                    
+                    # Add data for each folder
+                    for i, folder in enumerate(valid_folders):
+                        folder_name = os.path.basename(folder)
+                        if folder_name in folder_analysis_results and param in folder_analysis_results[folder_name]['individual_parameters']:
+                            result = folder_analysis_results[folder_name]['individual_parameters'][param]
+                            semantic_mean = result.get('overall_semantic_mean', 0.0)
+                            exact_mean = result.get('overall_exact_mean', 0.0)
+                            total_comparisons = result.get('total_comparisons', 0)
+                            row.cells[i + 1].text = f"S: {semantic_mean:.3f}\nE: {exact_mean:.3f}\nC: {total_comparisons}"
+                        else:
+                            row.cells[i + 1].text = "N/A"
+                
+                # Add timing information
+                timing_para = doc.add_paragraph()
+                timing_para.add_run("⏱️ Parameter Sensitivity Ranking completed in ").font.size = Inches(0.1)
+                # Get timing from analysis_timings if available
+                if analysis_timings and any('sensitivity' in timings for timings in analysis_timings.values()):
+                    avg_time = sum(timings.get('sensitivity', 0) for timings in analysis_timings.values()) / len(analysis_timings)
+                    timing_para.add_run(f"{avg_time:.2f} seconds").font.size = Inches(0.1)
+                else:
+                    timing_para.add_run("X.XX seconds").font.size = Inches(0.1)
+                timing_para.add_run(".").font.size = Inches(0.1)
+            
+            # Add overall timing summary
+            if analysis_timings:
+                total_time = sum(sum(timings.values()) for timings in analysis_timings.values())
+                timing_para = doc.add_paragraph()
+                timing_para.add_run("⏱️ Total RAG Consistency Analysis completed in ").font.size = Inches(0.1)
+                timing_para.add_run(f"{total_time:.2f} seconds").font.size = Inches(0.1)
+                timing_para.add_run(".").font.size = Inches(0.1)
+            
+        except Exception as e:
+            print(f"Error adding analysis tables to document: {e}")
+            import traceback
+            traceback.print_exc()
 
     def on_llm_grouping_toggle(self):
         # If LLM Grouping is enabled, disable all other grouping controls
@@ -4138,6 +5632,19 @@ class UpSetGUI:
         # (requires storing references to the checkboxes)
         # self.agg_group_by_subletters_cb.config(state=state)
         # self.agg_group_by_words_cb.config(state=state)
+
+    def on_consistency_toggle(self):
+        """Enable/disable consistency analysis sub-checkboxes"""
+        state = 'normal' if self.analyze_consistency_var.get() else 'disabled'
+        self.within_param_cb.config(state=state)
+        self.cross_param_cb.config(state=state)
+        self.sensitivity_cb.config(state=state)
+        
+        # If main checkbox is unchecked, uncheck all sub-checkboxes
+        if not self.analyze_consistency_var.get():
+            self.within_param_var.set(False)
+            self.cross_param_var.set(False)
+            self.sensitivity_var.set(False)
 
 def replace_bekker_with_greek(concept, bekker_map):
     for bekker, greek in bekker_map.items():
