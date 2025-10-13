@@ -2067,6 +2067,10 @@ class UpSetGUI:
                     import traceback
                     traceback.print_exc()
                 
+                # Add file information to the dataframe
+                df['File'] = file_name
+                print(f"[QUOTES DEBUG] Added File column to dataframe: {file_name}")
+                
                 # Store the processed dataframe for later use
                 processed_dataframes.append(df)
                 
@@ -2084,17 +2088,55 @@ class UpSetGUI:
                 print(f"[QUOTES DEBUG] Combined dataframe has {len(combined_df)} rows and columns: {list(combined_df.columns)}")
                 print(f"[QUOTES DEBUG] Concept_Quotes column exists: {'Concept_Quotes' in combined_df.columns}")
                 
-                # Create blocks for the combined data
-                n = len(combined_df)
-                block_size = n // 4 if n % 4 == 0 else 5
-                blocks = [(i*block_size, (i+1)*block_size, ['Temperature', 'Top-p', 'Top-k', 'BM25 Weight'][i] if i < 4 else '?') for i in range(4)]
+                # Create file-to-varying-parameter mapping and blocks
+                file_to_varying_param = {}
+                blocks = []
+                current_start = 0
+                
+                for i, file_path in enumerate(self.merged_file_paths):
+                    file_name = os.path.basename(file_path)
+                    file_name_lower = file_name.lower()
+                    print(f"[QUOTES DEBUG] Analyzing file: {file_name}")
+                    
+                    # Determine varying parameter for this file
+                    if 'temp' in file_name_lower:
+                        varying_param = 'Temperature'
+                        print(f"[QUOTES DEBUG] Detected Temperature sweep in {file_name}")
+                    elif 'top_p' in file_name_lower or 'topp' in file_name_lower:
+                        varying_param = 'Top-p'
+                        print(f"[QUOTES DEBUG] Detected Top-p sweep in {file_name}")
+                    elif 'top_k' in file_name_lower or 'topk' in file_name_lower:
+                        varying_param = 'Top-k'
+                        print(f"[QUOTES DEBUG] Detected Top-k sweep in {file_name}")
+                    elif 'bm25' in file_name_lower:
+                        varying_param = 'BM25 Weight'
+                        print(f"[QUOTES DEBUG] Detected BM25 sweep in {file_name}")
+                    else:
+                        varying_param = 'Unknown'
+                        print(f"[QUOTES DEBUG] Unknown parameter type in {file_name}")
+                    
+                    # Map file to varying parameter
+                    file_to_varying_param[file_name] = varying_param
+                    
+                    # Count rows for this file in the combined dataframe
+                    file_rows = combined_df[combined_df['File'] == file_name]
+                    file_end = current_start + len(file_rows)
+                    
+                    # Create block for this file
+                    blocks.append((current_start, file_end, varying_param))
+                    print(f"[QUOTES DEBUG] Created block for {file_name}: rows {current_start}-{file_end-1}, varying param: {varying_param}")
+                    
+                    current_start = file_end
+                
+                print(f"[QUOTES DEBUG] File to varying param mapping: {file_to_varying_param}")
+                print(f"[QUOTES DEBUG] Created blocks: {blocks}")
                 
                 # Define parameter labels
                 param_labels = {'Temperature': 'Temp', 'Top-p': 'Topp', 'Top-k': 'Topk', 'BM25 Weight': 'BM25'}
                 
                 # Generate additional files
                 self.generate_html_table(blocks, combined_df, self.color_mapping, outdir, param_labels)
-                self.generate_docx_and_csv(blocks, combined_df, self.color_mapping, outdir, param_labels)
+                self.generate_docx_and_csv(blocks, combined_df, self.color_mapping, outdir, param_labels, file_to_varying_param)
                 self.generate_stats_files(blocks, combined_df, self.color_mapping, outdir, param_labels)
             
         except Exception as e:
@@ -2826,7 +2868,7 @@ class UpSetGUI:
             except Exception as fallback_error:
                 print(f"Error creating fallback report: {fallback_error}")
 
-    def generate_docx_and_csv(self, blocks, df, color_mapping, outdir, param_labels):
+    def generate_docx_and_csv(self, blocks, df, color_mapping, outdir, param_labels, file_to_varying_param=None):
         try:
             import docx
             from docx.shared import RGBColor
@@ -3049,7 +3091,7 @@ class UpSetGUI:
                         para.add_run(", ")
                 row_cells[2].text = str(len(block_concepts))
             # --- Concept Quotes Section ---
-            self._add_quotes_section_to_stats_doc(doc, df, outdir)
+            self._add_quotes_section_to_stats_doc(doc, df, outdir, blocks)
             
             # --- UpSet Histogram Section ---
             doc.add_heading("UpSet Diagram Histograms", level=1)
@@ -3088,7 +3130,7 @@ class UpSetGUI:
         except Exception as e:
             print(f"Error generating stats TXT/PDF/DOCX: {e}")
 
-    def _add_quotes_section_to_stats_doc(self, doc, df, outdir):
+    def _add_quotes_section_to_stats_doc(self, doc, df, outdir, blocks):
         """Add concept quotes section to the stats document"""
         try:
             from docx.shared import Inches
@@ -3105,18 +3147,35 @@ class UpSetGUI:
             # Get all unique concepts
             all_concepts = sorted(set(c for concepts in df['Concepts'] for c in concepts))
             
+            # Create file-to-varying-parameter mapping from blocks
+            file_to_varying_param = {}
+            for start, end, varying_param in blocks:
+                subset = df.iloc[start:end].copy()
+                for _, row in subset.iterrows():
+                    file_name = row.get('File', 'Unknown')
+                    file_to_varying_param[file_name] = varying_param
+                    print(f"[QUOTES DEBUG] File '{file_name}' has varying param: {varying_param}")
+            
+            print(f"[QUOTES DEBUG] File to varying param mapping: {file_to_varying_param}")
+            
             # Create quotes table
-            quotes_table = doc.add_table(rows=1, cols=2)  # Concept and Quotes columns
+            quotes_table = doc.add_table(rows=1, cols=5)  # Concept, Short Quote, Full Citation, Sources, Reason columns
             quotes_table.style = 'Table Grid'
             
             # Set column widths
-            quotes_table.columns[0].width = Inches(2.0)  # Concept column
-            quotes_table.columns[1].width = Inches(6.0)  # Quotes column
+            quotes_table.columns[0].width = Inches(1.2)  # Concept column
+            quotes_table.columns[1].width = Inches(1.8)  # Short Quote column
+            quotes_table.columns[2].width = Inches(2.2)  # Full Citation column
+            quotes_table.columns[3].width = Inches(1.5)  # Sources column
+            quotes_table.columns[4].width = Inches(2.8)  # Reason column
             
             # Header row
             header_cells = quotes_table.rows[0].cells
             header_cells[0].text = "Concept"
-            header_cells[1].text = "Quotes and Citations"
+            header_cells[1].text = "Short Quote"
+            header_cells[2].text = "Full Citation"
+            header_cells[3].text = "Sources"
+            header_cells[4].text = "Reason"
             
             # Make header bold
             for cell in quotes_table.rows[0].cells:
@@ -3127,30 +3186,55 @@ class UpSetGUI:
             # Add data rows for each concept
             for concept in all_concepts:
                 row = quotes_table.add_row()
-                row.cells[0].text = concept
                 
-                # Look for quotes in the stored Concept_Quotes data
-                quotes = self._get_quotes_for_concept_from_data(concept, df)
+                # Set concept text with color from color mapping
+                concept_cell = row.cells[0]
+                concept_para = concept_cell.paragraphs[0]
+                concept_run = concept_para.add_run(concept)
                 
-                if quotes:
-                    # Combine quotes with line breaks
-                    quotes_text = "\n\n".join(quotes)
-                    # Truncate if too long (limit to ~1000 characters)
-                    if len(quotes_text) > 1000:
-                        quotes_text = quotes_text[:1000] + "..."
-                    row.cells[1].text = quotes_text
+                # Apply color from color mapping
+                if hasattr(self, 'color_mapping') and concept in self.color_mapping:
+                    color = self.color_mapping[concept]
+                    if color.startswith('#') and len(color) == 7:
+                        from docx.shared import RGBColor
+                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                        concept_run.font.color.rgb = RGBColor(r, g, b)
+                
+                # Look for quotes and additional info in the stored data with file mapping
+                quote_info = self._get_detailed_quotes_for_concept(concept, df, file_to_varying_param)
+                
+                if quote_info['quotes']:
+                    # Short Quote column (first quote, truncated)
+                    short_quote = quote_info['quotes'][0]
+                    if len(short_quote) > 150:
+                        short_quote = short_quote[:150] + "..."
+                    row.cells[1].text = short_quote
+                    
+                    # Full Citation column (quotes only, no source info)
+                    full_citation = self._format_quotes_only(quote_info)
+                    row.cells[2].text = full_citation
+                    
+                    # Sources column (parameter details with per-source varying parameter)
+                    self._format_sources_cell_with_per_source_varying_param(row.cells[3], quote_info)
+                    
+                    # Reason column
+                    reason_text = self._format_reason_text(quote_info)
+                    row.cells[4].text = reason_text
                 else:
                     row.cells[1].text = "No quotes found"
+                    row.cells[2].text = "No citation available"
+                    row.cells[3].text = "No sources available"
+                    row.cells[4].text = "No reason available"
                 
                 # Set font size for all cells in this row
                 for cell in row.cells:
                     for para in cell.paragraphs:
                         for run in para.runs:
-                            run.font.size = Inches(0.09)  # Smaller font for quotes
+                            run.font.size = Inches(0.08)  # Smaller font for better fit
             
             # Add summary paragraph
             total_quotes = sum(1 for concept in all_concepts 
-                             if self._get_quotes_for_concept_from_data(concept, df))
+                             if self._get_detailed_quotes_for_concept(concept, df, file_to_varying_param)['quotes'])
             doc.add_paragraph(
                 f"Summary: Found quotes for {total_quotes} out of {len(all_concepts)} concepts."
             )
@@ -3293,6 +3377,559 @@ class UpSetGUI:
         
         return quotes
 
+    def _get_detailed_quotes_for_concept(self, concept_name, df, file_to_varying_param=None):
+        """Get detailed quote information including source parameters and context"""
+        quote_info = {
+            'quotes': [],
+            'sources': [],
+            'reason_text': '',
+            'specific_use': ''
+        }
+
+        try:
+            print(f"[QUOTES DEBUG] Getting detailed quotes for '{concept_name}'")
+
+            # Check if Concept_Quotes column exists
+            if 'Concept_Quotes' not in df.columns:
+                print(f"[QUOTES DEBUG] Concept_Quotes column not found in dataframe")
+                return quote_info
+
+            # Look through all rows in the dataframe where the concept appears
+            for i, row in df.iterrows():
+                # Check if concept appears in the Concepts column
+                if 'Concepts' in row and concept_name in row['Concepts']:
+                    # Extract quotes if available
+                    if 'Concept_Quotes' in row and isinstance(row['Concept_Quotes'], dict):
+                        concept_quotes = row['Concept_Quotes']
+                        if concept_name in concept_quotes:
+                            quotes = concept_quotes[concept_name]
+                            quote_info['quotes'].extend(quotes)
+
+                    # Extract source information with file tracking
+                    source_info = {
+                        'file': row.get('File', 'Unknown'),
+                        'temperature': row.get('Temperature', 'N/A'),
+                        'top_p': row.get('Top-p', 'N/A'),
+                        'top_k': row.get('Top-k', 'N/A'),
+                        'bm25_weight': row.get('BM25 Weight', 'N/A'),
+                        'main_answer': row.get('Main Answer', ''),
+                        'varying_param': None  # Will be set based on file
+                    }
+                    
+                    # Determine varying parameter based on file
+                    if file_to_varying_param and source_info['file'] in file_to_varying_param:
+                        source_info['varying_param'] = file_to_varying_param[source_info['file']]
+                        print(f"[QUOTES DEBUG] Source from file '{source_info['file']}' has varying param: {source_info['varying_param']}")
+                    
+                    quote_info['sources'].append(source_info)
+
+                    # Extract reason and specific use from Main Answer
+                    reason_info = self._extract_reason_and_specific_use(row.get('Main Answer', ''), concept_name)
+                    if reason_info['reason']:
+                        quote_info['reason_text'] = reason_info['reason']
+                    if reason_info['specific_use']:
+                        quote_info['specific_use'] = reason_info['specific_use']
+
+            # Remove duplicates and limit quotes
+            quote_info['quotes'] = list(dict.fromkeys(quote_info['quotes']))[:3]
+            print(f"[QUOTES DEBUG] Found {len(quote_info['quotes'])} quotes and {len(quote_info['sources'])} sources for '{concept_name}'")
+
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error getting detailed quotes for concept '{concept_name}': {e}")
+            import traceback
+            traceback.print_exc()
+
+        return quote_info
+
+    def _extract_reason_and_specific_use(self, text, concept_name):
+        """Extract reason for selection and specific use from text"""
+        reason_info = {'reason': '', 'specific_use': ''}
+        
+        try:
+            import re
+            
+            print(f"[QUOTES DEBUG] Extracting reason for concept '{concept_name}' from text of length {len(text)}")
+            
+            # Look for the concept and extract reason and specific use
+            # Pattern: **Concept** ... **Reason for Selection**: ... **Specific Use**: ...
+            pattern = rf'\*\*{re.escape(concept_name)}\*\*.*?\*\*Reason for Selection\*\*:\s*([^*]+?)(?:\*\*Specific Use\*\*:\s*([^*]+))?'
+            match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+            
+            if match:
+                reason_info['reason'] = match.group(1).strip()
+                if match.group(2):
+                    reason_info['specific_use'] = match.group(2).strip()
+                print(f"[QUOTES DEBUG] Found reason: {reason_info['reason'][:100]}...")
+            else:
+                # Try alternative patterns - look for reason and specific use separately
+                # Look for just reason - use a more permissive pattern
+                reason_pattern = rf'\*\*{re.escape(concept_name)}\*\*.*?\*\*Reason for Selection\*\*:\s*([^*]+?)(?=\*\*|$)'
+                reason_match = re.search(reason_pattern, text, re.DOTALL | re.IGNORECASE)
+                if reason_match:
+                    reason_text = reason_match.group(1).strip()
+                    # Clean up the reason text
+                    reason_text = re.sub(r'\s+', ' ', reason_text)  # Replace multiple spaces
+                    reason_info['reason'] = reason_text
+                    print(f"[QUOTES DEBUG] Found reason (alt): {reason_info['reason'][:100]}...")
+                
+                # Look for just specific use - use a more permissive pattern
+                specific_pattern = rf'\*\*{re.escape(concept_name)}\*\*.*?\*\*Specific Use\*\*:\s*([^*]+?)(?=\*\*|$)'
+                specific_match = re.search(specific_pattern, text, re.DOTALL | re.IGNORECASE)
+                if specific_match:
+                    specific_text = specific_match.group(1).strip()
+                    # Clean up the specific use text
+                    specific_text = re.sub(r'\s+', ' ', specific_text)  # Replace multiple spaces
+                    reason_info['specific_use'] = specific_text
+                    print(f"[QUOTES DEBUG] Found specific use: {reason_info['specific_use'][:100]}...")
+            
+            # If still no reason found, try a broader search
+            if not reason_info['reason']:
+                # Look for any text that might contain reason information
+                broader_pattern = rf'{re.escape(concept_name)}.*?Reason for Selection.*?:\s*([^.]+\.[^.]*)'
+                broader_match = re.search(broader_pattern, text, re.DOTALL | re.IGNORECASE)
+                if broader_match:
+                    reason_text = broader_match.group(1).strip()
+                    reason_text = re.sub(r'\s+', ' ', reason_text)  # Clean up
+                    reason_info['reason'] = reason_text
+                    print(f"[QUOTES DEBUG] Found reason (broader): {reason_info['reason'][:100]}...")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting reason and specific use: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return reason_info
+
+    def _format_full_citation(self, quote_info):
+        """Format full citation with all details"""
+        if not quote_info['quotes'] or not quote_info['sources']:
+            return "No citation available"
+        
+        citation_parts = []
+        
+        # Add all quotes (no truncation)
+        for i, quote in enumerate(quote_info['quotes']):
+            citation_parts.append(f"Quote {i+1}: {quote}")
+        
+        # Add source information
+        for i, source in enumerate(quote_info['sources']):
+            source_text = f"Source {i+1}: Temp={source['temperature']}, Top-p={source['top_p']}, Top-k={source['top_k']}, BM25={source['bm25_weight']}"
+            citation_parts.append(source_text)
+        
+        return "\n\n".join(citation_parts)
+
+    def _format_quotes_only(self, quote_info):
+        """Format quotes without source information"""
+        if not quote_info['quotes']:
+            return "No quotes available"
+        
+        quote_parts = []
+        
+        # Add all quotes (no truncation)
+        for i, quote in enumerate(quote_info['quotes']):
+            quote_parts.append(f"Quote {i+1}: {quote}")
+        
+        return "\n\n".join(quote_parts)
+
+    def _format_sources_info(self, quote_info):
+        """Format source parameter information"""
+        if not quote_info['sources']:
+            return "No sources available"
+        
+        source_parts = []
+        
+        # Add source information
+        for i, source in enumerate(quote_info['sources']):
+            source_text = f"Source {i+1}: Temp={source['temperature']}, Top-p={source['top_p']}, Top-k={source['top_k']}, BM25={source['bm25_weight']}"
+            source_parts.append(source_text)
+        
+        return "\n\n".join(source_parts)
+
+    def _detect_varying_parameter_from_sources(self, sources):
+        """Detect which parameter is actually varying in the sources data by finding consecutive sweeps"""
+        if not sources or len(sources) < 2:
+            return None
+        
+        # Extract parameter values
+        param_values = {
+            'Temperature': [],
+            'Top-p': [],
+            'Top-k': [],
+            'BM25 Weight': []
+        }
+        
+        for source in sources:
+            param_values['Temperature'].append(source.get('temperature', 'N/A'))
+            param_values['Top-p'].append(source.get('top_p', 'N/A'))
+            param_values['Top-k'].append(source.get('top_k', 'N/A'))
+            param_values['BM25 Weight'].append(source.get('bm25_weight', 'N/A'))
+        
+        # Convert to comparable values
+        clean_param_values = {}
+        for param_name, values in param_values.items():
+            clean_values = []
+            for val in values:
+                if val == 'N/A' or val is None:
+                    clean_values.append(None)
+                else:
+                    try:
+                        clean_values.append(float(val))
+                    except (ValueError, TypeError):
+                        clean_values.append(str(val))
+            clean_param_values[param_name] = clean_values
+        
+        print(f"[DEBUG] Analyzing {len(sources)} sources for parameter sweeps:")
+        for param_name, values in clean_param_values.items():
+            non_none = [v for v in values if v is not None]
+            unique_vals = set(non_none)
+            print(f"[DEBUG] {param_name}: {values} -> {len(unique_vals)} unique values: {sorted(unique_vals)}")
+        
+        # Find consecutive parameter sweeps
+        sweep_detections = []
+        
+        for param_name, values in clean_param_values.items():
+            # Find consecutive ranges where this parameter varies significantly
+            sweep_ranges = self._find_consecutive_sweeps(values)
+            print(f"[DEBUG] {param_name} sweep ranges: {sweep_ranges}")
+            
+            for start, end in sweep_ranges:
+                # Check if other parameters are relatively constant in this range
+                other_params_constant = True
+                for other_param, other_values in clean_param_values.items():
+                    if other_param == param_name:
+                        continue
+                    
+                    # Check if other parameter values in this range are relatively constant
+                    range_values = other_values[start:end]
+                    non_none_range = [v for v in range_values if v is not None]
+                    if len(non_none_range) > 1:
+                        # Calculate coefficient of variation
+                        try:
+                            import statistics
+                            mean_val = statistics.mean(non_none_range)
+                            if mean_val != 0:
+                                std_val = statistics.stdev(non_none_range)
+                                cv = std_val / abs(mean_val)
+                                # If coefficient of variation > 0.1, consider it varying
+                                if cv > 0.1:
+                                    other_params_constant = False
+                                    print(f"[DEBUG] {other_param} is varying in range {start}-{end} (cv={cv:.3f})")
+                                    break
+                        except (statistics.StatisticsError, ZeroDivisionError):
+                            other_params_constant = False
+                            print(f"[DEBUG] {other_param} calculation error in range {start}-{end}")
+                            break
+                
+                if other_params_constant and (end - start) >= 3:  # At least 3 consecutive sources
+                    sweep_detections.append((param_name, end - start))
+                    print(f"[DEBUG] Found sweep for {param_name} in range {start}-{end}")
+        
+        # Return the parameter that appears in the most sweep detections
+        if sweep_detections:
+            param_counts = {}
+            for param, count in sweep_detections:
+                param_counts[param] = param_counts.get(param, 0) + count
+            print(f"[DEBUG] Sweep detections: {sweep_detections}")
+            print(f"[DEBUG] Param counts: {param_counts}")
+            result = max(param_counts, key=param_counts.get)
+            print(f"[DEBUG] Selected parameter: {result}")
+            return result
+        
+        # Fallback to simple variation detection
+        param_scores = {}
+        for param_name, values in clean_param_values.items():
+            non_none_values = [v for v in values if v is not None]
+            if len(non_none_values) > 1 and len(set(non_none_values)) > 1:
+                variation_score = len(set(non_none_values)) / len(non_none_values)
+                param_scores[param_name] = variation_score
+        
+        print(f"[DEBUG] Fallback varying_params: {param_scores}")
+        if param_scores:
+            result = max(param_scores, key=lambda x: x[1])[0]
+            print(f"[DEBUG] Fallback selected parameter: {result}")
+            return result
+        
+        print(f"[DEBUG] No varying parameter detected")
+        return None
+
+    def _find_consecutive_sweeps(self, values):
+        """Find consecutive ranges where a parameter varies significantly"""
+        ranges = []
+        n = len(values)
+        
+        i = 0
+        while i < n - 2:  # Need at least 3 values for a sweep
+            if values[i] is None:
+                i += 1
+                continue
+            
+            # Find the end of a potential sweep group
+            j = i + 1
+            consecutive_varying = 0
+            
+            while j < n and values[j] is not None:
+                # Check if this value is significantly different from the previous
+                try:
+                    if abs(float(values[j]) - float(values[j-1])) > 0.01:  # Significant change
+                        consecutive_varying += 1
+                        j += 1
+                    else:
+                        # If we have at least 2 consecutive varying values, this is a sweep
+                        if consecutive_varying >= 2:  # At least 3 total values (including the first)
+                            ranges.append((i, j))
+                        break
+                except (ValueError, TypeError):
+                    break
+            
+            # Check if we reached the end with a valid sweep
+            if j == n and consecutive_varying >= 2:
+                ranges.append((i, j))
+            
+            i = j if j > i else i + 1
+        
+        return ranges
+
+    def _find_parameter_sweep_ranges(self, values):
+        """Find consecutive ranges where a parameter varies significantly"""
+        ranges = []
+        n = len(values)
+        
+        i = 0
+        while i < n - 1:
+            if values[i] is None:
+                i += 1
+                continue
+            
+            # Find the end of a potential sweep group
+            j = i + 1
+            consecutive_varying = 0
+            
+            while j < n and values[j] is not None:
+                # Check if this value is significantly different from the previous
+                try:
+                    if abs(float(values[j]) - float(values[j-1])) > 0.01:  # Significant change
+                        consecutive_varying += 1
+                        j += 1
+                    else:
+                        # If we have at least 2 consecutive varying values, this is a sweep
+                        if consecutive_varying >= 1:  # At least 2 total values (including the first)
+                            ranges.append((i, j))
+                        break
+                except (ValueError, TypeError):
+                    break
+            
+            # Check if we reached the end with a valid sweep
+            if j == n and consecutive_varying >= 1:
+                ranges.append((i, j))
+            
+            i = j if j > i else i + 1
+        
+        return ranges
+
+    def _format_sources_cell_with_per_source_varying_param(self, cell, quote_info):
+        """Format sources cell with per-source varying parameter detection and bolding"""
+        if not quote_info['sources']:
+            cell.text = "No sources available"
+            return
+
+        # Clear the cell first
+        cell.text = ""
+
+        # Parameter name mapping for display
+        param_display_names = {
+            'Temperature': 'TEMP',
+            'Top-p': 'TOP P',
+            'Top-k': 'TOP K',
+            'BM25 Weight': 'BM25'
+        }
+
+        # Add source information with per-source varying parameter detection
+        for i, source in enumerate(quote_info['sources']):
+            if i > 0:
+                # Add line break between sources
+                cell.paragraphs[0].add_run("\n\n")
+
+            # Start with "Source X: "
+            source_run = cell.paragraphs[0].add_run(f"Source {i+1}: ")
+
+            # Get the varying parameter for this specific source
+            source_varying_param = source.get('varying_param', 'Unknown')
+            print(f"[DEBUG] Source {i+1} varying param: {source_varying_param}")
+
+            # Add parameter values with bold for the varying parameter
+            params = [
+                ('Temp', source['temperature'], 'Temperature'),
+                ('Top-p', source['top_p'], 'Top-p'),
+                ('Top-k', source['top_k'], 'Top-k'),
+                ('BM25', source['bm25_weight'], 'BM25 Weight')
+            ]
+
+            for j, (param_name, param_value, param_key) in enumerate(params):
+                if j > 0:
+                    cell.paragraphs[0].add_run(", ")
+
+                # Add parameter name and equals sign
+                cell.paragraphs[0].add_run(f"{param_name}=")
+
+                # Add parameter value - bold if it's the varying parameter for this source
+                if param_key == source_varying_param:
+                    bold_run = cell.paragraphs[0].add_run(str(param_value))
+                    bold_run.bold = True
+                    print(f"[DEBUG] Bolded {param_name}={param_value} for source {i+1}")
+                else:
+                    cell.paragraphs[0].add_run(str(param_value))
+
+            # Add parameter name in parentheses
+            param_display = param_display_names.get(source_varying_param, source_varying_param)
+            cell.paragraphs[0].add_run(f" ({param_display} Sweep)")
+
+    def _format_sources_cell_with_bold(self, cell, quote_info, varying_param):
+        """Format sources cell with bold varying parameter value and parameter name in parentheses"""
+        if not quote_info['sources']:
+            cell.text = "No sources available"
+            return
+
+        # Clear the cell first
+        cell.text = ""
+
+        # Parameter name mapping for display
+        param_display_names = {
+            'Temperature': 'TEMP',
+            'Top-p': 'TOP P',
+            'Top-k': 'TOP K',
+            'BM25 Weight': 'BM25'
+        }
+
+        # Detect the actual varying parameter from the data
+        actual_varying_param = self._detect_varying_parameter_from_sources(quote_info['sources'])
+        print(f"[DEBUG] File-based varying_param: {varying_param}")
+        print(f"[DEBUG] Data-based actual_varying_param: {actual_varying_param}")
+
+        # Use the actual varying parameter if detected, otherwise fall back to file-based detection
+        final_varying_param = actual_varying_param if actual_varying_param else varying_param
+        param_display = param_display_names.get(final_varying_param, final_varying_param)
+        print(f"[DEBUG] Final varying_param: {final_varying_param}, display: {param_display}")
+
+        # Add source information with formatting
+        for i, source in enumerate(quote_info['sources']):
+            if i > 0:
+                # Add line break between sources
+                cell.paragraphs[0].add_run("\n\n")
+
+            # Start with "Source X: "
+            source_run = cell.paragraphs[0].add_run(f"Source {i+1}: ")
+
+            # Add parameter values with bold for the varying parameter
+            params = [
+                ('Temp', source['temperature'], 'Temperature'),
+                ('Top-p', source['top_p'], 'Top-p'),
+                ('Top-k', source['top_k'], 'Top-k'),
+                ('BM25', source['bm25_weight'], 'BM25 Weight')
+            ]
+
+            for j, (param_name, param_value, param_key) in enumerate(params):
+                if j > 0:
+                    cell.paragraphs[0].add_run(", ")
+
+                # Add parameter name and equals sign
+                cell.paragraphs[0].add_run(f"{param_name}=")
+
+                # Add parameter value - bold if it's the varying parameter
+                if param_key == final_varying_param:
+                    bold_run = cell.paragraphs[0].add_run(str(param_value))
+                    bold_run.bold = True
+                else:
+                    cell.paragraphs[0].add_run(str(param_value))
+
+            # Add parameter name in parentheses
+            cell.paragraphs[0].add_run(f" ({param_display} Sweep)")
+
+    def _format_reason_text(self, quote_info):
+        """Format reason text with reason for selection and specific use for each quote"""
+        reason_parts = []
+        
+        # Add general reason for selection if available and not truncated
+        if quote_info['reason_text'] and len(quote_info['reason_text'].strip()) > 5:
+            reason_parts.append(f"**Reason for Selection**: {quote_info['reason_text']}")
+        
+        if quote_info['specific_use'] and len(quote_info['specific_use'].strip()) > 5:
+            reason_parts.append(f"**Specific Use**: {quote_info['specific_use']}")
+        
+        # Add individual reasons for each quote
+        if quote_info['quotes'] and quote_info['sources']:
+            for i, (quote, source) in enumerate(zip(quote_info['quotes'], quote_info['sources'])):
+                # Try to extract reason for this specific quote from the source text
+                quote_reason = self._extract_reason_for_quote(quote, source['main_answer'])
+                if quote_reason and len(quote_reason.strip()) > 10:  # Only add if meaningful
+                    reason_parts.append(f"**Quote {i+1} Reason**: {quote_reason}")
+        
+        if not reason_parts:
+            return "No reason information available"
+        
+        return "\n\n".join(reason_parts)
+
+    def _extract_reason_for_quote(self, quote, text):
+        """Extract reason for a specific quote from the text"""
+        try:
+            import re
+            
+            print(f"[QUOTES DEBUG] Extracting reason for quote: {quote[:50]}...")
+            
+            # Look for the quote in the text and extract surrounding context
+            # Escape special regex characters in the quote
+            escaped_quote = re.escape(quote)
+            
+            # Try multiple patterns to get better context extraction
+            patterns_to_try = [
+                # Pattern 1: Extract more context around the quote (multiple sentences)
+                rf'([^.]*?{escaped_quote}[^.]*?[^.]*?[^.]*)',
+                # Pattern 2: Extract text before and after the quote (up to 2 sentences each side)
+                rf'([^.]*?[^.]*?{escaped_quote}[^.]*?[^.]*?)',
+                # Pattern 3: Look for the quote and extract a larger context window
+                rf'([^.]*?{escaped_quote}[^.]*)',
+                # Pattern 4: Simple pattern with partial quote match
+                rf'([^.]*{re.escape(quote[:30])}[^.]*)',
+            ]
+            
+            for i, pattern in enumerate(patterns_to_try):
+                match = re.search(pattern, text, re.DOTALL | re.IGNORECASE)
+                if match:
+                    context = match.group(1).strip()
+                    # Clean up the context
+                    context = re.sub(r'\s+', ' ', context)  # Replace multiple spaces with single space
+                    
+                    # Remove any markdown formatting that might interfere
+                    context = re.sub(r'\*\*([^*]+)\*\*', r'\1', context)  # Remove **bold**
+                    context = re.sub(r'\*([^*]+)\*', r'\1', context)  # Remove *italic*
+                    
+                    # Only return if we have substantial context
+                    if len(context) > 50:  # Minimum meaningful context
+                        print(f"[QUOTES DEBUG] Found context (pattern {i+1}): {context[:100]}...")
+                        return context
+            
+            # If no match found, try a broader approach
+            # Look for any text that contains part of the quote
+            if len(quote) > 20:
+                partial_quote = quote[:20]
+                broader_pattern = rf'([^.]*{re.escape(partial_quote)}[^.]*)'
+                broader_match = re.search(broader_pattern, text, re.DOTALL | re.IGNORECASE)
+                
+                if broader_match:
+                    context = broader_match.group(1).strip()
+                    context = re.sub(r'\s+', ' ', context)
+                    context = re.sub(r'\*\*([^*]+)\*\*', r'\1', context)
+                    context = re.sub(r'\*([^*]+)\*', r'\1', context)
+                    if len(context) > 50:
+                        print(f"[QUOTES DEBUG] Found context (broader): {context[:100]}...")
+                        return context
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting reason for quote: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return None
+
     def _extract_simple_quotes_for_concept(self, concept_name, outdir):
         """Simple fallback method to extract any text containing the concept"""
         try:
@@ -3362,20 +3999,25 @@ class UpSetGUI:
             all_concepts = sorted(list(all_concepts))
             print(f"[QUOTES] Processing {len(all_concepts)} concepts across {len(valid_folders)} folders")
             
-            # Second pass: extract quotes for each concept from each folder
+            # Second pass: extract quotes and sources for each concept from each folder
             for concept in all_concepts:
                 quotes_data[concept] = {}
                 
                 for folder in valid_folders:
                     folder_name = os.path.basename(folder)
-                    quotes_data[concept][folder_name] = []
+                    quotes_data[concept][folder_name] = {
+                        'quotes': [],
+                        'sources': []
+                    }
                     
                     stats_doc_path = os.path.join(folder, "compare_stats.docx")
                     if os.path.exists(stats_doc_path):
                         quotes = self._extract_quotes_for_concept_from_stats_doc(stats_doc_path, concept)
-                        quotes_data[concept][folder_name] = quotes
+                        sources = self._extract_sources_for_concept_from_stats_doc(stats_doc_path, concept)
+                        quotes_data[concept][folder_name]['quotes'] = quotes
+                        quotes_data[concept][folder_name]['sources'] = sources
                         if quotes:
-                            print(f"[QUOTES] Found {len(quotes)} quotes for '{concept}' in {folder_name}")
+                            print(f"[QUOTES] Found {len(quotes)} quotes and {len(sources)} sources for '{concept}' in {folder_name}")
             
         except Exception as e:
             print(f"[QUOTES ERROR] Failed to read quotes from stats docs: {e}")
@@ -3406,17 +4048,23 @@ class UpSetGUI:
                     break
                 elif in_quotes_section and paragraph.text.strip():
                     # Skip header paragraphs
-                    if paragraph.text.strip() in ["Concept", "Quotes and Citations"]:
+                    if paragraph.text.strip() in ["Concept", "Short Quote", "Full Citation", "Sources", "Reason"]:
                         continue
                     # This should be a concept name
                     concept = paragraph.text.strip()
                     if concept and not concept.startswith("No quotes found"):
                         concepts.append(concept)
             
-            # Also check tables for concepts
+            # Check tables for concepts (new 5-column format)
             for table in doc.tables:
                 for row in table.rows:
-                    if len(row.cells) >= 2:
+                    if len(row.cells) >= 5:  # New format has 5 columns
+                        concept_cell = row.cells[0]  # First column is Concept
+                        concept_text = concept_cell.text.strip()
+                        
+                        if concept_text and concept_text not in ["Concept", "Short Quote", "Full Citation", "Sources", "Reason"]:
+                            concepts.append(concept_text)
+                    elif len(row.cells) >= 2:  # Fallback for old format
                         concept_cell = row.cells[0]
                         quotes_cell = row.cells[1]
                         
@@ -3449,7 +4097,24 @@ class UpSetGUI:
             # Look for the concept in tables
             for table in doc.tables:
                 for row in table.rows:
-                    if len(row.cells) >= 2:
+                    if len(row.cells) >= 5:  # New 5-column format
+                        concept_cell = row.cells[0]  # Concept column
+                        short_quote_cell = row.cells[1]  # Short Quote column
+                        full_citation_cell = row.cells[2]  # Full Citation column
+                        
+                        concept_text = concept_cell.text.strip()
+                        short_quote_text = short_quote_cell.text.strip()
+                        full_citation_text = full_citation_cell.text.strip()
+                        
+                        if concept_text == concept_name:
+                            # Use full citation if available, otherwise short quote
+                            if full_citation_text and full_citation_text != "No citation available":
+                                # Split quotes by semicolons (as formatted in the new system)
+                                quote_list = [q.strip() for q in full_citation_text.split(';') if q.strip()]
+                                quotes.extend(quote_list)
+                            elif short_quote_text and short_quote_text != "No quotes found":
+                                quotes.append(short_quote_text)
+                    elif len(row.cells) >= 2:  # Fallback for old format
                         concept_cell = row.cells[0]
                         quotes_cell = row.cells[1]
                         
@@ -3465,6 +4130,38 @@ class UpSetGUI:
             print(f"[QUOTES ERROR] Error extracting quotes for '{concept_name}' from {stats_doc_path}: {e}")
         
         return quotes
+
+    def _extract_sources_for_concept_from_stats_doc(self, stats_doc_path, concept_name):
+        """Extract sources information for a specific concept from a compare_stats.docx file"""
+        sources = []
+        
+        try:
+            import docx
+            
+            doc = docx.Document(stats_doc_path)
+            
+            # Look for the concept in tables
+            for table in doc.tables:
+                for row in table.rows:
+                    if len(row.cells) >= 5:  # New 5-column format
+                        concept_cell = row.cells[0]  # Concept column
+                        sources_cell = row.cells[3]  # Sources column
+                        
+                        concept_text = concept_cell.text.strip()
+                        sources_text = sources_cell.text.strip()
+                        
+                        if concept_text == concept_name and sources_text and sources_text != "No sources available":
+                            # Split sources by double line breaks
+                            source_list = [s.strip() for s in sources_text.split('\n\n') if s.strip()]
+                            sources.extend(source_list)
+                    elif len(row.cells) >= 2:  # Fallback for old format
+                        # Old format doesn't have sources column
+                        pass
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting sources for '{concept_name}' from {stats_doc_path}: {e}")
+        
+        return sources
 
     def on_group_by_subletters(self):
         if self.group_by_subletters.get():
@@ -6800,14 +7497,28 @@ class UpSetGUI:
                 # Add quotes for each folder
                 for i, folder in enumerate(valid_folders):
                     folder_name = os.path.basename(folder)
-                    quotes = folder_quotes.get(folder_name, [])
+                    folder_data = folder_quotes.get(folder_name, {})
+                    
+                    # Handle both old format (list) and new format (dict)
+                    if isinstance(folder_data, list):
+                        quotes = folder_data
+                        sources = []
+                    else:
+                        quotes = folder_data.get('quotes', [])
+                        sources = folder_data.get('sources', [])
                     
                     if quotes:
                         # Combine quotes with line breaks
                         quotes_text = "\n\n".join(quotes)
-                        # Truncate if too long (limit to ~500 characters)
-                        if len(quotes_text) > 500:
-                            quotes_text = quotes_text[:500] + "..."
+                        
+                        # Add sources information if available
+                        if sources:
+                            sources_text = "\n".join(sources)
+                            quotes_text += f"\n\nSources: {sources_text}"
+                        
+                        # Truncate if too long (limit to ~800 characters to accommodate sources)
+                        if len(quotes_text) > 800:
+                            quotes_text = quotes_text[:800] + "..."
                         row.cells[i + 1].text = quotes_text
                     else:
                         row.cells[i + 1].text = "No quotes found"
@@ -6820,7 +7531,14 @@ class UpSetGUI:
             
             # Add summary paragraph
             total_concepts = len(quotes_data)
-            total_quotes = sum(len(quotes) for folder_quotes in quotes_data.values() for quotes in folder_quotes.values())
+            total_quotes = 0
+            for folder_quotes in quotes_data.values():
+                for folder_data in folder_quotes.values():
+                    if isinstance(folder_data, list):
+                        total_quotes += len(folder_data)
+                    else:
+                        total_quotes += len(folder_data.get('quotes', []))
+            
             doc.add_paragraph(
                 f"Summary: Found quotes for {total_concepts} concepts with a total of {total_quotes} citations across {num_folders} folders."
             )
