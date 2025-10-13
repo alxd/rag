@@ -797,12 +797,18 @@ class UpSetGUI:
         consistency_frame = ttk.Frame(aggregate_frame)
         consistency_frame.grid(row=2, column=0, columnspan=4, sticky=(tk.W, tk.E), pady=(5,2))
         
+        # Add Quotes checkbox
+        self.add_quotes_var = tk.BooleanVar(value=False)
+        self.add_quotes_cb = ttk.Checkbutton(consistency_frame, text="Add Quotes", 
+                                           variable=self.add_quotes_var)
+        self.add_quotes_cb.grid(row=0, column=0, sticky=tk.W, pady=2, padx=(0, 10))
+        
         # Main consistency checkbox
         self.analyze_consistency_var = tk.BooleanVar(value=False)
         self.analyze_consistency_cb = ttk.Checkbutton(consistency_frame, text="Analyze Consistency", 
                                                     variable=self.analyze_consistency_var, 
                                                     command=self.on_consistency_toggle)
-        self.analyze_consistency_cb.grid(row=0, column=0, sticky=tk.W, pady=2)
+        self.analyze_consistency_cb.grid(row=0, column=1, sticky=tk.W, pady=2)
         
         # Sub-checkboxes for individual analyses
         self.consistency_sub_frame = ttk.Frame(consistency_frame)
@@ -1077,6 +1083,127 @@ class UpSetGUI:
             # This ensures we only extract concepts from lines that start with a number
         
         return concepts
+
+    def extract_concepts_and_quotes(self, text):
+        """Extract both concepts and their associated quotes from text"""
+        if pd.isna(text):
+            return [], {}
+        
+        lines = text.split('\n')
+        concepts = []
+        concept_quotes = {}
+        
+        # Detect if this is GPT_OSS_120b format (has table structure)
+        is_gpt_format = '| # |' in text and '| Concept' in text
+        
+        for line in lines:
+            line = line.strip()
+            
+            # Handle numbered lists (1., 2., etc.) - for DeepSeekV3 format
+            if line.startswith(tuple(str(i)+'.' for i in range(1, 21))):
+                # Markdown or plain numbered list
+                if '**' in line:
+                    c = line.split('**')[1].replace(':', '').replace('.', '').strip()
+                    if c:
+                        concepts.append(c)
+                        # Extract quotes for this concept
+                        quotes = self._extract_quotes_for_concept_from_text(text, c)
+                        if quotes:
+                            concept_quotes[c] = quotes
+                            print(f"[QUOTES DEBUG] Found {len(quotes)} quotes for concept '{c}': {quotes}")
+                else:
+                    c = line.lstrip('0123456789. ').replace(':', '').replace('.', '').strip()
+                    if c:
+                        concepts.append(c)
+                        # Extract quotes for this concept
+                        quotes = self._extract_quotes_for_concept_from_text(text, c)
+                        if quotes:
+                            concept_quotes[c] = quotes
+                            print(f"[QUOTES DEBUG] Found {len(quotes)} quotes for concept '{c}': {quotes}")
+            
+            # Handle markdown table format (| # | Concept | ...) - for GPT_OSS_120b format
+            # Only extract from numbered table rows (| 1 |, | 2 |, etc.)
+            elif line.startswith('|') and '**' in line and any(line.startswith(f'| {i} |') for i in range(1, 21)):
+                # Split by | and look for **bold** text in the second column only
+                parts = line.split('|')
+                if len(parts) >= 3:  # Ensure we have at least 3 parts: | number | concept | description |
+                    concept_part = parts[2].strip()  # Second column should contain the concept
+                    # Only extract if the entire concept_part is wrapped in ** (not just contains **)
+                    if concept_part.startswith('**') and concept_part.endswith('**'):
+                        c = concept_part[2:-2].strip()  # Remove ** from both ends
+                        if c and c not in ['#', 'Concept', 'How the text uses', 'Where the term appears', 'Why it functions as', 'Why it qualifies as', 'Why it counts as', 'Why it ranks among']:
+                            concepts.append(c)
+                            # Extract quotes for this concept
+                            quotes = self._extract_quotes_for_concept_from_text(text, c)
+                            if quotes:
+                                concept_quotes[c] = quotes
+                                print(f"[QUOTES DEBUG] Found {len(quotes)} quotes for concept '{c}': {quotes}")
+        
+        print(f"[QUOTES DEBUG] Total concepts extracted: {len(concepts)}, quotes found for {len(concept_quotes)} concepts")
+        return concepts, concept_quotes
+
+    def _extract_quotes_for_concept_from_text(self, text, concept_name):
+        """Extract quotes for a specific concept from the full text"""
+        quotes = []
+        
+        try:
+            import re
+            
+            print(f"[QUOTES DEBUG] Looking for quotes for concept '{concept_name}' in text of length {len(text)}")
+            
+            # Try multiple patterns to find the concept and its quotes
+            patterns_to_try = [
+                # Pattern: **Concept** ... *Specific Use*: "quote" (most specific)
+                rf'\*\*{re.escape(concept_name)}\*\*.*?\*Specific Use\*:\s*"([^"]+)"',
+                # Pattern: **Concept** ... *Specific Use*: quote (without quotes)
+                rf'\*\*{re.escape(concept_name)}\*\*.*?\*Specific Use\*:\s*([^"]+?)(?:\n|$)',
+                # Pattern: **Concept** ... *Specific Use*: In Book III, Aristotle... (specific format)
+                rf'\*\*{re.escape(concept_name)}\*\*.*?\*Specific Use\*:\s*In[^"]+',
+                # Pattern: **Concept** ... "quote" (any quoted text after concept)
+                rf'\*\*{re.escape(concept_name)}\*\*.*?"([^"]+)"',
+                # Pattern: Concept ... "quote" (without **)
+                rf'{re.escape(concept_name)}.*?"([^"]+)"',
+            ]
+            
+            for i, pattern in enumerate(patterns_to_try):
+                matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
+                print(f"[QUOTES DEBUG] Pattern {i+1} found {len(matches)} matches")
+                for match in matches:
+                    quote = match.strip()
+                    if len(quote) > 10:  # Filter out very short quotes
+                        quotes.append(quote)
+                        print(f"[QUOTES DEBUG] Added quote: {quote[:100]}...")
+                
+                if quotes:  # If we found quotes, stop trying other patterns
+                    break
+            
+            # If still no quotes, try a more general approach
+            if not quotes:
+                print(f"[QUOTES DEBUG] No quotes found with specific patterns, trying general approach")
+                # Look for any text that contains the concept name and has quotes
+                concept_words = concept_name.split()
+                if len(concept_words) > 0:
+                    # Try with the first word of the concept
+                    first_word = concept_words[0]
+                    pattern = rf'{re.escape(first_word)}.*?"([^"]+)"'
+                    matches = re.findall(pattern, text, re.DOTALL | re.IGNORECASE)
+                    print(f"[QUOTES DEBUG] General pattern with '{first_word}' found {len(matches)} matches")
+                    for match in matches:
+                        quote = match.strip()
+                        if len(quote) > 20:  # Longer minimum for general quotes
+                            quotes.append(quote)
+                            print(f"[QUOTES DEBUG] Added general quote: {quote[:100]}...")
+            
+            # Remove duplicates and limit quotes
+            quotes = list(dict.fromkeys(quotes))[:3]  # Keep first 3 unique quotes
+            print(f"[QUOTES DEBUG] Final quotes for '{concept_name}': {len(quotes)}")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting quotes for concept '{concept_name}': {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return quotes
     
     def normalize_word(self, word):
         """Normalize word by removing plurals and common variations"""
@@ -1235,7 +1362,10 @@ class UpSetGUI:
                 raise Exception('Could not read CSV file with any supported encoding (utf-8, cp1253, windows-1252, latin1)')
             print('First 10 Main Answer values:')
             print(df['Main Answer'].head(10).to_list())
-            df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
+            # Extract concepts and quotes together
+            concept_quote_results = df['Main Answer'].apply(self.extract_concepts_and_quotes)
+            df['Concepts'] = [result[0] for result in concept_quote_results]
+            df['Concept_Quotes'] = [result[1] for result in concept_quote_results]
             print('First 10 Concepts values:')
             print(df['Concepts'].head(10).to_list())
             
@@ -1588,6 +1718,9 @@ class UpSetGUI:
             outdir = 'compare_gui_output'
             os.makedirs(outdir, exist_ok=True)
             
+            # Store processed dataframes to preserve Concept_Quotes column
+            processed_dataframes = []
+            
             for file_path in self.merged_file_paths:
                 # Assign file_name at the very beginning to avoid UnboundLocalError
                 file_name = os.path.basename(file_path)
@@ -1623,8 +1756,10 @@ class UpSetGUI:
                         print(f"[ERROR] Alternative reading also failed: {e2}")
                         raise
                 
-                # Extract concepts
-                df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
+                # Extract concepts and quotes together
+                concept_quote_results = df['Main Answer'].apply(self.extract_concepts_and_quotes)
+                df['Concepts'] = [result[0] for result in concept_quote_results]
+                df['Concept_Quotes'] = [result[1] for result in concept_quote_results]
                 print(f"[DEBUG] Extracted concepts: {df['Concepts'].tolist()}")
                 
                 # Create color mapping for this file
@@ -1932,6 +2067,9 @@ class UpSetGUI:
                     import traceback
                     traceback.print_exc()
                 
+                # Store the processed dataframe for later use
+                processed_dataframes.append(df)
+                
                 # Clean up memory
                 import gc
                 gc.collect()
@@ -1941,9 +2079,10 @@ class UpSetGUI:
             
             # Generate additional files (HTML, DOCX, CSV, stats)
             if hasattr(self, 'merged_file_paths') and self.merged_file_paths:
-                # For merged files, we need to create a combined dataframe for the generate functions
-                combined_df = pd.concat([pd.read_csv(fp, encoding='utf-8') for fp in self.merged_file_paths], ignore_index=True)
-                combined_df['Concepts'] = combined_df['Main Answer'].apply(self.extract_concepts)
+                # Use the processed dataframes that already have Concept_Quotes column
+                combined_df = pd.concat(processed_dataframes, ignore_index=True)
+                print(f"[QUOTES DEBUG] Combined dataframe has {len(combined_df)} rows and columns: {list(combined_df.columns)}")
+                print(f"[QUOTES DEBUG] Concept_Quotes column exists: {'Concept_Quotes' in combined_df.columns}")
                 
                 # Create blocks for the combined data
                 n = len(combined_df)
@@ -2031,8 +2170,10 @@ class UpSetGUI:
                 messagebox.showerror("Column Error", msg)
                 return
             
-            # Extract concepts from each row
-            df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
+            # Extract concepts and quotes from each row
+            concept_quote_results = df['Main Answer'].apply(self.extract_concepts_and_quotes)
+            df['Concepts'] = [result[0] for result in concept_quote_results]
+            df['Concept_Quotes'] = [result[1] for result in concept_quote_results]
             
             # Check dataset size to prevent memory issues
             total_rows = len(df)
@@ -2212,8 +2353,10 @@ class UpSetGUI:
                 messagebox.showerror("Column Error", msg)
                 return
             
-            # Extract concepts from each row
-            df['Concepts'] = df['Main Answer'].apply(self.extract_concepts)
+            # Extract concepts and quotes from each row
+            concept_quote_results = df['Main Answer'].apply(self.extract_concepts_and_quotes)
+            df['Concepts'] = [result[0] for result in concept_quote_results]
+            df['Concept_Quotes'] = [result[1] for result in concept_quote_results]
             
             # Create color mapping
             all_concepts = set()
@@ -2905,6 +3048,9 @@ class UpSetGUI:
                     if i < len(block_concepts) - 1:
                         para.add_run(", ")
                 row_cells[2].text = str(len(block_concepts))
+            # --- Concept Quotes Section ---
+            self._add_quotes_section_to_stats_doc(doc, df, outdir)
+            
             # --- UpSet Histogram Section ---
             doc.add_heading("UpSet Diagram Histograms", level=1)
             # For each block, add a table with parameter, value, and histogram (bar heights/counts)
@@ -2941,6 +3087,384 @@ class UpSetGUI:
             self.merge_label.config(text="Stats PDF generated successfully.", foreground="black")
         except Exception as e:
             print(f"Error generating stats TXT/PDF/DOCX: {e}")
+
+    def _add_quotes_section_to_stats_doc(self, doc, df, outdir):
+        """Add concept quotes section to the stats document"""
+        try:
+            from docx.shared import Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            # Add header for quotes section
+            doc.add_heading("Concept Citations and Quotes", level=1)
+            doc.add_paragraph(
+                "This table shows specific citations and quotes from the original texts for each concept, "
+                "extracted from the parameter-specific CSV files. The quotes demonstrate how each concept "
+                "is used in context within the philosophical texts."
+            )
+            
+            # Get all unique concepts
+            all_concepts = sorted(set(c for concepts in df['Concepts'] for c in concepts))
+            
+            # Create quotes table
+            quotes_table = doc.add_table(rows=1, cols=2)  # Concept and Quotes columns
+            quotes_table.style = 'Table Grid'
+            
+            # Set column widths
+            quotes_table.columns[0].width = Inches(2.0)  # Concept column
+            quotes_table.columns[1].width = Inches(6.0)  # Quotes column
+            
+            # Header row
+            header_cells = quotes_table.rows[0].cells
+            header_cells[0].text = "Concept"
+            header_cells[1].text = "Quotes and Citations"
+            
+            # Make header bold
+            for cell in quotes_table.rows[0].cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.bold = True
+            
+            # Add data rows for each concept
+            for concept in all_concepts:
+                row = quotes_table.add_row()
+                row.cells[0].text = concept
+                
+                # Look for quotes in the stored Concept_Quotes data
+                quotes = self._get_quotes_for_concept_from_data(concept, df)
+                
+                if quotes:
+                    # Combine quotes with line breaks
+                    quotes_text = "\n\n".join(quotes)
+                    # Truncate if too long (limit to ~1000 characters)
+                    if len(quotes_text) > 1000:
+                        quotes_text = quotes_text[:1000] + "..."
+                    row.cells[1].text = quotes_text
+                else:
+                    row.cells[1].text = "No quotes found"
+                
+                # Set font size for all cells in this row
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.font.size = Inches(0.09)  # Smaller font for quotes
+            
+            # Add summary paragraph
+            total_quotes = sum(1 for concept in all_concepts 
+                             if self._get_quotes_for_concept_from_data(concept, df))
+            doc.add_paragraph(
+                f"Summary: Found quotes for {total_quotes} out of {len(all_concepts)} concepts."
+            )
+            
+            print(f"[QUOTES STATS] Successfully added quotes section with {len(all_concepts)} concepts")
+            
+        except Exception as e:
+            print(f"[QUOTES STATS ERROR] Failed to add quotes section: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _extract_quotes_for_concept_from_csvs(self, concept_name, outdir):
+        """Extract quotes for a specific concept from CSV files in the output directory"""
+        quotes = []
+        
+        try:
+            import pandas as pd
+            import re
+            import os
+            
+            # Look for CSV files in the output directory
+            csv_files = [f for f in os.listdir(outdir) if f.endswith('.csv')]
+            print(f"[QUOTES DEBUG] Looking for quotes for '{concept_name}' in {len(csv_files)} CSV files")
+            
+            for csv_file in csv_files:
+                csv_path = os.path.join(outdir, csv_file)
+                
+                try:
+                    df = pd.read_csv(csv_path)
+                    print(f"[QUOTES DEBUG] Processing CSV {csv_file} with {len(df)} rows")
+                    
+                    # Look for Main Answer column
+                    if 'Main Answer' in df.columns:
+                        for _, row in df.iterrows():
+                            content = str(row['Main Answer'])
+                            if content and content != 'nan':
+                                # Extract specific use sections for this concept
+                                specific_uses = self._extract_specific_uses_from_content(content, concept_name)
+                                if specific_uses:
+                                    quotes.extend(specific_uses)
+                                    print(f"[QUOTES DEBUG] Found {len(specific_uses)} quotes in {csv_file}")
+                    else:
+                        print(f"[QUOTES DEBUG] No 'Main Answer' column in {csv_file}")
+                
+                except Exception as e:
+                    print(f"[QUOTES ERROR] Error reading CSV {csv_file}: {e}")
+            
+            # Remove duplicates and limit quotes
+            quotes = list(dict.fromkeys(quotes))[:3]  # Keep first 3 unique quotes
+            print(f"[QUOTES DEBUG] Final quotes for '{concept_name}': {len(quotes)}")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting quotes for concept '{concept_name}': {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return quotes
+
+    def _extract_specific_uses_from_content(self, content, concept_name):
+        """Extract specific use sections for a concept from content"""
+        specific_uses = []
+        
+        try:
+            import re
+            
+            # Try multiple patterns to find the concept and its quotes
+            patterns_to_try = [
+                # Exact match with **Concept**
+                rf'\*\*{re.escape(concept_name)}\*\*.*?\*Specific Use\*:\s*"([^"]+)"',
+                # Partial match (main concept without parentheses)
+                rf'\*\*{re.escape(concept_name.split("(")[0].strip())}\*\*.*?\*Specific Use\*:\s*"([^"]+)"',
+                # Any quoted text near the concept
+                rf'\*\*{re.escape(concept_name)}\*\*.*?"([^"]+)"',
+                # Partial match with any quoted text
+                rf'\*\*{re.escape(concept_name.split("(")[0].strip())}\*\*.*?"([^"]+)"',
+            ]
+            
+            for pattern in patterns_to_try:
+                matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
+                for match in matches:
+                    quote = match.strip()
+                    if len(quote) > 10:  # Filter out very short quotes
+                        specific_uses.append(quote)
+                
+                if specific_uses:  # If we found quotes, stop trying other patterns
+                    break
+            
+            # If still no quotes, try a more general approach
+            if not specific_uses:
+                # Look for any text that contains the concept name and has quotes
+                concept_words = concept_name.split()
+                if len(concept_words) > 0:
+                    # Try with the first word of the concept
+                    first_word = concept_words[0]
+                    pattern = rf'{re.escape(first_word)}.*?"([^"]+)"'
+                    matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
+                    for match in matches:
+                        quote = match.strip()
+                        if len(quote) > 20:  # Longer minimum for general quotes
+                            specific_uses.append(quote)
+            
+            print(f"[QUOTES DEBUG] Extracted {len(specific_uses)} specific uses for '{concept_name}'")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting specific uses: {e}")
+        
+        return specific_uses
+
+    def _get_quotes_for_concept_from_data(self, concept_name, df):
+        """Get quotes for a concept from the stored Concept_Quotes data"""
+        quotes = []
+        
+        try:
+            print(f"[QUOTES DEBUG] Looking for quotes for '{concept_name}' in dataframe with {len(df)} rows")
+            
+            # Check if Concept_Quotes column exists
+            if 'Concept_Quotes' not in df.columns:
+                print(f"[QUOTES DEBUG] Concept_Quotes column not found in dataframe")
+                return quotes
+            
+            # Look through all rows in the dataframe
+            for i, row in df.iterrows():
+                if 'Concept_Quotes' in row and isinstance(row['Concept_Quotes'], dict):
+                    concept_quotes = row['Concept_Quotes']
+                    print(f"[QUOTES DEBUG] Row {i} has {len(concept_quotes)} concept quotes: {list(concept_quotes.keys())}")
+                    if concept_name in concept_quotes:
+                        quotes.extend(concept_quotes[concept_name])
+                        print(f"[QUOTES DEBUG] Found quotes for '{concept_name}' in row {i}: {concept_quotes[concept_name]}")
+                else:
+                    print(f"[QUOTES DEBUG] Row {i} has no Concept_Quotes or it's not a dict: {type(row.get('Concept_Quotes', 'Not found'))}")
+            
+            # Remove duplicates and limit quotes
+            quotes = list(dict.fromkeys(quotes))[:3]  # Keep first 3 unique quotes
+            print(f"[QUOTES DEBUG] Found {len(quotes)} quotes for '{concept_name}' in stored data")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error getting quotes for concept '{concept_name}': {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return quotes
+
+    def _extract_simple_quotes_for_concept(self, concept_name, outdir):
+        """Simple fallback method to extract any text containing the concept"""
+        try:
+            import pandas as pd
+            import os
+            
+            # Look for CSV files in the output directory
+            csv_files = [f for f in os.listdir(outdir) if f.endswith('.csv')]
+            
+            for csv_file in csv_files:
+                csv_path = os.path.join(outdir, csv_file)
+                
+                try:
+                    df = pd.read_csv(csv_path)
+                    
+                    # Look for any column that might contain the concept
+                    for col in df.columns:
+                        if col in ['Main Answer', 'Specific Use', 'Text', 'Content']:
+                            for _, row in df.iterrows():
+                                content = str(row[col])
+                                if content and content != 'nan' and concept_name.lower() in content.lower():
+                                    # Extract a reasonable snippet around the concept
+                                    words = content.split()
+                                    concept_words = concept_name.split()
+                                    if len(concept_words) > 0:
+                                        first_word = concept_words[0].lower()
+                                        for i, word in enumerate(words):
+                                            if first_word in word.lower():
+                                                # Extract 20 words before and after
+                                                start = max(0, i - 20)
+                                                end = min(len(words), i + 20)
+                                                snippet = ' '.join(words[start:end])
+                                                if len(snippet) > 50:  # Only return substantial snippets
+                                                    return snippet
+                
+                except Exception as e:
+                    print(f"[QUOTES ERROR] Error reading CSV {csv_file}: {e}")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error in simple quotes extraction: {e}")
+        
+        return None
+
+    def _read_quotes_from_stats_docs(self, valid_folders):
+        """Read quotes from compare_stats.docx files in each folder"""
+        quotes_data = {}
+        
+        try:
+            import docx
+            import os
+            
+            # Get all unique concepts across all folders
+            all_concepts = set()
+            
+            # First pass: collect all concepts from all stats docs
+            for folder in valid_folders:
+                folder_name = os.path.basename(folder)
+                stats_doc_path = os.path.join(folder, "compare_stats.docx")
+                
+                if os.path.exists(stats_doc_path):
+                    concepts = self._extract_concepts_from_stats_doc(stats_doc_path)
+                    all_concepts.update(concepts)
+                    print(f"[QUOTES] Found {len(concepts)} concepts in {folder_name}/compare_stats.docx")
+                else:
+                    print(f"[QUOTES] No compare_stats.docx found in {folder_name}")
+            
+            all_concepts = sorted(list(all_concepts))
+            print(f"[QUOTES] Processing {len(all_concepts)} concepts across {len(valid_folders)} folders")
+            
+            # Second pass: extract quotes for each concept from each folder
+            for concept in all_concepts:
+                quotes_data[concept] = {}
+                
+                for folder in valid_folders:
+                    folder_name = os.path.basename(folder)
+                    quotes_data[concept][folder_name] = []
+                    
+                    stats_doc_path = os.path.join(folder, "compare_stats.docx")
+                    if os.path.exists(stats_doc_path):
+                        quotes = self._extract_quotes_for_concept_from_stats_doc(stats_doc_path, concept)
+                        quotes_data[concept][folder_name] = quotes
+                        if quotes:
+                            print(f"[QUOTES] Found {len(quotes)} quotes for '{concept}' in {folder_name}")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Failed to read quotes from stats docs: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return quotes_data
+
+    def _extract_concepts_from_stats_doc(self, stats_doc_path):
+        """Extract concept names from a compare_stats.docx file"""
+        concepts = []
+        
+        try:
+            import docx
+            
+            doc = docx.Document(stats_doc_path)
+            
+            # Look for the "Concept Citations and Quotes" section
+            in_quotes_section = False
+            
+            for paragraph in doc.paragraphs:
+                # Check if we're in the quotes section
+                if paragraph.text.strip() == "Concept Citations and Quotes":
+                    in_quotes_section = True
+                    continue
+                elif in_quotes_section and paragraph.text.strip().startswith("Summary:"):
+                    # End of quotes section
+                    break
+                elif in_quotes_section and paragraph.text.strip():
+                    # Skip header paragraphs
+                    if paragraph.text.strip() in ["Concept", "Quotes and Citations"]:
+                        continue
+                    # This should be a concept name
+                    concept = paragraph.text.strip()
+                    if concept and not concept.startswith("No quotes found"):
+                        concepts.append(concept)
+            
+            # Also check tables for concepts
+            for table in doc.tables:
+                for row in table.rows:
+                    if len(row.cells) >= 2:
+                        concept_cell = row.cells[0]
+                        quotes_cell = row.cells[1]
+                        
+                        concept_text = concept_cell.text.strip()
+                        quotes_text = quotes_cell.text.strip()
+                        
+                        if concept_text and concept_text not in ["Concept", "Quotes and Citations"]:
+                            concepts.append(concept_text)
+            
+            print(f"[QUOTES DEBUG] Extracted {len(concepts)} concepts from {os.path.basename(stats_doc_path)}")
+            if concepts:
+                print(f"[QUOTES DEBUG] First 3 concepts: {concepts[:3]}")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting concepts from {stats_doc_path}: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return list(set(concepts))  # Remove duplicates
+
+    def _extract_quotes_for_concept_from_stats_doc(self, stats_doc_path, concept_name):
+        """Extract quotes for a specific concept from a compare_stats.docx file"""
+        quotes = []
+        
+        try:
+            import docx
+            
+            doc = docx.Document(stats_doc_path)
+            
+            # Look for the concept in tables
+            for table in doc.tables:
+                for row in table.rows:
+                    if len(row.cells) >= 2:
+                        concept_cell = row.cells[0]
+                        quotes_cell = row.cells[1]
+                        
+                        concept_text = concept_cell.text.strip()
+                        quotes_text = quotes_cell.text.strip()
+                        
+                        if concept_text == concept_name and quotes_text and quotes_text != "No quotes found":
+                            # Split quotes by double line breaks
+                            quote_list = [q.strip() for q in quotes_text.split('\n\n') if q.strip()]
+                            quotes.extend(quote_list)
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting quotes for '{concept_name}' from {stats_doc_path}: {e}")
+        
+        return quotes
 
     def on_group_by_subletters(self):
         if self.group_by_subletters.get():
@@ -3759,7 +4283,7 @@ class UpSetGUI:
         def safe_update_time(msg):
             self.root.after(0, lambda: self.aggregate_time_label.config(text=msg))
         # Define total steps for progress tracking
-        total_steps = 6  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis
+        total_steps = 7  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis, quotes (optional)
         current_step = 0
         
         safe_update_status("Scanning folders...", "blue")
@@ -4423,6 +4947,26 @@ class UpSetGUI:
             safe_update_progress(current_step, total_steps, total_elapsed, est_total)
             safe_update_status("Running RAG consistency analysis...", "blue")
             self._add_rag_consistency_analysis(doc, valid_folders, folder_concepts, parent)
+            
+            # Add Quotes Table if enabled
+            if self.add_quotes_var.get():
+                current_step += 1
+                safe_update_progress(current_step, total_steps, total_elapsed, est_total)
+                safe_update_status("Processing quotes and citations...", "blue")
+                
+                try:
+                    # Read quotes from compare_stats.docx files in each folder
+                    quotes_data = self._read_quotes_from_stats_docs(valid_folders)
+                    
+                    # Add quotes table to document
+                    self._add_quotes_table_to_doc(doc, valid_folders, quotes_data)
+                    
+                except Exception as e:
+                    print(f"[QUOTES ERROR] Failed to process quotes: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continue with the rest of the process even if quotes fail
+                    safe_update_status("Quotes processing failed, continuing...", "orange")
             
             plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[6, 9])
 
@@ -5960,6 +6504,331 @@ class UpSetGUI:
             
         except Exception as e:
             print(f"[SEMANTIC VIZ ERROR] Failed to add visualizations to document: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _find_parameter_csv_files(self, valid_folders):
+        """Find CSV files containing parameter names in each folder"""
+        parameter_csv_files = {}
+        
+        # Define parameter patterns to look for in filenames
+        parameter_patterns = {
+            'TEMP': ['temp', 'temperature'],
+            'TOPP': ['topp', 'top_p'],
+            'TOPK': ['topk', 'top_k'],
+            'BM25': ['bm25', 'bm25_weight']
+        }
+        
+        for folder in valid_folders:
+            folder_name = os.path.basename(folder)
+            parameter_csv_files[folder_name] = {}
+            
+            try:
+                # Look for CSV files in the folder
+                csv_files = [f for f in os.listdir(folder) if f.endswith('.csv')]
+                
+                for csv_file in csv_files:
+                    csv_path = os.path.join(folder, csv_file)
+                    csv_lower = csv_file.lower()
+                    
+                    # Check which parameter this CSV file corresponds to
+                    for param_key, patterns in parameter_patterns.items():
+                        if any(pattern in csv_lower for pattern in patterns):
+                            parameter_csv_files[folder_name][param_key] = csv_path
+                            print(f"[QUOTES] Found {param_key} CSV: {csv_file} in {folder_name}")
+                            break
+                            
+            except Exception as e:
+                print(f"[QUOTES ERROR] Error scanning folder {folder_name}: {e}")
+        
+        return parameter_csv_files
+
+    def _parse_csv_for_quotes(self, csv_path, concept_name):
+        """Parse CSV file to extract quotes for a specific concept"""
+        quotes = []
+        
+        try:
+            import pandas as pd
+            
+            # Read the CSV file
+            df = pd.read_csv(csv_path)
+            print(f"[QUOTES DEBUG] Parsing {os.path.basename(csv_path)} for concept '{concept_name}'")
+            print(f"[QUOTES DEBUG] CSV has {len(df)} rows and columns: {list(df.columns)}")
+            
+            # Look for columns that might contain quotes or specific use information
+            quote_columns = ['Main Answer', 'Specific Use', 'specific_use', 'Quotes', 'quotes', 'Citation', 'citation', 'Text', 'text']
+            
+            # First, try exact concept matching
+            for col in quote_columns:
+                if col in df.columns:
+                    print(f"[QUOTES DEBUG] Checking column '{col}' for exact matches")
+                    # Filter rows that might contain the concept
+                    concept_rows = df[df[col].astype(str).str.contains(concept_name, case=False, na=False)]
+                    print(f"[QUOTES DEBUG] Found {len(concept_rows)} rows with exact concept match")
+                    
+                    for _, row in concept_rows.iterrows():
+                        content = str(row[col]).strip()
+                        if content and content != 'nan' and len(content) > 10:
+                            # If this is Main Answer column, extract specific use sections
+                            if col == 'Main Answer':
+                                specific_uses = self._extract_specific_uses(content, concept_name)
+                                quotes.extend(specific_uses)
+                                print(f"[QUOTES DEBUG] Added {len(specific_uses)} specific uses from Main Answer")
+                            else:
+                                quotes.append(content)
+                                print(f"[QUOTES DEBUG] Added quote: {content[:100]}...")
+            
+            # If no exact matches, try partial matching (extract main concept without parenthetical info)
+            if not quotes:
+                main_concept = concept_name.split('(')[0].strip()
+                print(f"[QUOTES DEBUG] No exact matches, trying partial match with '{main_concept}'")
+                
+                for col in quote_columns:
+                    if col in df.columns:
+                        concept_rows = df[df[col].astype(str).str.contains(main_concept, case=False, na=False)]
+                        print(f"[QUOTES DEBUG] Found {len(concept_rows)} rows with partial concept match")
+                        
+                        for _, row in concept_rows.iterrows():
+                            quote_text = str(row[col]).strip()
+                            if quote_text and quote_text != 'nan' and len(quote_text) > 10:
+                                quotes.append(quote_text)
+                                print(f"[QUOTES DEBUG] Added partial match quote: {quote_text[:100]}...")
+            
+            # If still no quotes, try all text columns with partial matching
+            if not quotes:
+                main_concept = concept_name.split('(')[0].strip()
+                print(f"[QUOTES DEBUG] No quote column matches, trying all text columns with '{main_concept}'")
+                text_columns = df.select_dtypes(include=['object']).columns
+                
+                for col in text_columns:
+                    concept_rows = df[df[col].astype(str).str.contains(main_concept, case=False, na=False)]
+                    print(f"[QUOTES DEBUG] Column '{col}': Found {len(concept_rows)} rows with partial match")
+                    
+                    for _, row in concept_rows.iterrows():
+                        quote_text = str(row[col]).strip()
+                        if quote_text and quote_text != 'nan' and len(quote_text) > 20:  # Longer minimum for general text
+                            quotes.append(quote_text)
+                            print(f"[QUOTES DEBUG] Added text column quote: {quote_text[:100]}...")
+            
+            # Remove duplicates and limit to reasonable number
+            quotes = list(dict.fromkeys(quotes))[:3]  # Keep first 3 unique quotes
+            print(f"[QUOTES DEBUG] Final result: {len(quotes)} quotes found")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error parsing CSV {csv_path}: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return quotes
+
+    def _extract_concepts_from_csv(self, csv_path):
+        """Extract concepts from CSV file by parsing the Main Answer column"""
+        concepts = set()
+        
+        try:
+            import pandas as pd
+            import re
+            
+            df = pd.read_csv(csv_path)
+            
+            # Look for Main Answer column
+            if 'Main Answer' in df.columns:
+                for _, row in df.iterrows():
+                    main_answer = str(row['Main Answer'])
+                    if main_answer and main_answer != 'nan':
+                        # Extract concepts using regex patterns
+                        # Look for numbered lists with concepts
+                        concept_patterns = [
+                            r'\d+\.\s*\*\*([^*]+?)\*\*',  # **Concept** format (non-greedy)
+                            r'\d+\.\s*\*\*([^*]+?)\s*\([^)]+\)\*\*',  # **Concept (Greek)** format
+                            r'\d+\.\s*([^(]+?)(?:\s*\([^)]+\))?\s*$',  # Numbered concepts
+                        ]
+                        
+                        for pattern in concept_patterns:
+                            matches = re.findall(pattern, main_answer, re.MULTILINE)
+                            for match in matches:
+                                concept = match.strip()
+                                if len(concept) > 3:  # Filter out very short matches
+                                    concepts.add(concept)
+            
+            print(f"[QUOTES DEBUG] Extracted {len(concepts)} concepts from {os.path.basename(csv_path)}")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting concepts from {csv_path}: {e}")
+        
+        return list(concepts)
+
+    def _extract_specific_uses(self, content, concept_name):
+        """Extract specific use sections for a concept from Main Answer content"""
+        specific_uses = []
+        
+        try:
+            import re
+            
+            # Look for the concept in the content and extract the specific use section
+            # Pattern: **Concept** ... *Specific Use*: "quote"
+            pattern = rf'\*\*{re.escape(concept_name)}\*\*.*?\*Specific Use\*:\s*"([^"]+)"'
+            matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
+            
+            for match in matches:
+                quote = match.strip()
+                if len(quote) > 10:  # Filter out very short quotes
+                    specific_uses.append(quote)
+            
+            # If no specific use found, try a broader pattern
+            if not specific_uses:
+                # Look for any quoted text near the concept
+                pattern = rf'\*\*{re.escape(concept_name)}\*\*.*?"([^"]+)"'
+                matches = re.findall(pattern, content, re.DOTALL | re.IGNORECASE)
+                
+                for match in matches:
+                    quote = match.strip()
+                    if len(quote) > 20:  # Longer minimum for general quotes
+                        specific_uses.append(quote)
+            
+            print(f"[QUOTES DEBUG] Extracted {len(specific_uses)} specific uses for '{concept_name}'")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Error extracting specific uses: {e}")
+        
+        return specific_uses
+
+    def _generate_quotes_table(self, valid_folders, folder_concepts, parameter_csv_files):
+        """Generate quotes table data structure"""
+        quotes_data = {}
+        
+        # Extract concepts directly from CSV files instead of using folder_concepts
+        all_concepts = set()
+        
+        # Extract concepts from all CSV files
+        for folder in valid_folders:
+            folder_name = os.path.basename(folder)
+            if folder_name in parameter_csv_files:
+                for param_key, csv_path in parameter_csv_files[folder_name].items():
+                    csv_concepts = self._extract_concepts_from_csv(csv_path)
+                    all_concepts.update(csv_concepts)
+                    print(f"[QUOTES DEBUG] Found {len(csv_concepts)} concepts in {param_key} CSV for {folder_name}")
+        
+        all_concepts = sorted(list(all_concepts))
+        print(f"[QUOTES] Processing {len(all_concepts)} concepts across {len(valid_folders)} folders")
+        print(f"[QUOTES DEBUG] First 5 concepts: {all_concepts[:5]}")
+        
+        for concept in all_concepts:
+            quotes_data[concept] = {}
+            
+            for folder in valid_folders:
+                folder_name = os.path.basename(folder)
+                quotes_data[concept][folder_name] = []
+                
+                # Look for quotes in parameter CSV files for this folder
+                if folder_name in parameter_csv_files:
+                    print(f"[QUOTES DEBUG] Processing concept '{concept}' in folder '{folder_name}'")
+                    for param_key, csv_path in parameter_csv_files[folder_name].items():
+                        quotes = self._parse_csv_for_quotes(csv_path, concept)
+                        quotes_data[concept][folder_name].extend(quotes)
+                        print(f"[QUOTES DEBUG] Added {len(quotes)} quotes from {param_key} CSV")
+                    
+                    # Remove duplicates and limit quotes per folder
+                    quotes_data[concept][folder_name] = list(dict.fromkeys(quotes_data[concept][folder_name]))[:2]
+                    print(f"[QUOTES DEBUG] Final quotes for '{concept}' in '{folder_name}': {len(quotes_data[concept][folder_name])}")
+        
+        return quotes_data
+
+    def _debug_csv_content(self, csv_path):
+        """Debug function to show CSV content structure"""
+        try:
+            import pandas as pd
+            df = pd.read_csv(csv_path)
+            print(f"[QUOTES DEBUG] CSV Structure for {os.path.basename(csv_path)}:")
+            print(f"[QUOTES DEBUG] Shape: {df.shape}")
+            print(f"[QUOTES DEBUG] Columns: {list(df.columns)}")
+            print(f"[QUOTES DEBUG] First few rows:")
+            for i, (_, row) in enumerate(df.head(3).iterrows()):
+                print(f"[QUOTES DEBUG] Row {i}: {dict(row)}")
+        except Exception as e:
+            print(f"[QUOTES DEBUG ERROR] Could not read CSV: {e}")
+
+    def _add_quotes_table_to_doc(self, doc, valid_folders, quotes_data):
+        """Add quotes table to the document after RAG Parameter Consistency Analysis"""
+        try:
+            from docx.shared import Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            # Add header for quotes section
+            doc.add_heading("Concept Citations and Quotes", level=2)
+            doc.add_paragraph(
+                "This table shows specific citations and quotes from the original texts for each concept, "
+                "extracted from parameter-specific CSV files. Each column represents a different folder/author, "
+                "and the quotes show how each concept is used in context."
+            )
+            
+            # Create quotes table
+            num_folders = len(valid_folders)
+            quotes_table = doc.add_table(rows=1, cols=num_folders + 1)  # +1 for concept column
+            quotes_table.style = 'Table Grid'
+            
+            # Set column widths
+            for i, col in enumerate(quotes_table.columns):
+                if i == 0:
+                    col.width = Inches(2.0)  # Concept column
+                else:
+                    col.width = Inches(2.5)  # Folder columns
+            
+            # Header row
+            header_cells = quotes_table.rows[0].cells
+            header_cells[0].text = "Concept"
+            
+            # Add folder headers with short names
+            for i, folder in enumerate(valid_folders):
+                folder_name = os.path.basename(folder)
+                # Create short folder name (first 8 characters or less)
+                short_name = folder_name[:8] if len(folder_name) > 8 else folder_name
+                header_cells[i + 1].text = short_name
+            
+            # Make header bold and set font size
+            for cell in quotes_table.rows[0].cells:
+                for para in cell.paragraphs:
+                    for run in para.runs:
+                        run.bold = True
+                        run.font.size = Inches(0.10)
+            
+            # Add data rows for each concept
+            for concept, folder_quotes in quotes_data.items():
+                row = quotes_table.add_row()
+                row.cells[0].text = concept
+                
+                # Add quotes for each folder
+                for i, folder in enumerate(valid_folders):
+                    folder_name = os.path.basename(folder)
+                    quotes = folder_quotes.get(folder_name, [])
+                    
+                    if quotes:
+                        # Combine quotes with line breaks
+                        quotes_text = "\n\n".join(quotes)
+                        # Truncate if too long (limit to ~500 characters)
+                        if len(quotes_text) > 500:
+                            quotes_text = quotes_text[:500] + "..."
+                        row.cells[i + 1].text = quotes_text
+                    else:
+                        row.cells[i + 1].text = "No quotes found"
+                
+                # Set font size for all cells in this row
+                for cell in row.cells:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.font.size = Inches(0.09)  # Smaller font for quotes
+            
+            # Add summary paragraph
+            total_concepts = len(quotes_data)
+            total_quotes = sum(len(quotes) for folder_quotes in quotes_data.values() for quotes in folder_quotes.values())
+            doc.add_paragraph(
+                f"Summary: Found quotes for {total_concepts} concepts with a total of {total_quotes} citations across {num_folders} folders."
+            )
+            
+            print(f"[QUOTES] Successfully added quotes table with {total_concepts} concepts and {total_quotes} quotes")
+            
+        except Exception as e:
+            print(f"[QUOTES ERROR] Failed to add quotes table to document: {e}")
             import traceback
             traceback.print_exc()
 
