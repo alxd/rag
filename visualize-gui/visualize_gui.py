@@ -272,6 +272,162 @@ class RAGConsistencyAnalyzer:
             print(f"Total comparisons: {overall['total_comparisons']}")
         
         return results
+    
+    def generate_semantic_similarity_heatmap(self, output_dir, folder_name):
+        """Generate semantic similarity matrix heatmap for all concepts in this folder"""
+        if not self.model or not self.data:
+            return None
+            
+        try:
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            from sklearn.metrics.pairwise import cosine_similarity
+            import numpy as np
+            
+            # Collect all unique concepts from this folder
+            all_concepts = []
+            for row in self.data:
+                all_concepts.extend(row['concepts'])
+            
+            # Remove duplicates while preserving order
+            unique_concepts = list(dict.fromkeys(all_concepts))
+            
+            if len(unique_concepts) < 2:
+                print(f"[SEMANTIC VIZ] Not enough concepts for heatmap in {folder_name}")
+                return None
+            
+            # Limit to reasonable number for visualization
+            if len(unique_concepts) > 50:
+                # Take most frequent concepts
+                concept_counts = {}
+                for row in self.data:
+                    for concept in row['concepts']:
+                        concept_counts[concept] = concept_counts.get(concept, 0) + 1
+                unique_concepts = sorted(concept_counts.items(), key=lambda x: x[1], reverse=True)[:50]
+                unique_concepts = [concept for concept, count in unique_concepts]
+            
+            # Compute embeddings for all unique concepts
+            embeddings = self.model.encode(unique_concepts)
+            
+            # Compute similarity matrix
+            similarity_matrix = cosine_similarity(embeddings)
+            
+            # Create heatmap
+            plt.figure(figsize=(max(12, len(unique_concepts) * 0.4), max(10, len(unique_concepts) * 0.4)))
+            
+            # Truncate concept names for better display
+            display_concepts = [concept[:30] + '...' if len(concept) > 30 else concept for concept in unique_concepts]
+            
+            sns.heatmap(similarity_matrix, 
+                       annot=True, 
+                       fmt='.2f',
+                       cmap='viridis',
+                       xticklabels=display_concepts,
+                       yticklabels=display_concepts,
+                       cbar_kws={'label': 'Semantic Similarity'})
+            
+            plt.title(f'Semantic Similarity Matrix - {folder_name}\n(Higher values = more similar concepts)', 
+                     fontsize=14, pad=20)
+            plt.xlabel('Concepts', fontsize=12)
+            plt.ylabel('Concepts', fontsize=12)
+            plt.xticks(rotation=45, ha='right')
+            plt.yticks(rotation=0)
+            plt.tight_layout()
+            
+            # Save the plot
+            heatmap_path = os.path.join(output_dir, f"{folder_name}_semantic_similarity_heatmap.png")
+            plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"[SEMANTIC VIZ] Created similarity heatmap: {heatmap_path}")
+            return heatmap_path
+            
+        except Exception as e:
+            print(f"[SEMANTIC VIZ ERROR] Failed to create similarity heatmap: {e}")
+            return None
+    
+    def generate_tsne_plot(self, output_dir, folder_name):
+        """Generate t-SNE plot for concept clustering visualization"""
+        if not self.model or not self.data:
+            return None
+            
+        try:
+            from sklearn.manifold import TSNE
+            import matplotlib.pyplot as plt
+            import numpy as np
+            
+            # Collect all unique concepts from this folder
+            all_concepts = []
+            for row in self.data:
+                all_concepts.extend(row['concepts'])
+            
+            # Remove duplicates while preserving order
+            unique_concepts = list(dict.fromkeys(all_concepts))
+            
+            if len(unique_concepts) < 3:
+                print(f"[SEMANTIC VIZ] Not enough concepts for t-SNE in {folder_name}")
+                return None
+            
+            # Limit to reasonable number for visualization
+            if len(unique_concepts) > 100:
+                # Take most frequent concepts
+                concept_counts = {}
+                for row in self.data:
+                    for concept in row['concepts']:
+                        concept_counts[concept] = concept_counts.get(concept, 0) + 1
+                unique_concepts = sorted(concept_counts.items(), key=lambda x: x[1], reverse=True)[:100]
+                unique_concepts = [concept for concept, count in unique_concepts]
+            
+            # Compute embeddings for all unique concepts
+            embeddings = self.model.encode(unique_concepts)
+            
+            # Apply t-SNE
+            tsne = TSNE(n_components=2, random_state=42, perplexity=min(30, len(unique_concepts)-1))
+            embeddings_2d = tsne.fit_transform(embeddings)
+            
+            # Create scatter plot
+            plt.figure(figsize=(12, 10))
+            
+            # Color points by frequency
+            concept_counts = {}
+            for row in self.data:
+                for concept in row['concepts']:
+                    concept_counts[concept] = concept_counts.get(concept, 0) + 1
+            
+            colors = [concept_counts.get(concept, 1) for concept in unique_concepts]
+            
+            scatter = plt.scatter(embeddings_2d[:, 0], embeddings_2d[:, 1], 
+                                c=colors, cmap='viridis', alpha=0.7, s=100)
+            
+            # Add concept labels
+            for i, concept in enumerate(unique_concepts):
+                # Truncate long concept names
+                display_concept = concept[:20] + '...' if len(concept) > 20 else concept
+                plt.annotate(display_concept, 
+                           (embeddings_2d[i, 0], embeddings_2d[i, 1]),
+                           xytext=(5, 5), textcoords='offset points',
+                           fontsize=8, alpha=0.8)
+            
+            plt.colorbar(scatter, label='Concept Frequency')
+            plt.title(f't-SNE Concept Clustering - {folder_name}\n(Closer points = more similar concepts)', 
+                     fontsize=14, pad=20)
+            plt.xlabel('t-SNE Dimension 1', fontsize=12)
+            plt.ylabel('t-SNE Dimension 2', fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            # Save the plot
+            tsne_path = os.path.join(output_dir, f"{folder_name}_tsne_clustering.png")
+            plt.savefig(tsne_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"[SEMANTIC VIZ] Created t-SNE plot: {tsne_path}")
+            return tsne_path
+            
+        except Exception as e:
+            print(f"[SEMANTIC VIZ ERROR] Failed to create t-SNE plot: {e}")
+            return None
+
 def create_fixed_width_table(doc, rows, cols, col_widths_inches):
     """
     Create a table with fixed column widths that actually work in python-docx.
@@ -4266,7 +4422,7 @@ class UpSetGUI:
             current_step += 1
             safe_update_progress(current_step, total_steps, total_elapsed, est_total)
             safe_update_status("Running RAG consistency analysis...", "blue")
-            self._add_rag_consistency_analysis(doc, valid_folders, folder_concepts)
+            self._add_rag_consistency_analysis(doc, valid_folders, folder_concepts, parent)
             
             plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[6, 9])
 
@@ -5199,7 +5355,7 @@ class UpSetGUI:
         else:
             self.aggregate_time_label.config(text=f"Elapsed: {elapsed:.1f}s, Estimated total: {est_total:.1f}s")
     
-    def _add_rag_consistency_analysis(self, doc, valid_folders, folder_concepts):
+    def _add_rag_consistency_analysis(self, doc, valid_folders, folder_concepts, parent_dir):
         """Add RAG consistency analysis tables to the document"""
         try:
             import time
@@ -5263,7 +5419,7 @@ class UpSetGUI:
                     )
                 
                 if folder_analyzer.data:
-                    # Time the full analysis process including generate_stability_report
+                    # Time the full analysis process including generate_stability_report AND visualizations
                     analysis_start_time = time.time()
                     folder_timings = {}
                     
@@ -5274,7 +5430,36 @@ class UpSetGUI:
                         run_sensitivity=self.sensitivity_var.get()
                     )
                     
-                    # Calculate total analysis time
+                    # Generate semantic similarity visualizations
+                    print(f"[SEMANTIC VIZ] Generating visualizations for {folder_name}...")
+                    viz_start_time = time.time()
+                    try:
+                        # Get output directory (same as where the DOC file will be saved)
+                        output_dir = parent_dir  # Use the parent folder where the DOC file will be saved
+                        
+                        # Generate semantic similarity heatmap
+                        heatmap_path = folder_analyzer.generate_semantic_similarity_heatmap(output_dir, folder_name)
+                        
+                        # Generate t-SNE plot
+                        tsne_path = folder_analyzer.generate_tsne_plot(output_dir, folder_name)
+                        
+                        # Store visualization paths for later inclusion in DOC
+                        if not hasattr(self, 'semantic_visualizations'):
+                            self.semantic_visualizations = {}
+                        self.semantic_visualizations[folder_name] = {
+                            'heatmap': heatmap_path,
+                            'tsne': tsne_path
+                        }
+                        
+                        viz_end_time = time.time()
+                        viz_time = viz_end_time - viz_start_time
+                        print(f"[SEMANTIC VIZ] Visualizations completed in {viz_time:.2f}s for {folder_name}")
+                        
+                    except Exception as viz_error:
+                        print(f"[SEMANTIC VIZ ERROR] Failed to generate visualizations for {folder_name}: {viz_error}")
+                        viz_time = 0.0
+                    
+                    # Calculate total analysis time (including visualizations)
                     analysis_end_time = time.time()
                     total_analysis_time = analysis_end_time - analysis_start_time
                     
@@ -5287,20 +5472,25 @@ class UpSetGUI:
                     if self.sensitivity_var.get():
                         enabled_analyses.append('sensitivity')
                     
-                    # Distribute time evenly across enabled analyses
-                    if enabled_analyses:
-                        time_per_analysis = total_analysis_time / len(enabled_analyses)
-                        for analysis in enabled_analyses:
+                    # Add visualization time as a separate category
+                    enabled_analyses.append('visualizations')
+                    
+                    # Distribute time evenly across enabled analyses (excluding visualizations)
+                    non_viz_analyses = [a for a in enabled_analyses if a != 'visualizations']
+                    if non_viz_analyses:
+                        time_per_analysis = (total_analysis_time - viz_time) / len(non_viz_analyses)
+                        for analysis in non_viz_analyses:
                             folder_timings[analysis] = time_per_analysis
                     
+                    # Add visualization time separately
+                    folder_timings['visualizations'] = viz_time
                     folder_timings['total'] = total_analysis_time
                     
                     folder_analysis_results[folder_name] = folder_results
                     analysis_timings[folder_name] = folder_timings
                     
                     # Debug: Print parameter values found for this folder
-                    total_time = folder_timings.get('total', 0.0)
-                    print(f"[RAG ANALYSIS] {folder_name} - Found {len(folder_analyzer.data)} data points in {total_time:.2f}s")
+                    print(f"[RAG ANALYSIS] {folder_name} - Found {len(folder_analyzer.data)} data points in {total_analysis_time:.2f}s total (analysis: {total_analysis_time - viz_time:.2f}s, visualizations: {viz_time:.2f}s)")
                     
                     # Check if individual_parameters exists before accessing it
                     if 'individual_parameters' in folder_results:
@@ -5320,6 +5510,9 @@ class UpSetGUI:
             
             # Add analysis tables to document with timings
             self._add_analysis_tables_to_doc(doc, folder_analysis_results, valid_folders, analysis_timings)
+            
+            # Add semantic similarity visualizations to document
+            self._add_semantic_visualizations_to_doc(doc)
             
         except Exception as e:
             print(f"Error in RAG consistency analysis: {e}")
@@ -5484,8 +5677,8 @@ class UpSetGUI:
                 if analysis_timings and any('within_param' in timings for timings in analysis_timings.values()):
                     times = [timings.get('within_param', 0) for timings in analysis_timings.values() if 'within_param' in timings]
                     if times:
-                        avg_time_minutes = sum(times) / len(times) / 60.0
-                        timing_para.add_run(f"{avg_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                        total_time_minutes = sum(times) / 60.0  # Total time, not average
+                        timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
                     else:
                         timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
                 else:
@@ -5562,8 +5755,8 @@ class UpSetGUI:
                 if analysis_timings and any('cross_param' in timings for timings in analysis_timings.values()):
                     times = [timings.get('cross_param', 0) for timings in analysis_timings.values() if 'cross_param' in timings]
                     if times:
-                        avg_time_minutes = sum(times) / len(times) / 60.0
-                        timing_para.add_run(f"{avg_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                        total_time_minutes = sum(times) / 60.0  # Total time, not average
+                        timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
                     else:
                         timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
                 else:
@@ -5647,10 +5840,22 @@ class UpSetGUI:
                 if analysis_timings and any('sensitivity' in timings for timings in analysis_timings.values()):
                     times = [timings.get('sensitivity', 0) for timings in analysis_timings.values() if 'sensitivity' in timings]
                     if times:
-                        avg_time_minutes = sum(times) / len(times) / 60.0
-                        timing_para.add_run(f"{avg_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                        total_time_minutes = sum(times) / 60.0  # Total time, not average
+                        timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
                     else:
                         timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                else:
+                    timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                timing_para.add_run(".").font.size = Inches(0.12)
+            
+            # Add visualization timing
+            if analysis_timings and any('visualizations' in timings for timings in analysis_timings.values()):
+                timing_para = doc.add_paragraph()
+                timing_para.add_run("⏱️ Semantic Similarity Visualizations completed in ").font.size = Inches(0.12)
+                times = [timings.get('visualizations', 0) for timings in analysis_timings.values() if 'visualizations' in timings]
+                if times:
+                    total_time_minutes = sum(times) / 60.0  # Total time, not average
+                    timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
                 else:
                     timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
                 timing_para.add_run(".").font.size = Inches(0.12)
@@ -5666,14 +5871,95 @@ class UpSetGUI:
                         total_times.append(sum(timings.values()))
                 
                 if total_times:
-                    total_time_minutes = sum(total_times) / len(total_times) / 60.0  # Average across folders in minutes
+                    total_time_minutes = sum(total_times) / 60.0  # Total time across all folders in minutes
                     timing_para = doc.add_paragraph()
                     timing_para.add_run("⏱️ Total RAG Consistency Analysis completed in ").font.size = Inches(0.12)
                     timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
                     timing_para.add_run(".").font.size = Inches(0.12)
+                    
+                    # Add per-folder breakdown
+                    timing_para2 = doc.add_paragraph()
+                    timing_para2.add_run("Per-folder breakdown: ").font.size = Inches(0.12)
+                    folder_times = []
+                    for folder_name, timings in analysis_timings.items():
+                        if 'total' in timings:
+                            folder_time_min = timings['total'] / 60.0
+                            folder_times.append(f"{folder_name}: {folder_time_min:.2f}min")
+                    timing_para2.add_run("; ".join(folder_times)).font.size = Inches(0.12)
             
         except Exception as e:
             print(f"Error adding analysis tables to document: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _add_semantic_visualizations_to_doc(self, doc):
+        """Add semantic similarity visualizations to the document"""
+        try:
+            from docx.shared import Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            # Check if we have any visualizations to add
+            if not hasattr(self, 'semantic_visualizations') or not self.semantic_visualizations:
+                print("[SEMANTIC VIZ] No visualizations to add to document")
+                return
+            
+            # Add header for visualizations
+            doc.add_heading("Semantic Similarity Visualizations", level=2)
+            doc.add_paragraph(
+                "Visual representations of concept similarity and clustering based on the selected embedding model. "
+                "These visualizations help understand how semantically similar concepts are grouped together."
+            )
+            
+            # Add visualizations for each folder
+            for folder_name, viz_paths in self.semantic_visualizations.items():
+                if not viz_paths['heatmap'] and not viz_paths['tsne']:
+                    continue
+                
+                # Add folder header
+                doc.add_heading(f"Folder: {folder_name}", level=3)
+                
+                # Add heatmap if available
+                if viz_paths['heatmap'] and os.path.exists(viz_paths['heatmap']):
+                    doc.add_heading("Semantic Similarity Matrix Heatmap", level=4)
+                    doc.add_paragraph(
+                        "This heatmap shows the cosine similarity between all concept pairs. "
+                        "Darker colors indicate higher semantic similarity. Values range from 0 (no similarity) to 1 (identical meaning)."
+                    )
+                    
+                    # Add the image
+                    try:
+                        doc.add_picture(viz_paths['heatmap'], width=Inches(6))
+                        # Center the image
+                        last_paragraph = doc.paragraphs[-1]
+                        last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    except Exception as img_error:
+                        doc.add_paragraph(f"[Error loading heatmap image: {img_error}]")
+                
+                # Add t-SNE plot if available
+                if viz_paths['tsne'] and os.path.exists(viz_paths['tsne']):
+                    doc.add_heading("t-SNE Concept Clustering", level=4)
+                    doc.add_paragraph(
+                        "This 2D scatter plot shows how concepts cluster based on semantic similarity. "
+                        "Points closer together represent more semantically similar concepts. "
+                        "The color intensity indicates concept frequency across parameter variations."
+                    )
+                    
+                    # Add the image
+                    try:
+                        doc.add_picture(viz_paths['tsne'], width=Inches(6))
+                        # Center the image
+                        last_paragraph = doc.paragraphs[-1]
+                        last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    except Exception as img_error:
+                        doc.add_paragraph(f"[Error loading t-SNE image: {img_error}]")
+                
+                # Add spacing between folders
+                doc.add_paragraph()
+            
+            print("[SEMANTIC VIZ] Successfully added visualizations to document")
+            
+        except Exception as e:
+            print(f"[SEMANTIC VIZ ERROR] Failed to add visualizations to document: {e}")
             import traceback
             traceback.print_exc()
 
