@@ -1298,7 +1298,9 @@ class UpSetGUI:
                 words2 = set(re.findall(r'\b\w+\b', other_lc))
                 found = False
                 if group_by_words:
-                    if words1 & words2:
+                    # Only group if they share words that meet the minimum length requirement
+                    shared_words = words1 & words2
+                    if shared_words and any(len(w) >= min_letters for w in shared_words):
                         found = True
                 else:
                     for w1 in words1:
@@ -5247,7 +5249,18 @@ class UpSetGUI:
             group_colors = {}
             color_to_concepts = defaultdict(list)
             for i, group in enumerate(llm_groups):
-                color = color_palette[i % len(color_palette)]
+                # Use a different color for each group to avoid conflicts
+                if i < len(color_palette):
+                    color = color_palette[i]
+                else:
+                    # Generate a unique color for groups beyond the palette
+                    import colorsys
+                    hue = (i * 0.618) % 1.0  # Golden ratio for good distribution
+                    saturation = 0.7
+                    value = 0.8
+                    rgb = colorsys.hsv_to_rgb(hue, saturation, value)
+                    color = f"#{int(rgb[0]*255):02x}{int(rgb[1]*255):02x}{int(rgb[2]*255):02x}"
+                
                 for concept in group:
                     group_colors[concept] = color
                     color_to_concepts[color].append(concept)
@@ -5256,7 +5269,17 @@ class UpSetGUI:
             if self.llm_grouping_var.get():
                 llm_group_tuples = []
                 for i, group in enumerate(llm_groups):
-                    color = color_palette[i % len(color_palette)]
+                    # Use a different color for each group to avoid conflicts
+                    if i < len(color_palette):
+                        color = color_palette[i]
+                    else:
+                        # Generate a unique color for groups beyond the palette
+                        import colorsys
+                        hue = (i * 0.618) % 1.0  # Golden ratio for good distribution
+                        saturation = 0.7
+                        value = 0.8
+                        rgb = colorsys.hsv_to_rgb(hue, saturation, value)
+                        color = f"#{int(rgb[0]*255):02x}{int(rgb[1]*255):02x}{int(rgb[2]*255):02x}"
                     llm_group_tuples.append((color, group))
         else:
             def create_refined_color_groups(concepts, use_colors, group_by_words, group_by_subletters, min_letters):
@@ -5266,13 +5289,17 @@ class UpSetGUI:
                 stopwords = set(['the','a','an','and','or','but','in','on','at','to','for','of','with','by','is','are','was','were','be','been','being','have','has','had','do','does','did','will','would','should','could','can','may','might','must'])
                 def extract_words(concept):
                     words = re.findall(r'\b\w+\b', concept.lower())
-                    return [w for w in words if w not in stopwords and len(w) > 2]
+                    return [w for w in words if w not in stopwords and len(w) >= min_letters]
                 # Build word-to-concept mapping
                 word_to_concepts = {}
                 for concept in concepts:
                     words = extract_words(concept)
                     for w in words:
                         word_to_concepts.setdefault(w, set()).add(concept)
+                    # Debug: Print words for Character and Reason concepts
+                    if 'Character' in concept or 'Reason' in concept:
+                        print(f"[DEBUG] Concept '{concept}' -> words: {words}")
+                
                 # Build groups: each group is all concepts sharing a word
                 groups = []
                 assigned = set()
@@ -5281,6 +5308,9 @@ class UpSetGUI:
                     if len(group) > 1:
                         groups.append(group)
                         assigned.update(group)
+                        # Debug: Print groups that contain Character or Reason concepts
+                        if any('Character' in str(concept) or 'Reason' in str(concept) for concept in group):
+                            print(f"[DEBUG] Group by word '{w}' (len={len(w)}): {sorted(group)}")
                 # Any unassigned concepts become their own group
                 for concept in concepts:
                     if concept not in assigned:
@@ -5293,9 +5323,23 @@ class UpSetGUI:
                 ]
                 group_colors = {}
                 for i, group in enumerate(groups):
-                    color = color_palette[i % len(color_palette)]
+                    # Use a different color for each group to avoid conflicts
+                    if i < len(color_palette):
+                        color = color_palette[i]
+                    else:
+                        # Generate a unique color for groups beyond the palette
+                        import colorsys
+                        hue = (i * 0.618) % 1.0  # Golden ratio for good distribution
+                        saturation = 0.7
+                        value = 0.8
+                        rgb = colorsys.hsv_to_rgb(hue, saturation, value)
+                        color = f"#{int(rgb[0]*255):02x}{int(rgb[1]*255):02x}{int(rgb[2]*255):02x}"
+                    
                     for concept in group:
                         group_colors[concept] = color
+                    # Debug: Print color assignment for groups containing Character or Reason
+                    if any('Character' in str(concept) or 'Reason' in str(concept) for concept in group):
+                        print(f"[DEBUG] Group {i} assigned color {color}: {sorted(group)}")
                 return group_colors
             group_colors = create_refined_color_groups(
                 concept_list, 
@@ -5304,6 +5348,12 @@ class UpSetGUI:
                 params['group_by_subletters'],
                 params['min_letters']
             )
+            
+            # Debug: Print final color assignments for Character and Reason concepts
+            print("[DEBUG] Final color assignments:")
+            for concept in concept_list:
+                if 'Character' in concept or 'Reason' in concept:
+                    print(f"  '{concept}' -> {group_colors.get(concept, 'NOT_FOUND')}")
             # --- Fuzzy/Exact/None grouping for overlap and canonicalization ---
             if self.agg_enable_fuzzy.get() and grouping_logic == "Fuzzy":
                 groups = []  # List of sets
