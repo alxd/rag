@@ -1042,6 +1042,48 @@ class UpSetGUI:
     def fit_to_window(self):
         self.zoomable_canvas.fit_to_window()
         
+    def _is_valid_concept(self, concept):
+        """Check if a concept is valid (not a number or technical parameter)"""
+        if not concept or not isinstance(concept, str):
+            return False
+        
+        concept = concept.strip()
+        
+        # Filter out empty or very short concepts
+        if len(concept) < 2:
+            return False
+        
+        # Filter out pure numbers
+        if concept.isdigit():
+            return False
+        
+        # Filter out common parameters and technical terms
+        invalid_terms = {
+            'bm25', 'temperature', 'top_p', 'top_k', 'top-p', 'top-k', 'block', 'blocks', 'group label', 'index', 'parameter'
+        }
+        
+        # Check for exact matches
+        if concept.lower() in invalid_terms:
+            return False
+        
+        # Check if concept contains any invalid terms (like "BM25 Weight", "Top-k", "Top-p")
+        concept_lower = concept.lower()
+        for invalid_term in invalid_terms:
+            if invalid_term in concept_lower:
+                return False
+        
+        # Filter out long descriptive sentences (likely not concepts)
+        if len(concept) > 100:
+            return False
+        
+        # Filter out sentences that look like descriptions (contain common sentence words)
+        descriptive_words = ['this', 'table', 'shows', 'specific', 'citations', 'quotes', 'original', 'texts', 'concept', 'extracted', 'parameter', 'files', 'demonstrate', 'used', 'context', 'within', 'philosophical']
+        concept_words = concept.lower().split()
+        if len(concept_words) > 5 and any(word in descriptive_words for word in concept_words):
+            return False
+        
+        return True
+
     def extract_concepts(self, text):
         if pd.isna(text):
             return []
@@ -1059,11 +1101,11 @@ class UpSetGUI:
                 # Markdown or plain numbered list
                 if '**' in line:
                     c = line.split('**')[1].replace(':', '').replace('.', '').strip()
-                    if c:
+                    if c and self._is_valid_concept(c):
                         concepts.append(c)
                 else:
                     c = line.lstrip('0123456789. ').replace(':', '').replace('.', '').strip()
-                    if c:
+                    if c and self._is_valid_concept(c):
                         concepts.append(c)
             
             # Handle markdown table format (| # | Concept | ...) - for GPT_OSS_120b format
@@ -1076,7 +1118,7 @@ class UpSetGUI:
                     # Only extract if the entire concept_part is wrapped in ** (not just contains **)
                     if concept_part.startswith('**') and concept_part.endswith('**'):
                         c = concept_part[2:-2].strip()  # Remove ** from both ends
-                        if c and c not in ['#', 'Concept', 'How the text uses', 'Where the term appears', 'Why it functions as', 'Why it qualifies as', 'Why it counts as', 'Why it ranks among']:
+                        if c and c not in ['#', 'Concept', 'How the text uses', 'Where the term appears', 'Why it functions as', 'Why it qualifies as', 'Why it counts as', 'Why it ranks among'] and self._is_valid_concept(c):
                             concepts.append(c)
             
             # No fallback logic needed - only extract from numbered lines and table rows
@@ -1104,7 +1146,7 @@ class UpSetGUI:
                 # Markdown or plain numbered list
                 if '**' in line:
                     c = line.split('**')[1].replace(':', '').replace('.', '').strip()
-                    if c:
+                    if c and self._is_valid_concept(c):
                         concepts.append(c)
                         # Extract quotes for this concept
                         quotes = self._extract_quotes_for_concept_from_text(text, c)
@@ -1113,7 +1155,7 @@ class UpSetGUI:
                             print(f"[QUOTES DEBUG] Found {len(quotes)} quotes for concept '{c}': {quotes}")
                 else:
                     c = line.lstrip('0123456789. ').replace(':', '').replace('.', '').strip()
-                    if c:
+                    if c and self._is_valid_concept(c):
                         concepts.append(c)
                         # Extract quotes for this concept
                         quotes = self._extract_quotes_for_concept_from_text(text, c)
@@ -1131,7 +1173,7 @@ class UpSetGUI:
                     # Only extract if the entire concept_part is wrapped in ** (not just contains **)
                     if concept_part.startswith('**') and concept_part.endswith('**'):
                         c = concept_part[2:-2].strip()  # Remove ** from both ends
-                        if c and c not in ['#', 'Concept', 'How the text uses', 'Where the term appears', 'Why it functions as', 'Why it qualifies as', 'Why it counts as', 'Why it ranks among']:
+                        if c and c not in ['#', 'Concept', 'How the text uses', 'Where the term appears', 'Why it functions as', 'Why it qualifies as', 'Why it counts as', 'Why it ranks among'] and self._is_valid_concept(c):
                             concepts.append(c)
                             # Extract quotes for this concept
                             quotes = self._extract_quotes_for_concept_from_text(text, c)
@@ -3091,7 +3133,7 @@ class UpSetGUI:
                         para.add_run(", ")
                 row_cells[2].text = str(len(block_concepts))
             # --- Concept Quotes Section ---
-            self._add_quotes_section_to_stats_doc(doc, df, outdir, blocks)
+            self._add_quotes_section_to_stats_doc(doc, df, outdir, blocks, color_mapping)
             
             # --- UpSet Histogram Section ---
             doc.add_heading("UpSet Diagram Histograms", level=1)
@@ -3130,8 +3172,11 @@ class UpSetGUI:
         except Exception as e:
             print(f"Error generating stats TXT/PDF/DOCX: {e}")
 
-    def _add_quotes_section_to_stats_doc(self, doc, df, outdir, blocks):
+    def _add_quotes_section_to_stats_doc(self, doc, df, outdir, blocks, color_mapping=None, llm_group_tuples=None, color_to_concepts=None):
         """Add concept quotes section to the stats document"""
+        import time
+        start_time = time.time()
+        
         try:
             from docx.shared import Inches
             from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -3161,13 +3206,18 @@ class UpSetGUI:
             # Create quotes table
             quotes_table = doc.add_table(rows=1, cols=5)  # Concept, Short Quote, Full Citation, Sources, Reason columns
             quotes_table.style = 'Table Grid'
+            quotes_table.autofit = False
             
-            # Set column widths
-            quotes_table.columns[0].width = Inches(1.2)  # Concept column
-            quotes_table.columns[1].width = Inches(1.8)  # Short Quote column
-            quotes_table.columns[2].width = Inches(2.2)  # Full Citation column
-            quotes_table.columns[3].width = Inches(1.5)  # Sources column
-            quotes_table.columns[4].width = Inches(2.8)  # Reason column
+            # Calculate available table width (page width - margins)
+            section = doc.sections[0]
+            table_width = int(section.page_width - section.left_margin - section.right_margin)
+            
+            # Set proportional column widths to fit within page width (reduced last column)
+            col_props = [1.2, 1.8, 2.2, 1.5, 2.3]  # Reduced last column from 2.8 to 2.3
+            total = sum(col_props)
+            col_widths = [int(table_width * (w / total)) for w in col_props]
+            for i, w in enumerate(col_widths):
+                quotes_table.columns[i].width = w
             
             # Header row
             header_cells = quotes_table.rows[0].cells
@@ -3183,42 +3233,113 @@ class UpSetGUI:
                     for run in para.runs:
                         run.bold = True
             
-            # Add data rows for each concept
-            for concept in all_concepts:
+            # Group concepts by their color mapping (same as Unique/Common Concepts table)
+            concept_groups = {}
+            group_colors = {}
+            
+            if color_mapping:
+                for concept in all_concepts:
+                    if concept in color_mapping:
+                        color = color_mapping[concept]
+                        if color not in concept_groups:
+                            concept_groups[color] = []
+                            group_colors[color] = color
+                        concept_groups[color].append(concept)
+            
+            # If no color mapping available, create single-concept groups
+            if not concept_groups:
+                for concept in all_concepts:
+                    concept_groups[f"group_{concept}"] = [concept]
+                    group_colors[f"group_{concept}"] = "#000000"
+            
+            print(f"[QUOTES DEBUG] Grouped {len(all_concepts)} concepts into {len(concept_groups)} groups")
+            print(f"[QUOTES DEBUG] Color mapping available: {bool(color_mapping)}")
+            if color_mapping:
+                print(f"[QUOTES DEBUG] Sample color mapping: {dict(list(color_mapping.items())[:3])}")
+            
+            # Add data rows for each group
+            for color, group_concepts in concept_groups.items():
                 row = quotes_table.add_row()
                 
-                # Set concept text with color from color mapping
+                # Set group name as concept text with color
                 concept_cell = row.cells[0]
                 concept_para = concept_cell.paragraphs[0]
-                concept_run = concept_para.add_run(concept)
                 
-                # Apply color from color mapping
-                if hasattr(self, 'color_mapping') and concept in self.color_mapping:
-                    color = self.color_mapping[concept]
-                    if color.startswith('#') and len(color) == 7:
-                        from docx.shared import RGBColor
-                        r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
-                        concept_run.font.color.rgb = RGBColor(r, g, b)
+                # Create group name from concepts (show all concepts in the group)
+                if len(group_concepts) == 1:
+                    group_name = group_concepts[0]
+                else:
+                    group_name = ", ".join(group_concepts)
                 
-                # Look for quotes and additional info in the stored data with file mapping
-                quote_info = self._get_detailed_quotes_for_concept(concept, df, file_to_varying_param)
+                concept_run = concept_para.add_run(group_name)
                 
-                if quote_info['quotes']:
-                    # Short Quote column (first quote, truncated)
-                    short_quote = quote_info['quotes'][0]
+                # Apply color from color mapping (same as Unique/Common Concepts table)
+                if color.startswith('#') and len(color) == 7:
+                    from docx.shared import RGBColor
+                    r, g, b = tuple(int(color[j:j+2], 16) for j in (1, 3, 5))
+                    concept_run.font.color.rgb = RGBColor(r, g, b)
+                
+                # Look for quotes and additional info for all concepts in the group
+                all_quotes = []
+                all_sources = []
+                all_reasons = []
+                concept_quotes_map = {}  # Map concept names to their quotes
+                
+                for concept in group_concepts:
+                    quote_info = self._get_detailed_quotes_for_concept(concept, df, file_to_varying_param)
+                    print(f"[QUOTES DEBUG] Concept '{concept}' - quotes: {len(quote_info['quotes'])}, sources: {len(quote_info['sources'])}")
+                    
+                    if quote_info['quotes']:
+                        # Filter out invalid quotes (numbers, empty strings, etc.)
+                        valid_quotes = []
+                        for quote in quote_info['quotes']:
+                            if (isinstance(quote, str) and 
+                                quote.strip() and 
+                                not quote.strip().isdigit() and 
+                                len(quote.strip()) > 10):  # Minimum quote length
+                                valid_quotes.append(quote.strip())
+                        
+                        if valid_quotes:
+                            all_quotes.extend(valid_quotes)
+                            concept_quotes_map[concept] = valid_quotes
+                            print(f"[QUOTES DEBUG] Added {len(valid_quotes)} valid quotes for '{concept}'")
+                        else:
+                            print(f"[QUOTES DEBUG] No valid quotes found for '{concept}'")
+                    
+                    if quote_info['sources']:
+                        all_sources.extend(quote_info['sources'])
+                    if quote_info['reason_text']:
+                        all_reasons.append(quote_info['reason_text'])
+                
+                if all_quotes:
+                    # Short Quote column (first quote with concept name, truncated)
+                    first_concept = list(concept_quotes_map.keys())[0]
+                    first_quote = concept_quotes_map[first_concept][0]
+                    short_quote = f"{first_concept}: {first_quote}"
                     if len(short_quote) > 150:
                         short_quote = short_quote[:150] + "..."
                     row.cells[1].text = short_quote
                     
-                    # Full Citation column (quotes only, no source info)
-                    full_citation = self._format_quotes_only(quote_info)
+                    # Full Citation column (quotes with concept names)
+                    formatted_quotes = []
+                    for concept, quotes in concept_quotes_map.items():
+                        for quote in quotes:
+                            formatted_quotes.append(f"{concept}: {quote}")
+                    
+                    # Create a combined quote_info structure for formatting
+                    combined_quote_info = {
+                        'quotes': formatted_quotes,
+                        'sources': all_sources,
+                        'reason_text': '; '.join(all_reasons) if all_reasons else ''
+                    }
+                    full_citation = self._format_quotes_only(combined_quote_info)
                     row.cells[2].text = full_citation
                     
                     # Sources column (parameter details with per-source varying parameter)
-                    self._format_sources_cell_with_per_source_varying_param(row.cells[3], quote_info)
+                    self._format_sources_cell_with_per_source_varying_param(row.cells[3], combined_quote_info)
                     
                     # Reason column
-                    reason_text = self._format_reason_text(quote_info)
+                    reason_text = self._format_reason_text(combined_quote_info)
                     row.cells[4].text = reason_text
                 else:
                     row.cells[1].text = "No quotes found"
@@ -3235,11 +3356,12 @@ class UpSetGUI:
             # Add summary paragraph
             total_quotes = sum(1 for concept in all_concepts 
                              if self._get_detailed_quotes_for_concept(concept, df, file_to_varying_param)['quotes'])
+            processing_time = time.time() - start_time
             doc.add_paragraph(
-                f"Summary: Found quotes for {total_quotes} out of {len(all_concepts)} concepts."
+                f"Summary: Found quotes for {total_quotes} out of {len(all_concepts)} concepts. Processing time: {processing_time:.2f} seconds"
             )
             
-            print(f"[QUOTES STATS] Successfully added quotes section with {len(all_concepts)} concepts")
+            print(f"[QUOTES STATS] Successfully added quotes section with {len(all_concepts)} concepts in {processing_time:.2f} seconds")
             
         except Exception as e:
             print(f"[QUOTES STATS ERROR] Failed to add quotes section: {e}")
@@ -3385,15 +3507,15 @@ class UpSetGUI:
             'reason_text': '',
             'specific_use': ''
         }
-
+        
         try:
             print(f"[QUOTES DEBUG] Getting detailed quotes for '{concept_name}'")
-
+            
             # Check if Concept_Quotes column exists
             if 'Concept_Quotes' not in df.columns:
                 print(f"[QUOTES DEBUG] Concept_Quotes column not found in dataframe")
                 return quote_info
-
+            
             # Look through all rows in the dataframe where the concept appears
             for i, row in df.iterrows():
                 # Check if concept appears in the Concepts column
@@ -3404,41 +3526,41 @@ class UpSetGUI:
                         if concept_name in concept_quotes:
                             quotes = concept_quotes[concept_name]
                             quote_info['quotes'].extend(quotes)
-
-                    # Extract source information with file tracking
-                    source_info = {
-                        'file': row.get('File', 'Unknown'),
-                        'temperature': row.get('Temperature', 'N/A'),
-                        'top_p': row.get('Top-p', 'N/A'),
-                        'top_k': row.get('Top-k', 'N/A'),
-                        'bm25_weight': row.get('BM25 Weight', 'N/A'),
-                        'main_answer': row.get('Main Answer', ''),
-                        'varying_param': None  # Will be set based on file
-                    }
-                    
-                    # Determine varying parameter based on file
-                    if file_to_varying_param and source_info['file'] in file_to_varying_param:
-                        source_info['varying_param'] = file_to_varying_param[source_info['file']]
-                        print(f"[QUOTES DEBUG] Source from file '{source_info['file']}' has varying param: {source_info['varying_param']}")
-                    
-                    quote_info['sources'].append(source_info)
-
-                    # Extract reason and specific use from Main Answer
-                    reason_info = self._extract_reason_and_specific_use(row.get('Main Answer', ''), concept_name)
-                    if reason_info['reason']:
-                        quote_info['reason_text'] = reason_info['reason']
-                    if reason_info['specific_use']:
-                        quote_info['specific_use'] = reason_info['specific_use']
-
+                            
+                        # Extract source information with file tracking
+                            source_info = {
+                            'file': row.get('File', 'Unknown'),
+                                'temperature': row.get('Temperature', 'N/A'),
+                                'top_p': row.get('Top-p', 'N/A'),
+                                'top_k': row.get('Top-k', 'N/A'),
+                                'bm25_weight': row.get('BM25 Weight', 'N/A'),
+                            'main_answer': row.get('Main Answer', ''),
+                            'varying_param': None  # Will be set based on file
+                        }
+                        
+                        # Determine varying parameter based on file
+                        if file_to_varying_param and source_info['file'] in file_to_varying_param:
+                            source_info['varying_param'] = file_to_varying_param[source_info['file']]
+                            print(f"[QUOTES DEBUG] Source from file '{source_info['file']}' has varying param: {source_info['varying_param']}")
+                        
+                            quote_info['sources'].append(source_info)
+                            
+                            # Extract reason and specific use from Main Answer
+                            reason_info = self._extract_reason_and_specific_use(row.get('Main Answer', ''), concept_name)
+                            if reason_info['reason']:
+                                quote_info['reason_text'] = reason_info['reason']
+                            if reason_info['specific_use']:
+                                quote_info['specific_use'] = reason_info['specific_use']
+            
             # Remove duplicates and limit quotes
             quote_info['quotes'] = list(dict.fromkeys(quote_info['quotes']))[:3]
             print(f"[QUOTES DEBUG] Found {len(quote_info['quotes'])} quotes and {len(quote_info['sources'])} sources for '{concept_name}'")
-
+            
         except Exception as e:
             print(f"[QUOTES ERROR] Error getting detailed quotes for concept '{concept_name}': {e}")
             import traceback
             traceback.print_exc()
-
+        
         return quote_info
 
     def _extract_reason_and_specific_use(self, text, concept_name):
@@ -4050,9 +4172,15 @@ class UpSetGUI:
                     # Skip header paragraphs
                     if paragraph.text.strip() in ["Concept", "Short Quote", "Full Citation", "Sources", "Reason"]:
                         continue
-                    # This should be a concept name
+                    
+                    # Skip descriptive paragraphs (long text that explains the table)
                     concept = paragraph.text.strip()
-                    if concept and not concept.startswith("No quotes found"):
+                    if (concept and 
+                        not concept.startswith("No quotes found") and 
+                        not concept.startswith("This table shows") and
+                        not concept.startswith("This table") and
+                        len(concept) < 200 and  # Skip very long paragraphs
+                        self._is_valid_concept(concept)):
                         concepts.append(concept)
             
             # Check tables for concepts (new 5-column format)
@@ -4062,7 +4190,7 @@ class UpSetGUI:
                         concept_cell = row.cells[0]  # First column is Concept
                         concept_text = concept_cell.text.strip()
                         
-                        if concept_text and concept_text not in ["Concept", "Short Quote", "Full Citation", "Sources", "Reason"]:
+                        if concept_text and concept_text not in ["Concept", "Short Quote", "Full Citation", "Sources", "Reason"] and self._is_valid_concept(concept_text):
                             concepts.append(concept_text)
                     elif len(row.cells) >= 2:  # Fallback for old format
                         concept_cell = row.cells[0]
@@ -4071,7 +4199,7 @@ class UpSetGUI:
                         concept_text = concept_cell.text.strip()
                         quotes_text = quotes_cell.text.strip()
                         
-                        if concept_text and concept_text not in ["Concept", "Quotes and Citations"]:
+                        if concept_text and concept_text not in ["Concept", "Quotes and Citations"] and self._is_valid_concept(concept_text):
                             concepts.append(concept_text)
             
             print(f"[QUOTES DEBUG] Extracted {len(concepts)} concepts from {os.path.basename(stats_doc_path)}")
@@ -4979,6 +5107,32 @@ class UpSetGUI:
             self.root.after(0, lambda: self.aggregate_status_label.config(text=msg, foreground=color))
         def safe_update_time(msg):
             self.root.after(0, lambda: self.aggregate_time_label.config(text=msg))
+        
+        # Function to determine if a group is present in a folder
+        def is_group_present_in_folder(group_name, concepts, folder_concepts, folder):
+            """Check if a group is present in a folder based on the group name, not just any concept in the group"""
+            # First, check if any concept that contains the group name appears in the folder
+            group_name_lower = group_name.lower()
+            for concept in concepts:
+                if group_name_lower in concept.lower() and concept in folder_concepts[folder]:
+                    return True
+            
+            # If no concept contains the group name, check if the exact group name appears
+            if group_name in folder_concepts[folder]:
+                return True
+            
+            # For single-word group names, be more strict - only return True if the group name
+            # appears as a standalone word in a concept, not just as part of another word
+            if len(group_name.split()) == 1:
+                group_name_lower = group_name.lower()
+                for concept in concepts:
+                    if concept in folder_concepts[folder]:
+                        # Check if the group name appears as a standalone word in the concept
+                        words = re.findall(r'\b\w+\b', concept.lower())
+                        if group_name_lower in words:
+                            return True
+            
+            return False
         # Define total steps for progress tracking
         total_steps = 7  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis, quotes (optional)
         current_step = 0
@@ -5343,8 +5497,7 @@ class UpSetGUI:
                 words = re.findall(r'\b\w+\b', first_concept)
                 if words:
                     return words[0].capitalize()
-                
-                return "Group"
+            
             
             # Create data for UpSet diagram
             group_data = []
@@ -5359,7 +5512,7 @@ class UpSetGUI:
                     row = [group_name]
                     concepts_in_color = set(concepts)
                     for folder in valid_folders:
-                        present = any(c in folder_concepts[folder] for c in concepts_in_color)
+                        present = is_group_present_in_folder(group_name, concepts, folder_concepts, folder)
                         row.append(1 if present else 0)
                     group_data.append(row)
             else:
@@ -5372,7 +5525,7 @@ class UpSetGUI:
                     row = [group_name]
                     concepts_in_color = set(concepts)
                     for folder in valid_folders:
-                        present = any(c in folder_concepts[folder] for c in concepts_in_color)
+                        present = is_group_present_in_folder(group_name, concepts, folder_concepts, folder)
                         row.append(1 if present else 0)
                     group_data.append(row)
             
@@ -5856,12 +6009,12 @@ class UpSetGUI:
                             if self.llm_grouping_var.get():
                                 for color, concepts in llm_group_tuples:
                                     if extract_group_name(concepts) == group_name:
-                                        present = any(concept in folder_concepts[folder] for concept in concepts)
+                                        present = is_group_present_in_folder(group_name, concepts, folder_concepts, folder)
                                         break
                             else:
                                 for color, concepts in color_to_concepts.items():
                                     if extract_group_name(concepts) == group_name:
-                                        present = any(concept in folder_concepts[folder] for concept in concepts)
+                                        present = is_group_present_in_folder(group_name, concepts, folder_concepts, folder)
                                         break
                             row.append(1 if present else 0)
                         group_data_plot.append(row)
@@ -7345,7 +7498,7 @@ class UpSetGUI:
                             matches = re.findall(pattern, main_answer, re.MULTILINE)
                             for match in matches:
                                 concept = match.strip()
-                                if len(concept) > 3:  # Filter out very short matches
+                                if len(concept) > 3 and self._is_valid_concept(concept):  # Filter out very short matches and invalid concepts
                                     concepts.add(concept)
             
             print(f"[QUOTES DEBUG] Extracted {len(concepts)} concepts from {os.path.basename(csv_path)}")
@@ -7459,17 +7612,62 @@ class UpSetGUI:
                 "and the quotes show how each concept is used in context."
             )
             
+            # Filter out concepts that have no meaningful quotes
+            filtered_quotes_data = {}
+            for concept, folder_quotes in quotes_data.items():
+                # Check if this concept has any meaningful quotes (not all "No quotes found" or single digits)
+                has_meaningful_quotes = False
+                for folder_name, folder_data in folder_quotes.items():
+                    if isinstance(folder_data, list):
+                        quotes = folder_data
+                    else:
+                        quotes = folder_data.get('quotes', [])
+                    
+                    # Check if there are any meaningful quotes
+                    for quote in quotes:
+                        if (isinstance(quote, str) and 
+                            quote.strip() and 
+                            quote.strip() != "No quotes found" and 
+                            not quote.strip().isdigit() and 
+                            len(quote.strip()) > 1):
+                            has_meaningful_quotes = True
+                            break
+                    
+                    if has_meaningful_quotes:
+                        break
+                
+                # Only include concepts with meaningful quotes
+                if has_meaningful_quotes:
+                    filtered_quotes_data[concept] = folder_quotes
+            
+            # If no concepts have meaningful quotes, add a message and return
+            if not filtered_quotes_data:
+                doc.add_paragraph("No meaningful quotes found for any concepts.")
+                return
+            
             # Create quotes table
             num_folders = len(valid_folders)
             quotes_table = doc.add_table(rows=1, cols=num_folders + 1)  # +1 for concept column
             quotes_table.style = 'Table Grid'
             
-            # Set column widths
+            # Calculate available table width (page width - margins)
+            section = doc.sections[0]
+            table_width = int(section.page_width - section.left_margin - section.right_margin)
+            
+            # Set proportional column widths to fit within page width
+            # Concept column gets half the width of other columns
+            concept_width_ratio = 0.5
+            folder_width_ratio = 1.0
+            total_ratio = concept_width_ratio + (num_folders * folder_width_ratio)
+            
+            concept_width = int(table_width * (concept_width_ratio / total_ratio))
+            folder_width = int(table_width * (folder_width_ratio / total_ratio))
+            
             for i, col in enumerate(quotes_table.columns):
                 if i == 0:
-                    col.width = Inches(2.0)  # Concept column
+                    col.width = concept_width  # Concept column - half size
                 else:
-                    col.width = Inches(2.5)  # Folder columns
+                    col.width = folder_width  # Folder columns
             
             # Header row
             header_cells = quotes_table.rows[0].cells
@@ -7490,7 +7688,7 @@ class UpSetGUI:
                         run.font.size = Inches(0.10)
             
             # Add data rows for each concept
-            for concept, folder_quotes in quotes_data.items():
+            for concept, folder_quotes in filtered_quotes_data.items():
                 row = quotes_table.add_row()
                 row.cells[0].text = concept
                 
@@ -7530,9 +7728,9 @@ class UpSetGUI:
                             run.font.size = Inches(0.09)  # Smaller font for quotes
             
             # Add summary paragraph
-            total_concepts = len(quotes_data)
+            total_concepts = len(filtered_quotes_data)
             total_quotes = 0
-            for folder_quotes in quotes_data.values():
+            for folder_quotes in filtered_quotes_data.values():
                 for folder_data in folder_quotes.values():
                     if isinstance(folder_data, list):
                         total_quotes += len(folder_data)
