@@ -54,10 +54,12 @@ class RAGConsistencyAnalyzer:
             from sklearn.metrics.pairwise import cosine_similarity
             from scipy.optimize import linear_sum_assignment
             self.model = SentenceTransformer(model_name)
+            self.model_name = model_name
             self.data = []
         except ImportError as e:
             print(f"Warning: Could not import required libraries for semantic analysis: {e}")
             self.model = None
+            self.model_name = model_name
             self.data = []
     
     def parse_concepts(self, concept_string):
@@ -426,6 +428,413 @@ class RAGConsistencyAnalyzer:
             
         except Exception as e:
             print(f"[SEMANTIC VIZ ERROR] Failed to create t-SNE plot: {e}")
+            return None
+
+    def generate_cross_author_analysis(self, output_dir, current_folder, valid_folders, folder_concepts):
+        """Generate cross-author semantic similarity analysis with heatmaps, 2D embeddings, and network graphs"""
+        if not self.model:
+            return None
+            
+        try:
+            import os
+            import pandas as pd
+            import numpy as np
+            import matplotlib.pyplot as plt
+            import seaborn as sns
+            from sklearn.manifold import TSNE
+            from sklearn.metrics.pairwise import cosine_similarity
+            import networkx as nx
+            
+            # Collect all concepts and their embeddings from all folders
+            all_concepts_data = []
+            folder_names = []
+            
+            print(f"[CROSS-AUTHOR] Starting cross-author analysis...")
+            print(f"[CROSS-AUTHOR] Valid folders: {[os.path.basename(f) for f in valid_folders]}")
+            print(f"[CROSS-AUTHOR] Folder concepts keys: {list(folder_concepts.keys())}")
+            
+            for folder_path in valid_folders:
+                # Check if folder_path is directly in folder_concepts (full path)
+                if folder_path in folder_concepts:
+                    concepts = list(folder_concepts[folder_path])  # Convert set to list
+                    folder_name = os.path.basename(folder_path)
+                else:
+                    # Try with folder name only
+                    folder_name = os.path.basename(folder_path)
+                    if folder_name in folder_concepts:
+                        concepts = list(folder_concepts[folder_name])  # Convert set to list
+                    else:
+                        print(f"[CROSS-AUTHOR] Folder {folder_name} not found in folder_concepts")
+                        continue
+                
+                if concepts:
+                    print(f"[CROSS-AUTHOR] Processing {folder_name} with {len(concepts)} concepts")
+                    # Get embeddings for concepts in this folder
+                    embeddings = self.model.encode(concepts)
+                    for concept, embedding in zip(concepts, embeddings):
+                        all_concepts_data.append({
+                            'concept': concept,
+                            'author': folder_name,
+                            'embedding': embedding
+                        })
+                    folder_names.append(folder_name)
+                else:
+                    print(f"[CROSS-AUTHOR] No concepts found for {folder_name}")
+            
+            if len(all_concepts_data) < 2:
+                print(f"[CROSS-AUTHOR] Not enough data for cross-author analysis (found {len(all_concepts_data)} concepts)")
+                return None
+            
+            print(f"[CROSS-AUTHOR] Found {len(all_concepts_data)} concepts across {len(folder_names)} folders")
+            
+            # Create DataFrame
+            df = pd.DataFrame(all_concepts_data)
+            
+            # 1. Generate Between-Author Similarity Heatmap
+            print(f"[CROSS-AUTHOR] Generating heatmap...")
+            between_author_sim = self._compute_between_author_similarity(df, folder_names)
+            heatmap_path = self._create_between_author_heatmap(between_author_sim, folder_names, output_dir)
+            print(f"[CROSS-AUTHOR] Heatmap result: {heatmap_path}")
+            
+            # 2. Generate 2D Embedding Map (t-SNE)
+            print(f"[CROSS-AUTHOR] Generating t-SNE plot...")
+            tsne_path = self._create_cross_author_tsne(df, folder_names, output_dir)
+            print(f"[CROSS-AUTHOR] t-SNE result: {tsne_path}")
+            
+            # 3. Generate Semantic Network Graph
+            print(f"[CROSS-AUTHOR] Generating network graph...")
+            network_path = self._create_semantic_network(df, folder_names, output_dir)
+            print(f"[CROSS-AUTHOR] Network result: {network_path}")
+            
+            # 4. Generate CSV with results
+            print(f"[CROSS-AUTHOR] Generating CSV...")
+            csv_path = self._create_cross_author_csv(df, between_author_sim, folder_names, output_dir)
+            print(f"[CROSS-AUTHOR] CSV result: {csv_path}")
+            
+            return {
+                'heatmap': heatmap_path,
+                'tsne': tsne_path,
+                'network': network_path,
+                'csv': csv_path,
+                'between_author_sim': between_author_sim,
+                'concepts_data': df
+            }
+            
+        except Exception as e:
+            print(f"[CROSS-AUTHOR ERROR] Failed to generate cross-author analysis: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+
+    def _compute_between_author_similarity(self, df, folder_names):
+        """Compute semantic similarity matrix between authors"""
+        from sklearn.metrics.pairwise import cosine_similarity
+        between_author_sim = np.zeros((len(folder_names), len(folder_names)))
+        
+        for i, author1 in enumerate(folder_names):
+            for j, author2 in enumerate(folder_names):
+                if i <= j:
+                    # Get concepts for each author
+                    author1_concepts = df[df['author'] == author1]['concept'].tolist()
+                    author2_concepts = df[df['author'] == author2]['concept'].tolist()
+                    
+                    if author1_concepts and author2_concepts:
+                        # Compute average similarity between all concept pairs
+                        similarities = []
+                        for c1 in author1_concepts:
+                            for c2 in author2_concepts:
+                                emb1 = df[(df['author'] == author1) & (df['concept'] == c1)]['embedding'].iloc[0]
+                                emb2 = df[(df['author'] == author2) & (df['concept'] == c2)]['embedding'].iloc[0]
+                                sim = cosine_similarity([emb1], [emb2])[0][0]
+                                similarities.append(sim)
+                        
+                        avg_sim = np.mean(similarities) if similarities else 0.0
+                        between_author_sim[i, j] = avg_sim
+                        between_author_sim[j, i] = avg_sim  # Symmetric matrix
+                    else:
+                        between_author_sim[i, j] = 0.0
+                        between_author_sim[j, i] = 0.0
+        
+        return between_author_sim
+
+    def _create_between_author_heatmap(self, between_author_sim, folder_names, output_dir):
+        """Create heatmap showing semantic similarity between authors"""
+        try:
+            plt.figure(figsize=(10, 8))
+            sns.heatmap(between_author_sim.astype(float), 
+                       cmap="viridis", 
+                       annot=True, 
+                       xticklabels=folder_names,
+                       yticklabels=folder_names,
+                       fmt='.3f')
+            plt.title("Semantic Similarity Between Authors\n(Darker color = higher semantic overlap)", 
+                     fontsize=14, pad=20)
+            plt.xlabel("Authors", fontsize=12)
+            plt.ylabel("Authors", fontsize=12)
+            plt.tight_layout()
+            
+            heatmap_path = os.path.join(output_dir, "cross_author_similarity_heatmap.png")
+            plt.savefig(heatmap_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"[CROSS-AUTHOR] Created between-author heatmap: {heatmap_path}")
+            return heatmap_path
+        except Exception as e:
+            print(f"[CROSS-AUTHOR ERROR] Failed to create heatmap: {e}")
+            return None
+
+    def _create_cross_author_tsne(self, df, folder_names, output_dir):
+        """Create 2D embedding map showing concept clustering by author"""
+        try:
+            from sklearn.manifold import TSNE
+            import matplotlib.pyplot as plt
+            import numpy as np
+            
+            # Stack all embeddings
+            X = np.stack(df["embedding"])
+            
+            # Apply t-SNE
+            tsne = TSNE(n_components=2, perplexity=min(20, len(df)-1), random_state=42)
+            X_2d = tsne.fit_transform(X)
+            
+            # Create scatter plot
+            plt.figure(figsize=(12, 10))
+            
+            # Color by author
+            colors = plt.cm.Set3(np.linspace(0, 1, len(folder_names)))
+            author_colors = {author: colors[i] for i, author in enumerate(folder_names)}
+            
+            for author in folder_names:
+                mask = df["author"] == author
+                if mask.any():
+                    plt.scatter(X_2d[mask, 0], X_2d[mask, 1], 
+                              label=author, alpha=0.7, s=100, c=[author_colors[author]])
+                    
+                    # Add concept labels (limit to avoid overcrowding)
+                    author_data = df[mask]
+                    for idx, (_, row) in enumerate(author_data.iterrows()):
+                        if idx < 20:  # Limit to first 20 concepts per author to avoid overcrowding
+                            concept = row['concept']
+                            # Truncate long concept names
+                            display_concept = concept[:15] + '...' if len(concept) > 15 else concept
+                            plt.annotate(display_concept, 
+                                       (X_2d[mask][idx, 0], X_2d[mask][idx, 1]),
+                                       xytext=(3, 3), textcoords='offset points',
+                                       fontsize=6, alpha=0.8)
+            
+            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            plt.title("Concept Embeddings by Author\n(Closer points = more similar concepts)", 
+                     fontsize=14, pad=20)
+            plt.xlabel("t-SNE Dimension 1", fontsize=12)
+            plt.ylabel("t-SNE Dimension 2", fontsize=12)
+            plt.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            tsne_path = os.path.join(output_dir, "cross_author_tsne.png")
+            plt.savefig(tsne_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"[CROSS-AUTHOR] Created cross-author t-SNE: {tsne_path}")
+            return tsne_path
+        except Exception as e:
+            print(f"[CROSS-AUTHOR ERROR] Failed to create t-SNE: {e}")
+            return None
+
+    def _create_semantic_network(self, df, folder_names, output_dir):
+        """Create semantic network graph showing concept relationships"""
+        try:
+            from sklearn.metrics.pairwise import cosine_similarity
+            import networkx as nx
+            import matplotlib.pyplot as plt
+            import numpy as np
+            
+            G = nx.Graph()
+            threshold = 0.8  # Similarity threshold for edges
+            
+            # Add nodes (concepts) with author information
+            for _, row in df.iterrows():
+                G.add_node(row['concept'], author=row['author'])
+            
+            # Add edges based on similarity
+            for i, row_i in df.iterrows():
+                for j, row_j in df.iterrows():
+                    if i < j:
+                        sim = cosine_similarity([row_i['embedding']], [row_j['embedding']])[0][0]
+                        if sim > threshold:
+                            G.add_edge(row_i['concept'], row_j['concept'], weight=sim)
+            
+            # Create the plot
+            plt.figure(figsize=(15, 12))
+            
+            # Position nodes using spring layout
+            pos = nx.spring_layout(G, k=1, iterations=50)
+            
+            # Color nodes by author
+            author_colors = {author: plt.cm.Set3(i/len(folder_names)) 
+                           for i, author in enumerate(folder_names)}
+            node_colors = [author_colors[G.nodes[node]['author']] for node in G.nodes()]
+            
+            # Draw the network
+            nx.draw(G, pos, 
+                   node_color=node_colors,
+                   node_size=100,
+                   with_labels=False,
+                   alpha=0.7,
+                   edge_color='gray',
+                   width=0.5)
+            
+            # Add concept labels (limit to avoid overcrowding)
+            label_pos = {}
+            for node in G.nodes():
+                if len(G.nodes()) <= 50:  # Only add labels if not too many nodes
+                    label_pos[node] = pos[node]
+            
+            if label_pos:
+                # Truncate long concept names for display
+                labels = {node: node[:10] + '...' if len(node) > 10 else node 
+                         for node in label_pos.keys()}
+                nx.draw_networkx_labels(G, label_pos, labels, font_size=6, alpha=0.8)
+            
+            # Add legend for authors
+            legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
+                                        markerfacecolor=author_colors[author], 
+                                        markersize=10, label=author) 
+                             for author in folder_names]
+            plt.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0, 1))
+            
+            plt.title(f"Semantic Concept Network\n(Edges: similarity > {threshold})", 
+                     fontsize=14, pad=20)
+            plt.tight_layout()
+            
+            network_path = os.path.join(output_dir, "cross_author_network.png")
+            plt.savefig(network_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"[CROSS-AUTHOR] Created semantic network: {network_path}")
+            return network_path
+        except Exception as e:
+            print(f"[CROSS-AUTHOR ERROR] Failed to create network: {e}")
+            return None
+
+    def _create_cross_author_csv(self, df, between_author_sim, folder_names, output_dir):
+        """Create CSV file with cross-author analysis results"""
+        try:
+            # Create similarity matrix DataFrame
+            sim_df = pd.DataFrame(between_author_sim, 
+                                index=folder_names, 
+                                columns=folder_names)
+            
+            # Create concepts summary with ALL concepts for each author
+            concepts_summary = []
+            for author in folder_names:
+                author_concepts = df[df['author'] == author]['concept'].tolist()
+                concepts_summary.append({
+                    'author': author,
+                    'concept_count': len(author_concepts),
+                    'all_concepts': '; '.join(author_concepts),  # Include ALL concepts
+                    'concepts_sample': '; '.join(author_concepts[:10]) + ('...' if len(author_concepts) > 10 else ''),
+                    'embedding_model': self.model_name if hasattr(self, 'model_name') else 'sentence-transformers/all-MiniLM-L6-v2'
+                })
+            
+            concepts_df = pd.DataFrame(concepts_summary)
+            
+            # Save to Excel file (not CSV since we have multiple sheets)
+            excel_path = os.path.join(output_dir, "cross_author_analysis.xlsx")
+            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
+                sim_df.to_excel(writer, sheet_name='Between_Author_Similarity')
+                concepts_df.to_excel(writer, sheet_name='Concepts_Summary')
+            
+            # Also save individual CSV files
+            csv_sim_path = os.path.join(output_dir, "cross_author_similarity_matrix.csv")
+            csv_concepts_path = os.path.join(output_dir, "cross_author_concepts_summary.csv")
+            
+            sim_df.to_csv(csv_sim_path, index=True)
+            concepts_df.to_csv(csv_concepts_path, index=False)
+            
+            # Return the Excel file as the main result
+            csv_path = excel_path
+            
+            print(f"[CROSS-AUTHOR] Created CSV: {csv_path}")
+            return csv_path
+        except Exception as e:
+            print(f"[CROSS-AUTHOR ERROR] Failed to create CSV: {e}")
+            return None
+
+    def generate_analysis_csv(self, analysis_type, results, folder_name, output_dir):
+        """Generate CSV files for different analysis types (A, B, C)"""
+        try:
+            import os
+            import pandas as pd
+            
+            csv_data = []
+            embedding_model = getattr(self, 'model_name', 'sentence-transformers/all-MiniLM-L6-v2')
+            
+            if analysis_type == 'within_param' and 'individual_parameters' in results:
+                # A. Within-Parameter Analysis CSV
+                for param, param_results in results['individual_parameters'].items():
+                    csv_data.append({
+                        'analysis_type': 'Within-Parameter Analysis',
+                        'parameter': param,
+                        'semantic_mean': param_results.get('overall_semantic_mean', 0.0),
+                        'semantic_std': param_results.get('overall_semantic_std', 0.0),
+                        'exact_mean': param_results.get('overall_exact_mean', 0.0),
+                        'exact_std': param_results.get('overall_exact_std', 0.0),
+                        'total_comparisons': param_results.get('total_comparisons', 0),
+                        'folder_name': folder_name,
+                        'embedding_model': embedding_model
+                    })
+                    
+            elif analysis_type == 'cross_param' and 'cross_parameter' in results:
+                # B. Cross-Parameter Analysis CSV
+                cross_results = results['cross_parameter']
+                csv_data.append({
+                    'analysis_type': 'Cross-Parameter Analysis',
+                    'parameter': 'All Parameters',
+                    'semantic_mean': cross_results.get('overall_semantic_mean', 0.0),
+                    'semantic_std': cross_results.get('overall_semantic_std', 0.0),
+                    'exact_mean': cross_results.get('overall_exact_mean', 0.0),
+                    'exact_std': cross_results.get('overall_exact_std', 0.0),
+                    'total_comparisons': cross_results.get('total_comparisons', 0),
+                    'folder_name': folder_name,
+                    'embedding_model': embedding_model
+                })
+                
+            elif analysis_type == 'sensitivity' and 'individual_parameters' in results:
+                # C. Parameter Sensitivity Ranking CSV
+                sensitivity_scores = []
+                for param, param_results in results['individual_parameters'].items():
+                    semantic_mean = param_results.get('overall_semantic_mean', 0.0)
+                    exact_mean = param_results.get('overall_exact_mean', 0.0)
+                    # Lower values = higher sensitivity
+                    sensitivity_score = 1.0 - ((semantic_mean + exact_mean) / 2.0)
+                    sensitivity_scores.append((param, sensitivity_score, semantic_mean, exact_mean))
+                
+                # Sort by sensitivity (highest first)
+                sensitivity_scores.sort(key=lambda x: x[1], reverse=True)
+                
+                for rank, (param, sensitivity, semantic, exact) in enumerate(sensitivity_scores, 1):
+                    csv_data.append({
+                        'analysis_type': 'Parameter Sensitivity Ranking',
+                        'parameter': param,
+                        'sensitivity_rank': rank,
+                        'sensitivity_score': sensitivity,
+                        'semantic_mean': semantic,
+                        'exact_mean': exact,
+                        'folder_name': folder_name,
+                        'embedding_model': embedding_model
+                    })
+            
+            if csv_data:
+                df = pd.DataFrame(csv_data)
+                csv_path = os.path.join(output_dir, f"{folder_name}_{analysis_type}_analysis.csv")
+                df.to_csv(csv_path, index=False)
+                print(f"[CSV EXPORT] Created {analysis_type} CSV: {csv_path}")
+                return csv_path
+            
+            return None
+            
+        except Exception as e:
+            print(f"[CSV EXPORT ERROR] Failed to create {analysis_type} CSV: {e}")
             return None
 
 def create_fixed_width_table(doc, rows, cols, col_widths_inches):
@@ -827,7 +1236,12 @@ class UpSetGUI:
         self.sensitivity_var = tk.BooleanVar(value=False)
         self.sensitivity_cb = ttk.Checkbutton(self.consistency_sub_frame, text="C. Parameter Sensitivity Ranking", 
                                             variable=self.sensitivity_var, state='disabled')
-        self.sensitivity_cb.grid(row=0, column=2, sticky=tk.W, padx=(10, 0), pady=2)
+        self.sensitivity_cb.grid(row=0, column=2, sticky=tk.W, padx=(10, 10), pady=2)
+        
+        self.semantic_viz_var = tk.BooleanVar(value=False)
+        self.semantic_viz_cb = ttk.Checkbutton(self.consistency_sub_frame, text="D. Semantic Similarity Across Authors / Folders", 
+                                             variable=self.semantic_viz_var, state='disabled')
+        self.semantic_viz_cb.grid(row=0, column=3, sticky=tk.W, padx=(10, 0), pady=2)
         
         self.aggregate_status_label = ttk.Label(aggregate_frame, text="", foreground="blue")
         self.aggregate_status_label.grid(row=3, column=0, columnspan=4, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
@@ -6839,6 +7253,9 @@ class UpSetGUI:
             analysis_timings = {}
             
             print(f"[RAG ANALYSIS] Analyzing {len(folder_data)} folders individually")
+            print(f"[RAG ANALYSIS] Folder data keys: {list(folder_data.keys())}")
+            for folder_name, data in folder_data.items():
+                print(f"[RAG ANALYSIS] {folder_name}: {len(data)} parameter combinations")
             
             for folder in valid_folders:
                 folder_name = os.path.basename(folder)
@@ -6852,8 +7269,10 @@ class UpSetGUI:
                 folder_analyzer = RAGConsistencyAnalyzer(model_name)
                 
                 # Add data for this folder only
-                for param_combo in folder_data[folder_name]:
+                print(f"[RAG ANALYSIS] Adding {len(folder_data[folder_name])} parameter combinations to analyzer")
+                for i, param_combo in enumerate(folder_data[folder_name]):
                     concepts_text = " ".join(param_combo['concepts'])
+                    print(f"[RAG ANALYSIS] Adding result {i+1}: T={param_combo['params']['temp']}, P={param_combo['params']['topp']}, K={param_combo['params']['topk']}, B={param_combo['params']['bm25']}, Concepts={len(param_combo['concepts'])}")
                     folder_analyzer.add_result(
                         param_combo['params']['temp'],
                         param_combo['params']['topp'],
@@ -6861,6 +7280,7 @@ class UpSetGUI:
                         param_combo['params']['bm25'],
                         concepts_text
                     )
+                print(f"[RAG ANALYSIS] Analyzer now has {len(folder_analyzer.data)} data points")
                 
                 if folder_analyzer.data:
                     # Time the full analysis process including generate_stability_report AND visualizations
@@ -6874,36 +7294,19 @@ class UpSetGUI:
                         run_sensitivity=self.sensitivity_var.get()
                     )
                     
-                    # Generate semantic similarity visualizations
-                    print(f"[SEMANTIC VIZ] Generating visualizations for {folder_name}...")
-                    viz_start_time = time.time()
-                    try:
-                        # Get output directory (same as where the DOC file will be saved)
-                        output_dir = parent_dir  # Use the parent folder where the DOC file will be saved
-                        
-                        # Generate semantic similarity heatmap
-                        heatmap_path = folder_analyzer.generate_semantic_similarity_heatmap(output_dir, folder_name)
-                        
-                        # Generate t-SNE plot
-                        tsne_path = folder_analyzer.generate_tsne_plot(output_dir, folder_name)
-                        
-                        # Store visualization paths for later inclusion in DOC
-                        if not hasattr(self, 'semantic_visualizations'):
-                            self.semantic_visualizations = {}
-                        self.semantic_visualizations[folder_name] = {
-                            'heatmap': heatmap_path,
-                            'tsne': tsne_path
-                        }
-                        
-                        viz_end_time = time.time()
-                        viz_time = viz_end_time - viz_start_time
-                        print(f"[SEMANTIC VIZ] Visualizations completed in {viz_time:.2f}s for {folder_name}")
-                        
-                    except Exception as viz_error:
-                        print(f"[SEMANTIC VIZ ERROR] Failed to generate visualizations for {folder_name}: {viz_error}")
-                        viz_time = 0.0
+                    # Generate CSV files for enabled analyses
+                    csv_files = {}
+                    if self.within_param_var.get() and folder_results:
+                        csv_files['within_param'] = folder_analyzer.generate_analysis_csv(
+                            'within_param', folder_results, folder_name, parent_dir)
+                    if self.cross_param_var.get() and folder_results:
+                        csv_files['cross_param'] = folder_analyzer.generate_analysis_csv(
+                            'cross_param', folder_results, folder_name, parent_dir)
+                    if self.sensitivity_var.get() and folder_results:
+                        csv_files['sensitivity'] = folder_analyzer.generate_analysis_csv(
+                            'sensitivity', folder_results, folder_name, parent_dir)
                     
-                    # Calculate total analysis time (including visualizations)
+                    # Calculate total analysis time (excluding cross-author analysis)
                     analysis_end_time = time.time()
                     total_analysis_time = analysis_end_time - analysis_start_time
                     
@@ -6916,25 +7319,19 @@ class UpSetGUI:
                     if self.sensitivity_var.get():
                         enabled_analyses.append('sensitivity')
                     
-                    # Add visualization time as a separate category
-                    enabled_analyses.append('visualizations')
-                    
-                    # Distribute time evenly across enabled analyses (excluding visualizations)
-                    non_viz_analyses = [a for a in enabled_analyses if a != 'visualizations']
-                    if non_viz_analyses:
-                        time_per_analysis = (total_analysis_time - viz_time) / len(non_viz_analyses)
-                        for analysis in non_viz_analyses:
+                    # Distribute time evenly across enabled analyses
+                    if enabled_analyses:
+                        time_per_analysis = total_analysis_time / len(enabled_analyses)
+                        for analysis in enabled_analyses:
                             folder_timings[analysis] = time_per_analysis
                     
-                    # Add visualization time separately
-                    folder_timings['visualizations'] = viz_time
                     folder_timings['total'] = total_analysis_time
                     
                     folder_analysis_results[folder_name] = folder_results
                     analysis_timings[folder_name] = folder_timings
                     
                     # Debug: Print parameter values found for this folder
-                    print(f"[RAG ANALYSIS] {folder_name} - Found {len(folder_analyzer.data)} data points in {total_analysis_time:.2f}s total (analysis: {total_analysis_time - viz_time:.2f}s, visualizations: {viz_time:.2f}s)")
+                    print(f"[RAG ANALYSIS] {folder_name} - Found {len(folder_analyzer.data)} data points in {total_analysis_time:.2f}s total")
                     
                     # Check if individual_parameters exists before accessing it
                     if 'individual_parameters' in folder_results:
@@ -6951,6 +7348,31 @@ class UpSetGUI:
             if not folder_analysis_results:
                 print("No folder analysis results available")
                 return
+            
+            # Generate cross-author analysis (checkbox D) - done once for all folders
+            if self.semantic_viz_var.get():
+                print(f"[CROSS-AUTHOR] Generating cross-author analysis for all folders...")
+                cross_author_start_time = time.time()
+                try:
+                    # Create a single analyzer for cross-author analysis
+                    cross_analyzer = RAGConsistencyAnalyzer(model_name)
+                    
+                    # Generate cross-author semantic similarity analysis
+                    cross_author_results = cross_analyzer.generate_cross_author_analysis(parent_dir, "all_folders", valid_folders, folder_concepts)
+                    
+                    # Store visualization paths for later inclusion in DOC
+                    if not hasattr(self, 'cross_author_visualizations'):
+                        self.cross_author_visualizations = {}
+                    self.cross_author_visualizations['all_folders'] = cross_author_results
+                    
+                    cross_author_end_time = time.time()
+                    cross_author_time = cross_author_end_time - cross_author_start_time
+                    print(f"[CROSS-AUTHOR] Cross-author analysis completed in {cross_author_time:.2f}s")
+                    
+                except Exception as cross_error:
+                    print(f"[CROSS-AUTHOR ERROR] Failed to generate cross-author analysis: {cross_error}")
+                    import traceback
+                    traceback.print_exc()
             
             # Add analysis tables to document with timings
             self._add_analysis_tables_to_doc(doc, folder_analysis_results, valid_folders, analysis_timings)
@@ -7292,6 +7714,31 @@ class UpSetGUI:
                     timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
                 timing_para.add_run(".").font.size = Inches(0.12)
             
+            # D. Semantic Similarity Across Authors / Folders
+            if self.semantic_viz_var.get():
+                start_time = time.time()
+                doc.add_heading("D. Semantic Similarity Across Authors / Folders", level=3)
+                doc.add_paragraph(
+                    "This analysis examines semantic similarity between different authors/folders using cross-author analysis. "
+                    "It generates heatmaps, 2D embeddings, and network graphs to show conceptual relationships across authors, "
+                    "helping identify shared conceptual spaces and author-specific concept patterns."
+                )
+                
+                # Add timing information
+                timing_para = doc.add_paragraph()
+                timing_para.add_run("⏱️ Cross-Author Analysis completed in ").font.size = Inches(0.12)
+                # Get timing from analysis_timings if available
+                if analysis_timings and any('semantic_viz' in timings for timings in analysis_timings.values()):
+                    times = [timings.get('semantic_viz', 0) for timings in analysis_timings.values() if 'semantic_viz' in timings]
+                    if times:
+                        total_time_minutes = sum(times) / 60.0  # Total time, not average
+                        timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                    else:
+                        timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                else:
+                    timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                timing_para.add_run(".").font.size = Inches(0.12)
+            
             # Add visualization timing
             if analysis_timings and any('visualizations' in timings for timings in analysis_timings.values()):
                 timing_para = doc.add_paragraph()
@@ -7343,15 +7790,132 @@ class UpSetGUI:
             from docx.enum.text import WD_ALIGN_PARAGRAPH
             
             # Check if we have any visualizations to add
-            if not hasattr(self, 'semantic_visualizations') or not self.semantic_visualizations:
+            has_visualizations = False
+            
+            # Check for cross-author visualizations (checkbox D)
+            if hasattr(self, 'cross_author_visualizations') and self.cross_author_visualizations:
+                has_visualizations = True
+                self._add_cross_author_visualizations_to_doc(doc)
+            
+            # Check for individual folder visualizations (if any)
+            if hasattr(self, 'semantic_visualizations') and self.semantic_visualizations:
+                has_visualizations = True
+                self._add_individual_folder_visualizations_to_doc(doc)
+            
+            if not has_visualizations:
                 print("[SEMANTIC VIZ] No visualizations to add to document")
                 return
             
-            # Add header for visualizations
-            doc.add_heading("Semantic Similarity Visualizations", level=2)
+        except Exception as e:
+            print(f"[SEMANTIC VIZ ERROR] Failed to add visualizations to document: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _add_cross_author_visualizations_to_doc(self, doc):
+        """Add cross-author visualizations to the document"""
+        try:
+            from docx.shared import Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            # Add cross-author analysis header
+            doc.add_heading("Cross-Author Semantic Analysis", level=2)
             doc.add_paragraph(
-                "Visual representations of concept similarity and clustering based on the selected embedding model. "
-                "These visualizations help understand how semantically similar concepts are grouped together."
+                "This section shows semantic similarity analysis across all authors/folders. "
+                "These visualizations help identify shared conceptual spaces and author-specific patterns."
+            )
+            
+            for folder_name, viz_data in self.cross_author_visualizations.items():
+                if not viz_data or not isinstance(viz_data, dict):
+                    continue
+                
+                # Create a 3-column table for the visualizations
+                table = doc.add_table(rows=2, cols=3)
+                table.style = 'Table Grid'
+                
+                # Set column widths (equal width for 3 columns)
+                for col in table.columns:
+                    col.width = Inches(2.0)
+                
+                # Row 1: Headers and descriptions
+                headers = [
+                    "Between-Author Similarity Heatmap",
+                    "Cross-Author Concept Clustering (t-SNE)", 
+                    "Semantic Concept Network"
+                ]
+                
+                descriptions = [
+                    "Shows semantic similarity between different authors. Darker colors indicate higher semantic overlap.",
+                    "2D scatter plot showing how concepts from different authors cluster together. Different colors represent different authors.",
+                    "Network graph showing relationships between semantically similar concepts. Nodes represent concepts, edges represent high similarity (>0.8)."
+                ]
+                
+                for i, (header, desc) in enumerate(zip(headers, descriptions)):
+                    cell = table.cell(0, i)
+                    cell.paragraphs[0].text = header
+                    cell.paragraphs[0].runs[0].bold = True
+                    cell.paragraphs[0].runs[0].font.size = Inches(0.12)
+                    
+                    # Add description
+                    desc_para = cell.add_paragraph()
+                    desc_para.text = desc
+                    desc_para.runs[0].font.size = Inches(0.10)
+                
+                # Row 2: Images
+                images = [
+                    ('heatmap', 'heatmap'),
+                    ('tsne', 't-SNE'),
+                    ('network', 'network')
+                ]
+                
+                for i, (img_key, img_name) in enumerate(images):
+                    cell = table.cell(1, i)
+                    
+                    if viz_data.get(img_key) and os.path.exists(viz_data[img_key]):
+                        try:
+                            # Add image with smaller size to fit in table cell
+                            cell.paragraphs[0].add_run().add_picture(viz_data[img_key], width=Inches(1.8))
+                            # Center the image
+                            cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
+                        except Exception as img_error:
+                            cell.paragraphs[0].text = f"[Error loading {img_name} image: {img_error}]"
+                    else:
+                        cell.paragraphs[0].text = f"[{img_name} image not available]"
+                
+                # Add CSV information below the table
+                if viz_data.get('csv') and os.path.exists(viz_data['csv']):
+                    doc.add_heading("Cross-Author Analysis Data", level=3)
+                    doc.add_paragraph(
+                        f"Detailed analysis results are available in: {os.path.basename(viz_data['csv'])}"
+                    )
+                    doc.add_paragraph(
+                        "This file contains:"
+                    )
+                    doc.add_paragraph("• Between-author similarity matrix", style='List Bullet')
+                    doc.add_paragraph("• Concept summaries for each author", style='List Bullet')
+                    doc.add_paragraph("• Embedding model information", style='List Bullet')
+                    doc.add_paragraph("• Complete concept lists for all authors", style='List Bullet')
+                
+                # Add spacing
+                doc.add_paragraph()
+            
+            print("[CROSS-AUTHOR VIZ] Successfully added cross-author visualizations to document")
+            
+        except Exception as e:
+            print(f"[CROSS-AUTHOR VIZ ERROR] Failed to add cross-author visualizations: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _add_individual_folder_visualizations_to_doc(self, doc):
+        """Add individual folder visualizations to the document"""
+        try:
+            from docx.shared import Inches
+            from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            # Add header for individual folder visualizations
+            doc.add_heading("Individual Folder Visualizations", level=2)
+            doc.add_paragraph(
+                "Visual representations of concept similarity within individual folders. "
+                "These visualizations help understand how concepts cluster within each author's work."
             )
             
             # Add visualizations for each folder
@@ -7400,10 +7964,10 @@ class UpSetGUI:
                 # Add spacing between folders
                 doc.add_paragraph()
             
-            print("[SEMANTIC VIZ] Successfully added visualizations to document")
+            print("[INDIVIDUAL VIZ] Successfully added individual folder visualizations to document")
             
         except Exception as e:
-            print(f"[SEMANTIC VIZ ERROR] Failed to add visualizations to document: {e}")
+            print(f"[INDIVIDUAL VIZ ERROR] Failed to add individual folder visualizations: {e}")
             import traceback
             traceback.print_exc()
 
@@ -7820,12 +8384,14 @@ class UpSetGUI:
         self.within_param_cb.config(state=state)
         self.cross_param_cb.config(state=state)
         self.sensitivity_cb.config(state=state)
+        self.semantic_viz_cb.config(state=state)
         
         # If main checkbox is unchecked, uncheck all sub-checkboxes
         if not self.analyze_consistency_var.get():
             self.within_param_var.set(False)
             self.cross_param_var.set(False)
             self.sensitivity_var.set(False)
+            self.semantic_viz_var.set(False)
 
 def replace_bekker_with_greek(concept, bekker_map):
     for bekker, greek in bekker_map.items():
