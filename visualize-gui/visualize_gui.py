@@ -458,17 +458,21 @@ class RAGConsistencyAnalyzer:
                 if folder_path in folder_concepts:
                     concepts = list(folder_concepts[folder_path])  # Convert set to list
                     folder_name = os.path.basename(folder_path)
+                    print(f"[CROSS-AUTHOR] Found {len(concepts)} concepts for {folder_name} (full path match)")
                 else:
                     # Try with folder name only
                     folder_name = os.path.basename(folder_path)
                     if folder_name in folder_concepts:
                         concepts = list(folder_concepts[folder_name])  # Convert set to list
+                        print(f"[CROSS-AUTHOR] Found {len(concepts)} concepts for {folder_name} (name match)")
                     else:
                         print(f"[CROSS-AUTHOR] Folder {folder_name} not found in folder_concepts")
+                        print(f"[CROSS-AUTHOR] Available keys: {list(folder_concepts.keys())}")
                         continue
                 
                 if concepts:
                     print(f"[CROSS-AUTHOR] Processing {folder_name} with {len(concepts)} concepts")
+                    print(f"[CROSS-AUTHOR] Sample concepts for {folder_name}: {concepts[:5]}")
                     # Get embeddings for concepts in this folder
                     embeddings = self.model.encode(concepts)
                     for concept, embedding in zip(concepts, embeddings):
@@ -583,6 +587,15 @@ class RAGConsistencyAnalyzer:
             print(f"[CROSS-AUTHOR ERROR] Failed to create heatmap: {e}")
             return None
 
+    def _get_author_color_mapping(self, folder_names):
+        """Create consistent color mapping for authors across all visualizations"""
+        import matplotlib.pyplot as plt
+        import numpy as np
+        
+        # Use a fixed color palette and consistent ordering
+        colors = plt.cm.Set3(np.linspace(0, 1, len(folder_names)))
+        return {author: colors[i] for i, author in enumerate(sorted(folder_names))}
+
     def _create_cross_author_tsne(self, df, folder_names, output_dir):
         """Create 2D embedding map showing concept clustering by author"""
         try:
@@ -600,27 +613,30 @@ class RAGConsistencyAnalyzer:
             # Create scatter plot
             plt.figure(figsize=(12, 10))
             
-            # Color by author
-            colors = plt.cm.Set3(np.linspace(0, 1, len(folder_names)))
-            author_colors = {author: colors[i] for i, author in enumerate(folder_names)}
+            # Color by author using consistent mapping
+            author_colors = self._get_author_color_mapping(folder_names)
             
             for author in folder_names:
                 mask = df["author"] == author
                 if mask.any():
-                    plt.scatter(X_2d[mask, 0], X_2d[mask, 1], 
-                              label=author, alpha=0.7, s=100, c=[author_colors[author]])
-                    
-                    # Add concept labels (limit to avoid overcrowding)
                     author_data = df[mask]
+                    concept_count = len(author_data)
+                    
+                    plt.scatter(X_2d[mask, 0], X_2d[mask, 1], 
+                              label=f"{author} ({concept_count} concepts)", alpha=0.7, s=100, c=[author_colors[author]])
+                    
+                    # Add concept labels for 90% of concepts (or all if less than 50)
+                    max_labels = min(int(concept_count * 0.9), concept_count) if concept_count > 50 else concept_count
+                    
                     for idx, (_, row) in enumerate(author_data.iterrows()):
-                        if idx < 20:  # Limit to first 20 concepts per author to avoid overcrowding
+                        if idx < max_labels:
                             concept = row['concept']
                             # Truncate long concept names
-                            display_concept = concept[:15] + '...' if len(concept) > 15 else concept
+                            display_concept = concept[:12] + '...' if len(concept) > 12 else concept
                             plt.annotate(display_concept, 
                                        (X_2d[mask][idx, 0], X_2d[mask][idx, 1]),
-                                       xytext=(3, 3), textcoords='offset points',
-                                       fontsize=6, alpha=0.8)
+                                       xytext=(2, 2), textcoords='offset points',
+                                       fontsize=5, alpha=0.8)
             
             plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
             plt.title("Concept Embeddings by Author\n(Closer points = more similar concepts)", 
@@ -669,9 +685,8 @@ class RAGConsistencyAnalyzer:
             # Position nodes using spring layout
             pos = nx.spring_layout(G, k=1, iterations=50)
             
-            # Color nodes by author
-            author_colors = {author: plt.cm.Set3(i/len(folder_names)) 
-                           for i, author in enumerate(folder_names)}
+            # Color nodes by author using consistent mapping
+            author_colors = self._get_author_color_mapping(folder_names)
             node_colors = [author_colors[G.nodes[node]['author']] for node in G.nodes()]
             
             # Draw the network
@@ -683,23 +698,28 @@ class RAGConsistencyAnalyzer:
                    edge_color='gray',
                    width=0.5)
             
-            # Add concept labels (limit to avoid overcrowding)
-            label_pos = {}
-            for node in G.nodes():
-                if len(G.nodes()) <= 50:  # Only add labels if not too many nodes
-                    label_pos[node] = pos[node]
+            # Add concept labels for all nodes (or 90% if too many)
+            total_nodes = len(G.nodes())
+            max_labels = min(int(total_nodes * 0.9), total_nodes) if total_nodes > 50 else total_nodes
             
-            if label_pos:
+            if max_labels > 0:
+                # Select nodes to label (first max_labels nodes)
+                nodes_to_label = list(G.nodes())[:max_labels]
+                label_pos = {node: pos[node] for node in nodes_to_label}
+                
                 # Truncate long concept names for display
-                labels = {node: node[:10] + '...' if len(node) > 10 else node 
-                         for node in label_pos.keys()}
-                nx.draw_networkx_labels(G, label_pos, labels, font_size=6, alpha=0.8)
+                labels = {node: node[:8] + '...' if len(node) > 8 else node 
+                         for node in nodes_to_label}
+                nx.draw_networkx_labels(G, label_pos, labels, font_size=8, alpha=0.8)
             
-            # Add legend for authors
-            legend_elements = [plt.Line2D([0], [0], marker='o', color='w', 
-                                        markerfacecolor=author_colors[author], 
-                                        markersize=10, label=author) 
-                             for author in folder_names]
+            # Add legend for authors with concept counts
+            legend_elements = []
+            for author in folder_names:
+                author_nodes = [node for node in G.nodes() if G.nodes[node]['author'] == author]
+                concept_count = len(author_nodes)
+                legend_elements.append(plt.Line2D([0], [0], marker='o', color='w', 
+                                                markerfacecolor=author_colors[author], 
+                                                markersize=10, label=f"{author} ({concept_count} concepts)"))
             plt.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0, 1))
             
             plt.title(f"Semantic Concept Network\n(Edges: similarity > {threshold})", 
@@ -726,33 +746,52 @@ class RAGConsistencyAnalyzer:
             
             # Create concepts summary with ALL concepts for each author
             concepts_summary = []
+            print(f"[CROSS-AUTHOR] Creating concepts summary for {len(folder_names)} authors")
+            print(f"[CROSS-AUTHOR] Folder names: {folder_names}")
+            print(f"[CROSS-AUTHOR] DataFrame shape: {df.shape}")
+            print(f"[CROSS-AUTHOR] DataFrame columns: {df.columns.tolist()}")
+            print(f"[CROSS-AUTHOR] Unique authors in DataFrame: {df['author'].unique().tolist()}")
+            
             for author in folder_names:
                 author_concepts = df[df['author'] == author]['concept'].tolist()
+                print(f"[CROSS-AUTHOR] Author '{author}' has {len(author_concepts)} concepts")
+                if len(author_concepts) <= 5:
+                    print(f"[CROSS-AUTHOR] Concepts for '{author}': {author_concepts}")
+                
                 concepts_summary.append({
                     'author': author,
                     'concept_count': len(author_concepts),
-                    'all_concepts': '; '.join(author_concepts),  # Include ALL concepts
-                    'concepts_sample': '; '.join(author_concepts[:10]) + ('...' if len(author_concepts) > 10 else ''),
+                    'all_concepts': ' | '.join(author_concepts),  # Use pipe separator instead of semicolon to avoid CSV issues
+                    'concepts_sample': ' | '.join(author_concepts[:10]) + ('...' if len(author_concepts) > 10 else ''),
                     'embedding_model': self.model_name if hasattr(self, 'model_name') else 'sentence-transformers/all-MiniLM-L6-v2'
                 })
             
             concepts_df = pd.DataFrame(concepts_summary)
             
-            # Save to Excel file (not CSV since we have multiple sheets)
-            excel_path = os.path.join(output_dir, "cross_author_analysis.xlsx")
-            with pd.ExcelWriter(excel_path, engine='openpyxl') as writer:
-                sim_df.to_excel(writer, sheet_name='Between_Author_Similarity')
-                concepts_df.to_excel(writer, sheet_name='Concepts_Summary')
+            # Save to CSV file (main similarity matrix)
+            csv_path = os.path.join(output_dir, "cross_author_analysis.csv")
+            sim_df.to_csv(csv_path, index=True)
+            
+            # Also save concepts summary as separate CSV
+            concepts_csv_path = os.path.join(output_dir, "cross_author_concepts_summary.csv")
+            print(f"[CROSS-AUTHOR] Saving concepts summary to: {concepts_csv_path}")
+            print(f"[CROSS-AUTHOR] Concepts DataFrame shape: {concepts_df.shape}")
+            print(f"[CROSS-AUTHOR] Concepts DataFrame columns: {concepts_df.columns.tolist()}")
+            print(f"[CROSS-AUTHOR] Concepts DataFrame preview:")
+            print(concepts_df.head())
+            # Use proper CSV escaping to handle commas in concept names
+            concepts_df.to_csv(concepts_csv_path, index=False, quoting=1)  # quoting=1 means quote all fields
+            print(f"[CROSS-AUTHOR] Successfully saved concepts summary CSV")
             
             # Also save individual CSV files
             csv_sim_path = os.path.join(output_dir, "cross_author_similarity_matrix.csv")
-            csv_concepts_path = os.path.join(output_dir, "cross_author_concepts_summary.csv")
+            # Note: concepts_csv_path is already defined above, no need to redefine
             
             sim_df.to_csv(csv_sim_path, index=True)
-            concepts_df.to_csv(csv_concepts_path, index=False)
+            # Note: concepts_df is already saved above, no need to save again
             
-            # Return the Excel file as the main result
-            csv_path = excel_path
+            # Return the CSV file as the main result
+            # csv_path is already defined above
             
             print(f"[CROSS-AUTHOR] Created CSV: {csv_path}")
             return csv_path
@@ -3943,22 +3982,22 @@ class UpSetGUI:
                             quotes = concept_quotes[concept_name]
                             quote_info['quotes'].extend(quotes)
                             
-                        # Extract source information with file tracking
+                            # Extract source information with file tracking
                             source_info = {
-                            'file': row.get('File', 'Unknown'),
+                                'file': row.get('File', 'Unknown'),
                                 'temperature': row.get('Temperature', 'N/A'),
                                 'top_p': row.get('Top-p', 'N/A'),
                                 'top_k': row.get('Top-k', 'N/A'),
                                 'bm25_weight': row.get('BM25 Weight', 'N/A'),
-                            'main_answer': row.get('Main Answer', ''),
-                            'varying_param': None  # Will be set based on file
-                        }
-                        
-                        # Determine varying parameter based on file
-                        if file_to_varying_param and source_info['file'] in file_to_varying_param:
-                            source_info['varying_param'] = file_to_varying_param[source_info['file']]
-                            print(f"[QUOTES DEBUG] Source from file '{source_info['file']}' has varying param: {source_info['varying_param']}")
-                        
+                                'main_answer': row.get('Main Answer', ''),
+                                'varying_param': None  # Will be set based on file
+                            }
+                            
+                            # Determine varying parameter based on file
+                            if file_to_varying_param and source_info['file'] in file_to_varying_param:
+                                source_info['varying_param'] = file_to_varying_param[source_info['file']]
+                                print(f"[QUOTES DEBUG] Source from file '{source_info['file']}' has varying param: {source_info['varying_param']}")
+                            
                             quote_info['sources'].append(source_info)
                             
                             # Extract reason and specific use from Main Answer
@@ -4386,11 +4425,18 @@ class UpSetGUI:
         """Format reason text with reason for selection and specific use for each quote"""
         reason_parts = []
         
+        # Ensure quote_info has all required keys (backward compatibility)
+        if 'reason_text' not in quote_info:
+            quote_info['reason_text'] = ''
+        if 'specific_use' not in quote_info:
+            quote_info['specific_use'] = ''
+        
         # Add general reason for selection if available and not truncated
-        if quote_info['reason_text'] and len(quote_info['reason_text'].strip()) > 5:
+        if quote_info.get('reason_text') and len(quote_info['reason_text'].strip()) > 5:
             reason_parts.append(f"**Reason for Selection**: {quote_info['reason_text']}")
         
-        if quote_info['specific_use'] and len(quote_info['specific_use'].strip()) > 5:
+        # Safely check for specific_use key (may not exist in older data)
+        if quote_info.get('specific_use') and len(quote_info['specific_use'].strip()) > 5:
             reason_parts.append(f"**Specific Use**: {quote_info['specific_use']}")
         
         # Add individual reasons for each quote
@@ -4528,9 +4574,12 @@ class UpSetGUI:
                 stats_doc_path = os.path.join(folder, "compare_stats.docx")
                 
                 if os.path.exists(stats_doc_path):
+                    print(f"[QUOTES] Processing {folder_name}/compare_stats.docx")
                     concepts = self._extract_concepts_from_stats_doc(stats_doc_path)
                     all_concepts.update(concepts)
                     print(f"[QUOTES] Found {len(concepts)} concepts in {folder_name}/compare_stats.docx")
+                    if len(concepts) <= 5:
+                        print(f"[QUOTES] Concepts for {folder_name}: {concepts}")
                 else:
                     print(f"[QUOTES] No compare_stats.docx found in {folder_name}")
             
@@ -4550,12 +4599,16 @@ class UpSetGUI:
                     
                     stats_doc_path = os.path.join(folder, "compare_stats.docx")
                     if os.path.exists(stats_doc_path):
+                        print(f"[QUOTES DEBUG] Extracting quotes for '{concept}' from {folder_name}")
                         quotes = self._extract_quotes_for_concept_from_stats_doc(stats_doc_path, concept)
                         sources = self._extract_sources_for_concept_from_stats_doc(stats_doc_path, concept)
                         quotes_data[concept][folder_name]['quotes'] = quotes
                         quotes_data[concept][folder_name]['sources'] = sources
                         if quotes:
                             print(f"[QUOTES] Found {len(quotes)} quotes and {len(sources)} sources for '{concept}' in {folder_name}")
+                            print(f"[QUOTES DEBUG] Quotes: {quotes[:2]}")  # Show first 2 quotes
+                        elif len(quotes_data[concept]) == 1:  # Only print for first folder to avoid spam
+                            print(f"[QUOTES] No quotes found for '{concept}' in any folder")
             
         except Exception as e:
             print(f"[QUOTES ERROR] Failed to read quotes from stats docs: {e}")
@@ -4621,6 +4674,18 @@ class UpSetGUI:
             print(f"[QUOTES DEBUG] Extracted {len(concepts)} concepts from {os.path.basename(stats_doc_path)}")
             if concepts:
                 print(f"[QUOTES DEBUG] First 3 concepts: {concepts[:3]}")
+            else:
+                print(f"[QUOTES DEBUG] No concepts found in {os.path.basename(stats_doc_path)}")
+                # Debug: print all paragraph texts to see what's in the document
+                print(f"[QUOTES DEBUG] Document paragraphs:")
+                for i, para in enumerate(doc.paragraphs[:10]):  # First 10 paragraphs
+                    print(f"  Para {i}: '{para.text.strip()}'")
+                print(f"[QUOTES DEBUG] Document tables: {len(doc.tables)}")
+                for i, table in enumerate(doc.tables):
+                    print(f"  Table {i}: {len(table.rows)} rows, {len(table.columns)} columns")
+                    if table.rows:
+                        first_row = [cell.text.strip() for cell in table.rows[0].cells]
+                        print(f"    First row: {first_row}")
             
         except Exception as e:
             print(f"[QUOTES ERROR] Error extracting concepts from {stats_doc_path}: {e}")
@@ -4637,9 +4702,10 @@ class UpSetGUI:
             import docx
             
             doc = docx.Document(stats_doc_path)
+            print(f"[QUOTES DEBUG] Looking for concept '{concept_name}' in {len(doc.tables)} tables")
             
             # Look for the concept in tables
-            for table in doc.tables:
+            for table_idx, table in enumerate(doc.tables):
                 for row in table.rows:
                     if len(row.cells) >= 5:  # New 5-column format
                         concept_cell = row.cells[0]  # Concept column
@@ -4651,13 +4717,18 @@ class UpSetGUI:
                         full_citation_text = full_citation_cell.text.strip()
                         
                         if concept_text == concept_name:
+                            print(f"[QUOTES DEBUG] Found matching concept '{concept_name}' in table {table_idx}")
+                            print(f"[QUOTES DEBUG] Short quote: '{short_quote_text}'")
+                            print(f"[QUOTES DEBUG] Full citation: '{full_citation_text}'")
                             # Use full citation if available, otherwise short quote
                             if full_citation_text and full_citation_text != "No citation available":
                                 # Split quotes by semicolons (as formatted in the new system)
                                 quote_list = [q.strip() for q in full_citation_text.split(';') if q.strip()]
                                 quotes.extend(quote_list)
+                                print(f"[QUOTES DEBUG] Added {len(quote_list)} quotes from full citation")
                             elif short_quote_text and short_quote_text != "No quotes found":
                                 quotes.append(short_quote_text)
+                                print(f"[QUOTES DEBUG] Added 1 quote from short quote")
                     elif len(row.cells) >= 2:  # Fallback for old format
                         concept_cell = row.cells[0]
                         quotes_cell = row.cells[1]
@@ -4665,10 +4736,14 @@ class UpSetGUI:
                         concept_text = concept_cell.text.strip()
                         quotes_text = quotes_cell.text.strip()
                         
-                        if concept_text == concept_name and quotes_text and quotes_text != "No quotes found":
-                            # Split quotes by double line breaks
-                            quote_list = [q.strip() for q in quotes_text.split('\n\n') if q.strip()]
-                            quotes.extend(quote_list)
+                        if concept_text == concept_name:
+                            print(f"[QUOTES DEBUG] Found matching concept '{concept_name}' in old format table {table_idx}")
+                            print(f"[QUOTES DEBUG] Quotes text: '{quotes_text}'")
+                            if quotes_text and quotes_text != "No quotes found":
+                                # Split quotes by double line breaks
+                                quote_list = [q.strip() for q in quotes_text.split('\n\n') if q.strip()]
+                                quotes.extend(quote_list)
+                                print(f"[QUOTES DEBUG] Added {len(quote_list)} quotes from old format")
             
         except Exception as e:
             print(f"[QUOTES ERROR] Error extracting quotes for '{concept_name}' from {stats_doc_path}: {e}")
@@ -5550,7 +5625,7 @@ class UpSetGUI:
             
             return False
         # Define total steps for progress tracking
-        total_steps = 7  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis, quotes (optional)
+        total_steps = 8  # Scanning, extracting, grouping, color mapping, DOCX generation, RAG analysis, quotes (optional)
         current_step = 0
         
         safe_update_status("Scanning folders...", "blue")
@@ -5893,6 +5968,8 @@ class UpSetGUI:
             section.right_margin = 0
             section.header_distance = 0
             section.footer_distance = 0
+
+            # ===== FIRST PAGE: TOTAL CONCEPTS SUMMARY =====
 
             # Gather folder/group stats for the left column text
             total_concepts = sum(len(group) for _, group in llm_group_tuples) if self.llm_grouping_var.get() else sum(len(concepts) for concepts in color_to_concepts.values())
@@ -6262,7 +6339,7 @@ class UpSetGUI:
             safe_update_status("Running RAG consistency analysis...", "blue")
             self._add_rag_consistency_analysis(doc, valid_folders, folder_concepts, parent)
             
-            # Add Quotes Table if enabled
+            # Add Quotes Table if enabled (independent of consistency analysis)
             if self.add_quotes_var.get():
                 current_step += 1
                 safe_update_progress(current_step, total_steps, total_elapsed, est_total)
@@ -6270,10 +6347,25 @@ class UpSetGUI:
                 
                 try:
                     # Read quotes from compare_stats.docx files in each folder
+                    print(f"[QUOTES] Starting quotes processing for {len(valid_folders)} folders")
                     quotes_data = self._read_quotes_from_stats_docs(valid_folders)
+                    print(f"[QUOTES] Quotes data collected: {len(quotes_data)} concepts")
                     
-                    # Add quotes table to document
-                    self._add_quotes_table_to_doc(doc, valid_folders, quotes_data)
+                    # Check if we have any quotes data
+                    total_quotes = 0
+                    for concept, folders in quotes_data.items():
+                        for folder, data in folders.items():
+                            total_quotes += len(data.get('quotes', []))
+                    print(f"[QUOTES] Total quotes found: {total_quotes}")
+                    
+                    if total_quotes > 0:
+                        # Add quotes table to document
+                        self._add_quotes_table_to_doc(doc, valid_folders, quotes_data, parent)
+                        print(f"[QUOTES] Successfully added quotes table to document")
+                    else:
+                        print(f"[QUOTES] No quotes found, skipping quotes table")
+                        doc.add_heading("Concept Citations and Quotes", level=2)
+                        doc.add_paragraph("No quotes were found in the compare_stats.docx files for the selected concepts.")
                     
                 except Exception as e:
                     print(f"[QUOTES ERROR] Failed to process quotes: {e}")
@@ -6281,6 +6373,7 @@ class UpSetGUI:
                     traceback.print_exc()
                     # Continue with the rest of the process even if quotes fail
                     safe_update_status("Quotes processing failed, continuing...", "orange")
+            
             
             plot_table = create_fixed_width_table(doc, rows=1, cols=2, col_widths_inches=[6, 9])
 
@@ -7217,6 +7310,7 @@ class UpSetGUI:
         """Add RAG consistency analysis tables to the document"""
         try:
             import time
+            from docx.shared import Inches
             
             # Check which analyses are enabled
             if not self.analyze_consistency_var.get():
@@ -7369,6 +7463,13 @@ class UpSetGUI:
                     cross_author_time = cross_author_end_time - cross_author_start_time
                     print(f"[CROSS-AUTHOR] Cross-author analysis completed in {cross_author_time:.2f}s")
                     
+                    # Store timing in analysis_timings for display
+                    if not hasattr(self, 'analysis_timings'):
+                        self.analysis_timings = {}
+                    if 'all_folders' not in self.analysis_timings:
+                        self.analysis_timings['all_folders'] = {}
+                    self.analysis_timings['all_folders']['semantic_viz'] = cross_author_time
+                    
                 except Exception as cross_error:
                     print(f"[CROSS-AUTHOR ERROR] Failed to generate cross-author analysis: {cross_error}")
                     import traceback
@@ -7377,8 +7478,10 @@ class UpSetGUI:
             # Add analysis tables to document with timings
             self._add_analysis_tables_to_doc(doc, folder_analysis_results, valid_folders, analysis_timings)
             
-            # Add semantic similarity visualizations to document
-            self._add_semantic_visualizations_to_doc(doc)
+            
+            # Add semantic similarity visualizations to document (only if Option D is checked)
+            if self.semantic_viz_var.get():
+                self._add_semantic_visualizations_to_doc(doc)
             
         except Exception as e:
             print(f"Error in RAG consistency analysis: {e}")
@@ -7723,60 +7826,7 @@ class UpSetGUI:
                     "It generates heatmaps, 2D embeddings, and network graphs to show conceptual relationships across authors, "
                     "helping identify shared conceptual spaces and author-specific concept patterns."
                 )
-                
-                # Add timing information
-                timing_para = doc.add_paragraph()
-                timing_para.add_run("⏱️ Cross-Author Analysis completed in ").font.size = Inches(0.12)
-                # Get timing from analysis_timings if available
-                if analysis_timings and any('semantic_viz' in timings for timings in analysis_timings.values()):
-                    times = [timings.get('semantic_viz', 0) for timings in analysis_timings.values() if 'semantic_viz' in timings]
-                    if times:
-                        total_time_minutes = sum(times) / 60.0  # Total time, not average
-                        timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
-                    else:
-                        timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
-                else:
-                    timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
-                timing_para.add_run(".").font.size = Inches(0.12)
             
-            # Add visualization timing
-            if analysis_timings and any('visualizations' in timings for timings in analysis_timings.values()):
-                timing_para = doc.add_paragraph()
-                timing_para.add_run("⏱️ Semantic Similarity Visualizations completed in ").font.size = Inches(0.12)
-                times = [timings.get('visualizations', 0) for timings in analysis_timings.values() if 'visualizations' in timings]
-                if times:
-                    total_time_minutes = sum(times) / 60.0  # Total time, not average
-                    timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
-                else:
-                    timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
-                timing_para.add_run(".").font.size = Inches(0.12)
-            
-            # Add overall timing summary
-            if analysis_timings:
-                total_times = []
-                for timings in analysis_timings.values():
-                    if 'total' in timings:
-                        total_times.append(timings['total'])
-                    else:
-                        # Fallback: sum all individual timings
-                        total_times.append(sum(timings.values()))
-                
-                if total_times:
-                    total_time_minutes = sum(total_times) / 60.0  # Total time across all folders in minutes
-                    timing_para = doc.add_paragraph()
-                    timing_para.add_run("⏱️ Total RAG Consistency Analysis completed in ").font.size = Inches(0.12)
-                    timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
-                    timing_para.add_run(".").font.size = Inches(0.12)
-                    
-                    # Add per-folder breakdown
-                    timing_para2 = doc.add_paragraph()
-                    timing_para2.add_run("Per-folder breakdown: ").font.size = Inches(0.12)
-                    folder_times = []
-                    for folder_name, timings in analysis_timings.items():
-                        if 'total' in timings:
-                            folder_time_min = timings['total'] / 60.0
-                            folder_times.append(f"{folder_name}: {folder_time_min:.2f}min")
-                    timing_para2.add_run("; ".join(folder_times)).font.size = Inches(0.12)
             
         except Exception as e:
             print(f"Error adding analysis tables to document: {e}")
@@ -7828,25 +7878,29 @@ class UpSetGUI:
                 if not viz_data or not isinstance(viz_data, dict):
                     continue
                 
-                # Create a 3-column table for the visualizations
-                table = doc.add_table(rows=2, cols=3)
+                # Create a 2-column table for t-SNE and Network visualizations
+                table = doc.add_table(rows=2, cols=2)
                 table.style = 'Table Grid'
+                table.autofit = False
                 
-                # Set column widths (equal width for 3 columns)
+                # Calculate available table width (page width - margins) - same as other tables
+                section = doc.sections[0]
+                table_width = int(section.page_width - section.left_margin - section.right_margin)
+                
+                # Set column widths to use full page width (50% each)
+                col_width = int(table_width // 2)  # Each column takes 50% of available width
                 for col in table.columns:
-                    col.width = Inches(2.0)
+                    col.width = col_width
                 
                 # Row 1: Headers and descriptions
                 headers = [
-                    "Between-Author Similarity Heatmap",
                     "Cross-Author Concept Clustering (t-SNE)", 
                     "Semantic Concept Network"
                 ]
                 
                 descriptions = [
-                    "Shows semantic similarity between different authors. Darker colors indicate higher semantic overlap.",
-                    "2D scatter plot showing how concepts from different authors cluster together. Different colors represent different authors.",
-                    "Network graph showing relationships between semantically similar concepts. Nodes represent concepts, edges represent high similarity (>0.8)."
+                    "2D scatter plot showing concept clustering by author. Points closer together represent more semantically similar concepts. Different colors represent different authors. This is a dimensionality reduction of the high-dimensional concept embeddings into 2D space for visualization.",
+                    "Network graph showing relationships between semantically similar concepts. Nodes represent concepts, edges represent high similarity (>0.8). Node positions are determined by a spring layout algorithm that places connected nodes closer together. Different colors represent different authors."
                 ]
                 
                 for i, (header, desc) in enumerate(zip(headers, descriptions)):
@@ -7862,7 +7916,6 @@ class UpSetGUI:
                 
                 # Row 2: Images
                 images = [
-                    ('heatmap', 'heatmap'),
                     ('tsne', 't-SNE'),
                     ('network', 'network')
                 ]
@@ -7872,14 +7925,32 @@ class UpSetGUI:
                     
                     if viz_data.get(img_key) and os.path.exists(viz_data[img_key]):
                         try:
-                            # Add image with smaller size to fit in table cell
-                            cell.paragraphs[0].add_run().add_picture(viz_data[img_key], width=Inches(1.8))
+                            # Add image with full column width (slightly smaller to fit within cell padding)
+                            # Convert column width from EMU to inches for image sizing
+                            img_width_inches = col_width / 914400  # 914400 EMU = 1 inch
+                            cell.paragraphs[0].add_run().add_picture(viz_data[img_key], width=Inches(img_width_inches * 0.9))
                             # Center the image
                             cell.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.CENTER
                         except Exception as img_error:
                             cell.paragraphs[0].text = f"[Error loading {img_name} image: {img_error}]"
                     else:
                         cell.paragraphs[0].text = f"[{img_name} image not available]"
+                
+                # Add Between-Author Similarity Heatmap below the table
+                if viz_data.get('heatmap') and os.path.exists(viz_data['heatmap']):
+                    doc.add_heading("Between-Author Similarity Heatmap", level=3)
+                    doc.add_paragraph(
+                        "This heatmap shows semantic similarity between different authors. "
+                        "Darker colors indicate higher semantic overlap between authors. "
+                        "Values range from 0 (no similarity) to 1 (identical conceptual space)."
+                    )
+                    
+                    try:
+                        doc.add_picture(viz_data['heatmap'], width=Inches(5))
+                        last_paragraph = doc.paragraphs[-1]
+                        last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    except Exception as img_error:
+                        doc.add_paragraph(f"[Error loading heatmap image: {img_error}]")
                 
                 # Add CSV information below the table
                 if viz_data.get('csv') and os.path.exists(viz_data['csv']):
@@ -7890,13 +7961,53 @@ class UpSetGUI:
                     doc.add_paragraph(
                         "This file contains:"
                     )
-                    doc.add_paragraph("• Between-author similarity matrix", style='List Bullet')
-                    doc.add_paragraph("• Concept summaries for each author", style='List Bullet')
-                    doc.add_paragraph("• Embedding model information", style='List Bullet')
-                    doc.add_paragraph("• Complete concept lists for all authors", style='List Bullet')
+                    doc.add_paragraph("• cross_author_analysis.csv - Between-author similarity matrix", style='List Bullet')
+                    doc.add_paragraph("• cross_author_concepts_summary.csv - Concept summaries for each author", style='List Bullet')
                 
                 # Add spacing
                 doc.add_paragraph()
+                
+                # Add timing information at the end of section D
+                if hasattr(self, 'analysis_timings') and self.analysis_timings:
+                    # Add Cross-Author Analysis timing
+                    if any('semantic_viz' in timings for timings in self.analysis_timings.values()):
+                        timing_para = doc.add_paragraph()
+                        timing_para.add_run("⏱️ Cross-Author Analysis completed in ").font.size = Inches(0.12)
+                        times = [timings.get('semantic_viz', 0) for timings in self.analysis_timings.values() if 'semantic_viz' in timings]
+                        if times:
+                            total_time_minutes = sum(times) / 60.0
+                            timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                        else:
+                            timing_para.add_run("X.XX minutes").font.size = Inches(0.12)
+                        timing_para.add_run(".").font.size = Inches(0.12)
+                    
+                    # Add Total RAG Consistency Analysis timing
+                    if hasattr(self, 'analysis_timings') and self.analysis_timings:
+                        total_times = []
+                        for timings in self.analysis_timings.values():
+                            if 'total' in timings:
+                                total_times.append(timings['total'])
+                            else:
+                                # Fallback: sum all individual timings
+                                total_times.append(sum(timings.values()))
+                        
+                        if total_times:
+                            total_time_minutes = sum(total_times) / 60.0
+                            timing_para = doc.add_paragraph()
+                            timing_para.add_run("⏱️ Total RAG Consistency Analysis completed in ").font.size = Inches(0.12)
+                            timing_para.add_run(f"{total_time_minutes:.2f} minutes").font.size = Inches(0.12)
+                            timing_para.add_run(".").font.size = Inches(0.12)
+                            
+                            # Add per-folder breakdown
+                            timing_para2 = doc.add_paragraph()
+                            timing_para2.add_run("Per-folder breakdown: ").font.size = Inches(0.12)
+                            folder_times = []
+                            for folder_name, timings in self.analysis_timings.items():
+                                if 'total' in timings:
+                                    folder_time_min = timings['total'] / 60.0
+                                    folder_times.append(f"{folder_name}: {folder_time_min:.2f}min")
+                            timing_para2.add_run("; ".join(folder_times)).font.size = Inches(0.12)
+                    
             
             print("[CROSS-AUTHOR VIZ] Successfully added cross-author visualizations to document")
             
@@ -8212,18 +8323,362 @@ class UpSetGUI:
         except Exception as e:
             print(f"[QUOTES DEBUG ERROR] Could not read CSV: {e}")
 
-    def _add_quotes_table_to_doc(self, doc, valid_folders, quotes_data):
+    def _find_source_file(self, parent_folder, folder_name):
+        """Find PDF or TXT file for a folder in the parent directory"""
+        # Try PDF first
+        pdf_path = os.path.join(parent_folder, f"{folder_name}.pdf")
+        if os.path.exists(pdf_path):
+            return pdf_path, "PDF"
+        
+        # Try lowercase PDF
+        pdf_path_lower = os.path.join(parent_folder, f"{folder_name.lower()}.pdf")
+        if os.path.exists(pdf_path_lower):
+            return pdf_path_lower, "PDF"
+        
+        # Try TXT
+        txt_path = os.path.join(parent_folder, f"{folder_name}.txt")
+        if os.path.exists(txt_path):
+            return txt_path, "TXT"
+        
+        # Try lowercase TXT
+        txt_path_lower = os.path.join(parent_folder, f"{folder_name.lower()}.txt")
+        if os.path.exists(txt_path_lower):
+            return txt_path_lower, "TXT"
+        
+        return None, None
+    
+    def _search_quote_in_pdf(self, pdf_path, quote_text):
+        """Search for a quote in a PDF file using cached normalized version"""
+        normalized_data = self._load_and_normalize_source(pdf_path, "PDF")
+        if normalized_data is None:
+            return None, False
+        
+        # Use the same fuzzy matching as TXT (search in combined normalized text)
+        if self._fuzzy_match_quote_in_normalized(quote_text, normalized_data):
+            # Find which page the quote is on by searching in normalized pages
+            clean_quote = self._normalize_text_for_search(quote_text)
+            normalized_pages = normalized_data.get('normalized_pages', {})
+            
+            # Try to find the page number
+            for page_num, normalized_page_text in normalized_pages.items():
+                if clean_quote.lower() in normalized_page_text.lower():
+                    return page_num, True
+                # Try aggressive normalization
+                agg_quote = self._normalize_text_aggressive(quote_text)
+                agg_page = self._normalize_text_aggressive(normalized_page_text)
+                if agg_quote.lower() in agg_page.lower():
+                    return page_num, True
+            
+            # If we can't find exact page, estimate from position in combined text
+            normalized_text = normalized_data['normalized_text']
+            position = normalized_text.lower().find(clean_quote.lower())
+            if position == -1:
+                position = len(normalized_text) // 2
+            
+            # Estimate page number based on position
+            # Rough estimate: divide position by average chars per page
+            avg_chars_per_page = len(normalized_text) / max(1, normalized_data.get('num_pages', 1))
+            estimated_page = int(position / avg_chars_per_page) + 1
+            estimated_page = min(estimated_page, normalized_data.get('num_pages', 1))
+            return estimated_page, True
+        
+        return None, False
+    
+    def _normalize_text_for_search(self, text):
+        """Normalize text by removing all extra whitespace, newlines, and normalizing spaces"""
+        import re
+        # First, handle hyphenation at line breaks (e.g., "properly-\nspeaking" -> "properly speaking")
+        # Remove hyphens that are followed by newline/whitespace and a lowercase letter
+        text = re.sub(r'-\s+([a-z])', r'\1', text)
+        # Also handle hyphens at end of line followed by newline
+        text = re.sub(r'-\s*\n\s*([a-z])', r'\1', text)
+        # Remove ALL newlines, carriage returns, and other line breaks - make everything continuous
+        text = re.sub(r'[\r\n]+', ' ', text)
+        # Replace all remaining whitespace (spaces, tabs) with single space
+        normalized = re.sub(r'\s+', ' ', text)
+        # Strip leading/trailing whitespace
+        normalized = normalized.strip()
+        return normalized
+    
+    def _normalize_text_aggressive(self, text):
+        """More aggressive normalization for flexible matching - handles punctuation differences"""
+        import re
+        # First normalize whitespace (this handles line breaks and hyphens)
+        normalized = self._normalize_text_for_search(text)
+        # Remove trailing punctuation that might differ (periods, commas, semicolons)
+        normalized = normalized.rstrip('.,;:!?')
+        # Normalize spacing around punctuation - ensure single space after punctuation
+        normalized = re.sub(r'\s*([,.;:!?])\s*', r'\1 ', normalized)
+        # Remove extra spaces that might remain
+        normalized = re.sub(r'\s+', ' ', normalized)
+        return normalized.strip()
+    
+    def _load_and_normalize_source(self, source_file_path, file_type):
+        """Load and normalize a source file, caching the normalized version"""
+        # Initialize cache if it doesn't exist
+        if not hasattr(self, '_normalized_source_cache'):
+            self._normalized_source_cache = {}
+        
+        # Check cache first
+        cache_key = f"{source_file_path}_{file_type}"
+        if cache_key in self._normalized_source_cache:
+            return self._normalized_source_cache[cache_key]
+        
+        print(f"[QUOTES DEBUG] Loading and normalizing source: {os.path.basename(source_file_path)}")
+        
+        normalized_data = None
+        
+        if file_type == "TXT":
+            try:
+                with open(source_file_path, 'r', encoding='utf-8', errors='ignore') as file:
+                    content = file.read()
+                # Normalize the entire content once
+                normalized_data = {
+                    'normalized_text': self._normalize_text_for_search(content),
+                    'type': 'TXT',
+                    'original_length': len(content),
+                    'original_text': content  # Keep original for cache file writing
+                }
+            except Exception as e:
+                print(f"[QUOTES DEBUG] Error loading TXT: {e}")
+                return None
+        
+        elif file_type == "PDF":
+            # Extract all text from PDF first, then normalize (like TXT)
+            all_text = ""
+            normalized_pages = {}
+            try:
+                import pypdf
+                with open(source_file_path, 'rb') as file:
+                    pdf_reader = pypdf.PdfReader(file)
+                    for page_num, page in enumerate(pdf_reader.pages, start=1):
+                        page_text = page.extract_text()
+                        # Add space between pages to avoid word concatenation
+                        all_text += page_text + " "
+                        # Also keep page-by-page for page number tracking
+                        normalized_pages[page_num] = self._normalize_text_for_search(page_text)
+            except ImportError:
+                try:
+                    from pdfminer.high_level import extract_pages
+                    from pdfminer.layout import LTTextContainer
+                    for page_num, page_layout in enumerate(extract_pages(source_file_path), start=1):
+                        page_text = ""
+                        for element in page_layout:
+                            if isinstance(element, LTTextContainer):
+                                page_text += element.get_text()
+                        # Add space between pages
+                        all_text += page_text + " "
+                        # Also keep page-by-page for page number tracking
+                        normalized_pages[page_num] = self._normalize_text_for_search(page_text)
+                except Exception as e:
+                    print(f"[QUOTES DEBUG] Error loading PDF with pdfminer-six: {e}")
+                    return None
+            except Exception as e:
+                print(f"[QUOTES DEBUG] Error loading PDF with pypdf: {e}")
+                return None
+            
+            # Normalize the entire PDF text as one continuous string (like TXT)
+            # This ensures better matching since PDFs often have artificial line breaks
+            normalized_text = self._normalize_text_for_search(all_text)
+            
+            normalized_data = {
+                'normalized_pages': normalized_pages,
+                'normalized_text': normalized_text,
+                'type': 'PDF',
+                'num_pages': len(normalized_pages),
+                'original_text': all_text  # Keep original for cache file writing
+            }
+        
+        if normalized_data:
+            self._normalized_source_cache[cache_key] = normalized_data
+            print(f"[QUOTES DEBUG] Cached normalized source: {os.path.basename(source_file_path)} ({len(normalized_data['normalized_text'])} chars)")
+            
+            # Write cache to TXT file
+            self._write_cache_to_file(source_file_path, normalized_data)
+        
+        return normalized_data
+    
+    def _write_cache_to_file(self, source_file_path, normalized_data):
+        """Write normalized source cache to a TXT file for debugging/review"""
+        try:
+            # Create output filename: XXX_search.TXT
+            base_name = os.path.splitext(os.path.basename(source_file_path))[0]
+            output_dir = os.path.dirname(source_file_path)
+            output_path = os.path.join(output_dir, f"{base_name}_search.TXT")
+            
+            # Write normalized text to file
+            with open(output_path, 'w', encoding='utf-8') as f:
+                f.write("=" * 80 + "\n")
+                f.write(f"Normalized Search Cache for: {os.path.basename(source_file_path)}\n")
+                f.write(f"Generated: {len(normalized_data['normalized_text'])} characters\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(normalized_data['normalized_text'])
+            
+            print(f"[QUOTES DEBUG] Wrote cache to: {os.path.basename(output_path)}")
+        except Exception as e:
+            print(f"[QUOTES DEBUG] Error writing cache file: {e}")
+    
+    def _fuzzy_match_quote_in_normalized(self, quote_text, normalized_data):
+        """Match quote against pre-normalized source data with improved matching"""
+        if normalized_data is None:
+            return False
+        
+        normalized_source = normalized_data['normalized_text']
+        clean_quote = self._normalize_text_for_search(quote_text)
+        
+        # Strategy 1: Exact normalized match
+        if clean_quote in normalized_source:
+            return True
+        
+        # Strategy 2: Case-insensitive match
+        if clean_quote.lower() in normalized_source.lower():
+            return True
+        
+        # Strategy 3: Aggressive normalization (handles punctuation differences)
+        agg_quote = self._normalize_text_aggressive(quote_text)
+        agg_source = self._normalize_text_aggressive(normalized_source)
+        if agg_quote.lower() in agg_source.lower():
+            return True
+        
+        # Strategy 4: Word-based sequential matching (more lenient)
+        quote_words = []
+        for w in clean_quote.split():
+            cleaned = w.strip('.,;:!?()[]{}"\'').lower()
+            if len(cleaned) > 1:  # Changed from > 2 to > 1 to include more words
+                quote_words.append(cleaned)
+        
+        source_words = []
+        for w in normalized_source.split():
+            cleaned = w.strip('.,;:!?()[]{}"\'').lower()
+            if len(cleaned) > 1:  # Changed from > 2 to > 1
+                source_words.append(cleaned)
+        
+        if len(quote_words) >= 3:  # Changed from > 5 to >= 3 for shorter quotes
+            # Check if we can find the quote words in sequence in the source
+            quote_idx = 0
+            consecutive_matches = 0
+            max_consecutive = 0
+            
+            for source_word in source_words:
+                if quote_idx < len(quote_words) and source_word == quote_words[quote_idx]:
+                    quote_idx += 1
+                    consecutive_matches += 1
+                    max_consecutive = max(max_consecutive, consecutive_matches)
+                    if quote_idx == len(quote_words):
+                        return True
+                else:
+                    consecutive_matches = 0
+            
+            # More lenient matching: if we found at least 70% of words in order (changed from 85%)
+            # OR if we have a good consecutive match
+            if quote_idx >= len(quote_words) * 0.70:
+                return True
+            if max_consecutive >= min(3, len(quote_words) * 0.4):  # More lenient consecutive matching
+                return True
+        
+        # Strategy 5: Try without first/last few words (handles prefix/suffix differences like "Quote 1:")
+        if len(quote_words) >= 8:  # Changed from > 10 to >= 8
+            # Try without first 2 and last 2 words
+            middle_quote_words = quote_words[2:-2]
+            if len(middle_quote_words) >= 3:  # Changed from > 5 to >= 3
+                quote_idx = 0
+                for source_word in source_words:
+                    if quote_idx < len(middle_quote_words) and source_word == middle_quote_words[quote_idx]:
+                        quote_idx += 1
+                        if quote_idx == len(middle_quote_words):
+                            return True
+                # Also try partial match of middle words
+                if quote_idx >= len(middle_quote_words) * 0.70:
+                    return True
+        
+        # Strategy 6: Try matching without "Quote X:" prefix if present
+        if quote_text.startswith("Quote "):
+            quote_without_prefix = quote_text.split(":", 1)
+            if len(quote_without_prefix) > 1:
+                quote_after_colon = quote_without_prefix[1].strip()
+                clean_quote_no_prefix = self._normalize_text_for_search(quote_after_colon)
+                if clean_quote_no_prefix.lower() in normalized_source.lower():
+                    return True
+        
+        return False
+    
+    def _search_quote_in_txt(self, txt_path, quote_text):
+        """Search for a quote in a TXT file using cached normalized version"""
+        normalized_data = self._load_and_normalize_source(txt_path, "TXT")
+        if normalized_data is None:
+            return None, False
+        
+        # Match against normalized source
+        if self._fuzzy_match_quote_in_normalized(quote_text, normalized_data):
+            # Find position for page estimation
+            clean_quote = self._normalize_text_for_search(quote_text)
+            normalized_text = normalized_data['normalized_text']
+            
+            position = normalized_text.lower().find(clean_quote.lower())
+            if position == -1:
+                position = len(normalized_text) // 2
+            
+            estimated_page = (position // 2000) + 1
+            return estimated_page, True
+        
+        return None, False
+    
+    def _verify_quote(self, quote_text, source_file_path, file_type):
+        """Verify if a quote exists in the source file"""
+        if file_type == "PDF":
+            page_num, found = self._search_quote_in_pdf(source_file_path, quote_text)
+        elif file_type == "TXT":
+            page_num, found = self._search_quote_in_txt(source_file_path, quote_text)
+        else:
+            return None, False
+        
+        return page_num, found
+    
+    def _add_quotes_table_to_doc(self, doc, valid_folders, quotes_data, parent_folder=None):
         """Add quotes table to the document after RAG Parameter Consistency Analysis"""
         try:
             from docx.shared import Inches
             from docx.enum.text import WD_ALIGN_PARAGRAPH
+            
+            # Debug: Start quote verification analysis
+            print(f"[QUOTES DEBUG] ===== Starting Quote Verification Analysis =====")
+            if parent_folder:
+                print(f"[QUOTES DEBUG] Parent folder: {parent_folder}")
+            else:
+                print(f"[QUOTES DEBUG] WARNING: No parent folder provided, quote verification will be skipped")
+            
+            # Initialize normalized source cache
+            self._normalized_source_cache = {}
+            
+            # Find source files for each folder
+            folder_source_files = {}
+            if parent_folder:
+                for folder in valid_folders:
+                    folder_name = os.path.basename(folder)
+                    source_file, file_type = self._find_source_file(parent_folder, folder_name)
+                    if source_file:
+                        print(f"[QUOTES DEBUG] ✓ Found {file_type} for folder '{folder_name}': {os.path.basename(source_file)}")
+                        print(f"[QUOTES DEBUG]   Full path: {source_file}")
+                        folder_source_files[folder_name] = (source_file, file_type)
+                    else:
+                        print(f"[QUOTES DEBUG] ✗ No source file found for folder '{folder_name}' (tried {folder_name}.pdf, {folder_name.lower()}.pdf, {folder_name}.txt, {folder_name.lower()}.txt)")
+            
+            # Pre-load and normalize all source files for efficiency
+            print(f"[QUOTES DEBUG] Pre-loading and normalizing {len(folder_source_files)} source files...")
+            for folder_name, (source_file_path, file_type) in folder_source_files.items():
+                normalized_data = self._load_and_normalize_source(source_file_path, file_type)
+                if normalized_data is None:
+                    print(f"[QUOTES DEBUG] WARNING: Failed to load source file for '{folder_name}'")
+            print(f"[QUOTES DEBUG] Finished pre-loading {len(self._normalized_source_cache)} source files")
             
             # Add header for quotes section
             doc.add_heading("Concept Citations and Quotes", level=2)
             doc.add_paragraph(
                 "This table shows specific citations and quotes from the original texts for each concept, "
                 "extracted from parameter-specific CSV files. Each column represents a different folder/author, "
-                "and the quotes show how each concept is used in context."
+                "and the quotes show how each concept is used in context. Quotes are color-coded: "
+                "green background indicates the quote was found in the source document (with page number), "
+                "red background indicates the quote was not found."
             )
             
             # Filter out concepts that have no meaningful quotes
@@ -8301,6 +8756,9 @@ class UpSetGUI:
                         run.bold = True
                         run.font.size = Inches(0.10)
             
+            # Statistics for verification
+            verification_stats = {}  # {folder_name: {'found': count, 'not_found': count}}
+            
             # Add data rows for each concept
             for concept, folder_quotes in filtered_quotes_data.items():
                 row = quotes_table.add_row()
@@ -8319,27 +8777,199 @@ class UpSetGUI:
                         quotes = folder_data.get('quotes', [])
                         sources = folder_data.get('sources', [])
                     
-                    if quotes:
-                        # Combine quotes with line breaks
-                        quotes_text = "\n\n".join(quotes)
-                        
-                        # Add sources information if available
-                        if sources:
-                            sources_text = "\n".join(sources)
-                            quotes_text += f"\n\nSources: {sources_text}"
-                        
-                        # Truncate if too long (limit to ~800 characters to accommodate sources)
-                        if len(quotes_text) > 800:
-                            quotes_text = quotes_text[:800] + "..."
-                        row.cells[i + 1].text = quotes_text
+                    # Initialize stats for this folder if not exists
+                    if folder_name not in verification_stats:
+                        verification_stats[folder_name] = {'found': 0, 'not_found': 0}
+                    
+                    cell = row.cells[i + 1]
+                    
+                    # Skip verification if "No quotes found"
+                    if not quotes or all(q.strip() == "No quotes found" or not q.strip() for q in quotes):
+                        cell.text = "No quotes found"
+                        # Set font size
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                run.font.size = Inches(0.09)
+                        continue
+                    
+                    # Get source file for this folder
+                    source_file_path, file_type = folder_source_files.get(folder_name, (None, None))
+                    
+                    if source_file_path:
+                        print(f"[QUOTES DEBUG] Processing folder '{folder_name}' - will search in: {os.path.basename(source_file_path)} ({file_type})")
                     else:
-                        row.cells[i + 1].text = "No quotes found"
+                        print(f"[QUOTES DEBUG] Processing folder '{folder_name}' - no source file available for verification")
+                    
+                    # Filter out single numeric values and invalid quotes
+                    filtered_quotes = []
+                    for quote in quotes:
+                        quote_stripped = quote.strip()
+                        # Skip empty, "No quotes found", or single numeric values
+                        if (not quote_stripped or 
+                            quote_stripped == "No quotes found" or 
+                            (quote_stripped.isdigit() and len(quote_stripped) <= 3)):
+                            continue
+                        filtered_quotes.append(quote)
+                    
+                    # If no valid quotes after filtering, mark as no quotes
+                    if not filtered_quotes:
+                        cell.text = "No quotes found"
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                run.font.size = Inches(0.09)
+                        continue
+                    
+                    # Clear cell and add quotes with individual coloring
+                    cell.text = ""  # Clear default text
+                    
+                    # Process each quote individually
+                    verified_quotes = []
+                    for quote_idx, quote in enumerate(filtered_quotes):
+                        print(f"[QUOTES DEBUG]   Quote #{quote_idx + 1} for '{folder_name}': {quote[:50]}...")
+                        
+                        # Verify quote if source file is available
+                        if source_file_path:
+                            print(f"[QUOTES DEBUG]     Searching in: {os.path.basename(source_file_path)}")
+                            page_num, found = self._verify_quote(quote, source_file_path, file_type)
+                            
+                            if found:
+                                print(f"[QUOTES DEBUG]     ✓ FOUND on page {page_num}")
+                                verified_quotes.append((quote, True, page_num))
+                                verification_stats[folder_name]['found'] += 1
+                            else:
+                                print(f"[QUOTES DEBUG]     ✗ NOT FOUND")
+                                verified_quotes.append((quote, False, None))
+                                verification_stats[folder_name]['not_found'] += 1
+                        else:
+                            # No source file, mark as not verified
+                            verified_quotes.append((quote, None, None))
+                    
+                    # Add quotes to cell with individual coloring
+                    for quote_idx, (quote, found, page_num) in enumerate(verified_quotes):
+                        # Add line break before second and subsequent quotes
+                        if quote_idx > 0:
+                            para = cell.add_paragraph()
+                        else:
+                            para = cell.paragraphs[0]
+                        
+                        # Preserve original quote text format (may already have "Quote X:" prefix)
+                        quote_text = quote
+                        
+                        if found is True and page_num:
+                            quote_with_page = f"{quote_text} [p.{page_num}]"
+                        else:
+                            quote_with_page = quote_text
+                        
+                        run = para.add_run(quote_with_page)
+                        run.font.size = Inches(0.09)
+                        
+                        # Color the run based on verification result
+                        from docx.shared import RGBColor
+                        if found is True:
+                            # Dark green background with white text for contrast
+                            run.font.color.rgb = RGBColor(255, 255, 255)  # White text for contrast
+                            # Set background color using shading XML
+                            rPr = run._element.get_or_add_rPr()
+                            shd = OxmlElement('w:shd')
+                            shd.set(qn('w:fill'), '006400')  # Dark green background
+                            shd.set(qn('w:val'), 'clear')
+                            rPr.append(shd)
+                        elif found is False:
+                            # Red background with white text for contrast
+                            run.font.color.rgb = RGBColor(255, 255, 255)  # White text for contrast
+                            # Set background color using shading XML
+                            rPr = run._element.get_or_add_rPr()
+                            shd = OxmlElement('w:shd')
+                            shd.set(qn('w:fill'), '8B0000')  # Dark red background
+                            shd.set(qn('w:val'), 'clear')
+                            rPr.append(shd)
+                        # If found is None, no coloring (source file not available)
+                    
+                    # Add sources if available (add after all quotes)
+                    if sources:
+                        # Add a blank line before sources
+                        para = cell.add_paragraph()
+                        sources_label = para.add_run("Sources: ")
+                        sources_label.font.size = Inches(0.09)
+                        sources_label.bold = True
+                        
+                        # Add each source on a new line
+                        for source_idx, source in enumerate(sources):
+                            if source_idx > 0:
+                                para = cell.add_paragraph()
+                                para.add_run("  ")  # Indent continuation sources
+                            source_run = para.add_run(source)
+                            source_run.font.size = Inches(0.09)
+                    
+                    # Truncate if too long (but preserve sources)
+                    # Count characters in quotes only, not sources
+                    quotes_text_length = sum(len(q) for q, _, _ in verified_quotes)
+                    if quotes_text_length > 800:
+                        # Truncate quotes but keep sources
+                        # Remove quotes paragraphs starting from the end until we're under limit
+                        total_length = 0
+                        quotes_to_keep = []
+                        for quote_data in reversed(verified_quotes):
+                            quote, found, page_num = quote_data
+                            quote_text = quote  # Preserve original format
+                            if found is True and page_num:
+                                quote_text = f"{quote_text} [p.{page_num}]"
+                            
+                            if total_length + len(quote_text) > 800:
+                                break
+                            quotes_to_keep.insert(0, quote_data)
+                            total_length += len(quote_text)
+                        
+                        # Rebuild cell with truncated quotes
+                        cell.text = ""
+                        for quote_idx, (quote, found, page_num) in enumerate(quotes_to_keep):
+                            if quote_idx > 0:
+                                para = cell.add_paragraph()
+                            else:
+                                para = cell.paragraphs[0]
+                            
+                            quote_text = quote  # Preserve original format
+                            if found is True and page_num:
+                                quote_text = f"{quote_text} [p.{page_num}]"
+                            
+                            run = para.add_run(quote_text)
+                            run.font.size = Inches(0.09)
+                            
+                            # Reapply coloring
+                            from docx.shared import RGBColor
+                            if found is True:
+                                run.font.color.rgb = RGBColor(255, 255, 255)
+                                rPr = run._element.get_or_add_rPr()
+                                shd = OxmlElement('w:shd')
+                                shd.set(qn('w:fill'), '006400')
+                                shd.set(qn('w:val'), 'clear')
+                                rPr.append(shd)
+                            elif found is False:
+                                run.font.color.rgb = RGBColor(255, 255, 255)
+                                rPr = run._element.get_or_add_rPr()
+                                shd = OxmlElement('w:shd')
+                                shd.set(qn('w:fill'), '8B0000')
+                                shd.set(qn('w:val'), 'clear')
+                                rPr.append(shd)
+                        
+                        # Re-add sources after truncated quotes
+                        if sources:
+                            para = cell.add_paragraph()
+                            sources_label = para.add_run("Sources: ")
+                            sources_label.font.size = Inches(0.09)
+                            sources_label.bold = True
+                            
+                            for source_idx, source in enumerate(sources):
+                                if source_idx > 0:
+                                    para = cell.add_paragraph()
+                                    para.add_run("  ")
+                                source_run = para.add_run(source)
+                                source_run.font.size = Inches(0.09)
                 
-                # Set font size for all cells in this row
-                for cell in row.cells:
-                    for para in cell.paragraphs:
-                        for run in para.runs:
-                            run.font.size = Inches(0.09)  # Smaller font for quotes
+                # Set font size for concept cell
+                for para in row.cells[0].paragraphs:
+                    for run in para.runs:
+                        run.font.size = Inches(0.09)
             
             # Add summary paragraph
             total_concepts = len(filtered_quotes_data)
@@ -8354,6 +8984,90 @@ class UpSetGUI:
             doc.add_paragraph(
                 f"Summary: Found quotes for {total_concepts} concepts with a total of {total_quotes} citations across {num_folders} folders."
             )
+            
+            # Add verification statistics table
+            if verification_stats:
+                doc.add_paragraph()  # Add spacing
+                doc.add_heading("Quote Verification Statistics", level=3)
+                doc.add_paragraph(
+                    "This table shows the verification results for quotes found in each source document. "
+                    "The hallucination rate indicates the percentage of quotes that were not found in the original texts."
+                )
+                
+                # Create statistics table
+                stats_table = doc.add_table(rows=1, cols=5)
+                stats_table.style = 'Table Grid'
+                
+                # Header row
+                header_cells = stats_table.rows[0].cells
+                header_cells[0].text = "Book/Folder"
+                header_cells[1].text = "Found"
+                header_cells[2].text = "Not Found"
+                header_cells[3].text = "Found %"
+                header_cells[4].text = "Hallucination Rate"
+                
+                # Make header bold
+                for cell in header_cells:
+                    for para in cell.paragraphs:
+                        for run in para.runs:
+                            run.bold = True
+                            run.font.size = Inches(0.10)
+                
+                # Add data rows
+                for folder_name in sorted(verification_stats.keys()):
+                    stats = verification_stats[folder_name]
+                    found_count = stats['found']
+                    not_found_count = stats['not_found']
+                    total_count = found_count + not_found_count
+                    
+                    if total_count > 0:
+                        found_percentage = (found_count / total_count) * 100
+                        hallucination_rate = 100 - found_percentage
+                    else:
+                        found_percentage = 0.0
+                        hallucination_rate = 100.0
+                    
+                    row = stats_table.add_row()
+                    row.cells[0].text = folder_name
+                    row.cells[1].text = str(found_count)
+                    row.cells[2].text = str(not_found_count)
+                    row.cells[3].text = f"{found_percentage:.1f}%"
+                    row.cells[4].text = f"{hallucination_rate:.1f}%"
+                    
+                    # Color code the percentage cells
+                    from docx.shared import RGBColor
+                    # Found % cell - green if > 80%, yellow if 50-80%, red if < 50%
+                    found_para = row.cells[3].paragraphs[0]
+                    found_run = found_para.runs[0] if found_para.runs else found_para.add_run(row.cells[3].text)
+                    if found_percentage >= 80:
+                        found_run.font.color.rgb = RGBColor(0, 100, 0)  # Dark green
+                    elif found_percentage >= 50:
+                        found_run.font.color.rgb = RGBColor(184, 134, 11)  # Dark goldenrod
+                    else:
+                        found_run.font.color.rgb = RGBColor(139, 0, 0)  # Dark red
+                    
+                    # Hallucination rate cell - red if > 20%, yellow if 10-20%, green if < 10%
+                    hall_para = row.cells[4].paragraphs[0]
+                    hall_run = hall_para.runs[0] if hall_para.runs else hall_para.add_run(row.cells[4].text)
+                    if hallucination_rate > 20:
+                        hall_run.font.color.rgb = RGBColor(139, 0, 0)  # Dark red
+                    elif hallucination_rate > 10:
+                        hall_run.font.color.rgb = RGBColor(184, 134, 11)  # Dark goldenrod
+                    else:
+                        hall_run.font.color.rgb = RGBColor(0, 100, 0)  # Dark green
+                    
+                    # Set font size
+                    for cell in row.cells:
+                        for para in cell.paragraphs:
+                            for run in para.runs:
+                                run.font.size = Inches(0.09)
+                
+                print(f"[QUOTES DEBUG] ===== Quote Verification Statistics =====")
+                for folder_name, stats in verification_stats.items():
+                    total = stats['found'] + stats['not_found']
+                    if total > 0:
+                        pct = (stats['found'] / total) * 100
+                        print(f"[QUOTES DEBUG] {folder_name}: {stats['found']}/{total} found ({pct:.1f}%), {100-pct:.1f}% hallucination rate")
             
             print(f"[QUOTES] Successfully added quotes table with {total_concepts} concepts and {total_quotes} quotes")
             
