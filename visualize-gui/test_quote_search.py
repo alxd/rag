@@ -97,6 +97,15 @@ class QuoteSearchTester:
         # Remove numbers at end of lines (likely page numbers)
         text = re.sub(r'\s+\d+\s*$', '', text, flags=re.MULTILINE)
         
+        # Remove numbers attached directly to words (e.g., "nothing5" -> "nothing", "word10" -> "word")
+        # Pattern: word ending in letter + 1-3 digits + (optional hyphen + word or end)
+        text = re.sub(r'([a-zA-Z])\d{1,3}(?=-|$|\s)', r'\1', text)
+        
+        # Remove very short words (1-2 letters) after hyphens that are likely formatting artifacts
+        # Pattern: word-hyphen-very-short-word at end or before punctuation
+        # This handles cases like "nothing5-if" -> "nothing-if" -> "nothing"
+        text = re.sub(r'([a-zA-Z]+)-\s*([a-zA-Z]{1,2})(?=[\s.,;:!?]|$)', r'\1', text)
+        
         # Remove standalone numbers before words (even if after punctuation): "species.10 Base" -> "species. Base"
         text = re.sub(r'([.,;:!?])\s*\d{1,3}\s+([A-Za-z])', r'\1 \2', text)
         
@@ -171,15 +180,16 @@ class QuoteSearchTester:
         # First normalize whitespace (this handles line breaks, hyphens, em dashes, word splitting)
         normalized = self.normalize_text_for_search(text)
         
-        # Remove trailing punctuation that might differ (periods, commas, semicolons)
-        normalized = normalized.rstrip('.,;:!?')
-        
         # Normalize semicolons to periods for matching (both are sentence separators)
         # This handles cases where quote has "at study" but source has "at study;"
         normalized = re.sub(r';\s*', '. ', normalized)
         
         # Normalize spacing around punctuation - ensure single space after punctuation
         normalized = re.sub(r'\s*([,.:!?])\s*', r'\1 ', normalized)
+        
+        # Remove trailing punctuation that might differ (periods, commas, semicolons)
+        # Do this AFTER normalizing spacing to avoid issues
+        normalized = normalized.rstrip('.,;:!?')
         
         # Remove extra spaces that might remain
         normalized = re.sub(r'\s+', ' ', normalized)
@@ -241,6 +251,14 @@ class QuoteSearchTester:
                 quote_text = parts[1].strip()
         
         # Normalize the quote text
+        # First remove XML-like tags from quote (e.g., "<rather>" -> "rather")
+        # This must happen BEFORE normalization to ensure tags are removed
+        quote_text_original = quote_text
+        quote_text = re.sub(r'<([^>]+)>', r'\1', quote_text)
+        
+        # Also remove XML tags that might have been normalized differently
+        quote_text = re.sub(r'&lt;([^&]+)&gt;', r'\1', quote_text)  # Handle HTML entities
+        
         clean_quote = self.normalize_text_for_search(quote_text)
         clean_quote = self.clean_source_info_from_quote(clean_quote)
         
@@ -298,7 +316,8 @@ class QuoteSearchTester:
                             return True, matched_text
         
         # Strategy 4: Try aggressive normalization (handles punctuation differences)
-        agg_quote = self.normalize_text_aggressive(quote_text)
+        # Use clean_quote instead of quote_text to ensure consistent normalization
+        agg_quote = self.normalize_text_aggressive(clean_quote)
         agg_source = self.normalize_text_aggressive(normalized_source)
         agg_quote_lower = agg_quote.lower()
         agg_source_lower = agg_source.lower()
@@ -416,6 +435,14 @@ class QuoteSearchTester:
                 span = matched_positions[-1] - matched_positions[0]
                 # Check if span is reasonable (not too spread out)
                 if span <= len(quote_words) * 3:
+                    return (matched_positions[0], matched_positions[-1])
+            
+            # Also allow partial matches if we found most words (e.g., 80%+) and there are extra words at the end
+            # This handles cases where the source has extra words like "nothing if" when quote has "nothing."
+            if len(matched_positions) >= int(len(quote_words) * 0.8) and len(matched_positions) >= 5:
+                span = matched_positions[-1] - matched_positions[0]
+                # Allow slightly more spread for partial matches
+                if span <= len(quote_words) * 4:
                     return (matched_positions[0], matched_positions[-1])
         
         return None

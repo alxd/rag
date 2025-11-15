@@ -92,6 +92,15 @@ def clean_text_aggressive(text: str) -> str:
     # Remove numbers at end of lines (likely page numbers)
     text = re.sub(r'\s+\d+\s*$', '', text, flags=re.MULTILINE)
     
+    # Remove numbers attached directly to words (e.g., "nothing5" -> "nothing", "word10" -> "word")
+    # Pattern: word ending in letter + 1-3 digits + (optional hyphen + word or end)
+    text = re.sub(r'([a-zA-Z])\d{1,3}(?=-|$|\s)', r'\1', text)
+    
+    # Remove very short words (1-2 letters) after hyphens that are likely formatting artifacts
+    # Pattern: word-hyphen-very-short-word at end or before punctuation
+    # This handles cases like "nothing5-if" -> "nothing-if" -> "nothing"
+    text = re.sub(r'([a-zA-Z]+)-\s*([a-zA-Z]{1,2})(?=[\s.,;:!?]|$)', r'\1', text)
+    
     # Remove standalone numbers before words (even if after punctuation): "species.10 Base" -> "species. Base"
     text = re.sub(r'([.,;:!?])\s*\d{1,3}\s+([A-Za-z])', r'\1 \2', text)
     
