@@ -24,8 +24,90 @@ class QuoteSearchTester:
     def normalize_text_for_search(self, text: str) -> str:
         """
         Normalize text by removing all extra whitespace, newlines, and normalizing spaces.
-        Also handles em dashes, hyphens, and word splitting issues.
+        Also handles em dashes, hyphens, word splitting, and PDF/book artifacts.
+        Should be used for BOTH source text (cache) and quotes (search).
         """
+        # Remove XML-like tags (e.g., "<the companions>" -> "the companions")
+        text = re.sub(r'<([^>]+)>', r'\1', text)
+        
+        # Remove section markers with brackets (e.g., "[c6]", "[c1]")
+        text = re.sub(r'\[c\d+\]', '', text, flags=re.IGNORECASE)
+        
+        # Remove stray numbers in brackets (e.g., "[13]", "[5]")
+        text = re.sub(r'\[\d+\]', '', text)
+        
+        # Remove section markers and special characters (e.g., "§4", "§6", "§3")
+        text = re.sub(r'§\d+[a-z]?', '', text)
+        
+        # Remove standalone forward slashes with spaces (e.g., " / " -> " ")
+        text = re.sub(r'\s*/\s*', ' ', text)
+        
+        # Remove number+letter patterns (e.g., "1095b", "1096a", "1095a", "251095a")
+        text = re.sub(r'\b\d{3,}[a-z]\b', '', text)
+        
+        # Remove page numbers and formatting artifacts
+        # Patterns like: "10 15 20 25 30 351157b" (sequences of numbers)
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+[a-z]?\b', '', text)
+        # Shorter sequences: "10 15 20 25 30"
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\b', '', text)
+        # Even shorter: "10 15 20" or "5 10 15 20"
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\b', '', text)
+        # Very short: "5 10 15" or "10 15"
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\b', '', text)
+        text = re.sub(r'\b\d+\s+\d+\b', '', text)
+        
+        # File names and paths: "DSHPC081-2_Body_p001-203.indd" or "DSHPC081-2_Body_p001-203. indd"
+        text = re.sub(r'\b[A-Z0-9_-]+\.\s*(indd|pdf|txt|docx?)\b', '', text, flags=re.IGNORECASE)
+        # Also handle without the dot before extension
+        text = re.sub(r'\b[A-Z0-9_-]+\s+(indd|pdf|txt|docx?)\b', '', text, flags=re.IGNORECASE)
+        
+        # Dates in various formats: "22/06/19 3:15 PM" or "22/06/19 3: 14 PM" (with space in time)
+        text = re.sub(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\s*\d{2}\s*(AM|PM)?\b', '', text, flags=re.IGNORECASE)
+        # Also handle dates without time: "22/06/19"
+        text = re.sub(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', '', text)
+        
+        # Remove time patterns followed by numbers/letters: ":14 PM 711125b" or ":14 PM 351127a5"
+        text = re.sub(r':\s*\d{1,2}\s*(AM|PM)\s+\d+[a-z]?\d*[a-z]?\b', '', text, flags=re.IGNORECASE)
+        # Remove numbers/letters followed by time patterns: "711125b :14 PM" or "351127a5 :14 PM"
+        text = re.sub(r'\b\d+[a-z]?\d*[a-z]?\s+:\s*\d{1,2}\s*(AM|PM)\b', '', text, flags=re.IGNORECASE)
+        # Remove standalone time patterns with spaces: ":14 PM" (when not part of a date)
+        text = re.sub(r':\s*\d{1,2}\s*(AM|PM)\b', '', text, flags=re.IGNORECASE)
+        
+        # Book/chapter markers: "147Book VIII, Chapter 5" or "4Book I, Chapter 4"
+        text = re.sub(r'\b\d+Book\s+[IVXLC]+\s*,\s*Chapter\s+\d+\b', '', text, flags=re.IGNORECASE)
+        # Also handle without "Chapter": "4Book I"
+        text = re.sub(r'\b\d+Book\s+[IVXLC]+\b', '', text, flags=re.IGNORECASE)
+        
+        # Standalone long number sequences (likely page numbers): "351157b", "41157", "251095a"
+        text = re.sub(r'\b\d{5,}[a-z]?\b', '', text)
+        
+        # Remove patterns like "711125b" (6+ digits + letter) or "351127a5" (6+ digits + letter + digit)
+        text = re.sub(r'\b\d{6,}[a-z]\d*[a-z]?\b', '', text)
+        
+        # Remove standalone single/double/triple digit numbers that are likely page numbers
+        # Pattern: space, 1-3 digits, space (but not part of words or dates)
+        text = re.sub(r'\s+\d{1,3}\s+', ' ', text)
+        
+        # Remove numbers immediately after punctuation: "species.10" -> "species."
+        text = re.sub(r'([.,;:!?])\d{1,3}(?=\s|$|[A-Za-z])', r'\1', text)
+        
+        # Remove numbers at start of sentences/paragraphs: "10 Base people" -> "Base people"
+        text = re.sub(r'^\s*\d+\s+', '', text, flags=re.MULTILINE)
+        
+        # Remove numbers at end of lines (likely page numbers)
+        text = re.sub(r'\s+\d+\s*$', '', text, flags=re.MULTILINE)
+        
+        # Remove standalone numbers before words (even if after punctuation): "species.10 Base" -> "species. Base"
+        text = re.sub(r'([.,;:!?])\s*\d{1,3}\s+([A-Za-z])', r'\1 \2', text)
+        
+        # Replace ligatures (common in PDFs): ﬁ → fi, ﬂ → fl, etc.
+        ligature_map = {
+            'ﬁ': 'fi', 'ﬂ': 'fl', 'ﬀ': 'ff', 'ﬃ': 'ffi', 'ﬄ': 'ffl',
+            'æ': 'ae', 'œ': 'oe', 'Æ': 'AE', 'Œ': 'OE',
+        }
+        for ligature, replacement in ligature_map.items():
+            text = text.replace(ligature, replacement)
+        
         # Replace em dashes (—) and en dashes (–) with hyphens for consistency
         text = text.replace('—', '-').replace('–', '-')
         
@@ -39,21 +121,41 @@ class QuoteSearchTester:
         text = re.sub(r'[\r\n]+', ' ', text)
         
         # Handle hyphens that incorrectly split words (e.g., "thought-involuntary" -> "thought involuntary")
+        # Also handle line break hyphens like "gen-eral" -> "general"
         # Replace hyphens between two words (both sides have letters) with a space
-        # Pattern: letter-hyphen-letter (but not at start/end of word)
-        # This handles cases like "thought-involuntary" but keeps legitimate compound words
-        # We'll be conservative: only replace if both sides are complete words
         text = re.sub(r'([a-zA-Z]+)-([a-zA-Z]+)', r'\1 \2', text)
         
         # Normalize hyphen spacing (handle "evil for evil-and" vs "evil for evil—and")
         # Replace hyphens with spaces around them with just hyphen (no spaces)
-        # But now we need to handle remaining hyphens that might be legitimate
         text = re.sub(r'\s*-\s*', '-', text)
         
         # Handle common word splitting issues
         # "cana not" -> "cannot", "can not" -> "cannot"
         text = re.sub(r'\bcana\s+not\b', 'cannot', text, flags=re.IGNORECASE)
         text = re.sub(r'\bcan\s+not\b', 'cannot', text, flags=re.IGNORECASE)
+        
+        # Handle split words (e.g., "gen eral" -> "general", "in volun tary" -> "involuntary")
+        # Pattern: word ending in consonant(s) + space + word starting with vowel(s) that could be one word
+        # This is a heuristic - merge if first part ends with consonant and second starts with vowel/letter
+        # We'll be conservative and only merge if both parts are short (likely split)
+        text = re.sub(r'\b([a-z]{2,4})([bcdfghjklmnpqrstvwxyz])\s+([aeiou][a-z]{2,8})\b', 
+                     lambda m: m.group(1) + m.group(2) + m.group(3) if len(m.group(1) + m.group(2) + m.group(3)) <= 12 else m.group(0),
+                     text, flags=re.IGNORECASE)
+        
+        # More aggressive: handle common split patterns
+        # "gen eral", "gen erally", "in volun tary", "volun tary", etc.
+        common_splits = [
+            (r'\bgen\s+eral(ly)?\b', lambda m: 'general' + (m.group(1) if m.group(1) else '')),
+            (r'\bin\s+volun\s*tary\b', 'involuntary'),
+            (r'\bvolun\s*tary\b', 'voluntary'),
+            (r'\bcom\s+pan\s*ions?\b', lambda m: 'companion' + ('s' if m.group(0).endswith('s') else '')),
+            (r'\bcom\s+pan\s*ion\b', 'companion'),
+        ]
+        for pattern, replacement in common_splits:
+            if callable(replacement):
+                text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
+            else:
+                text = re.sub(pattern, replacement, text, flags=re.IGNORECASE)
         
         # Replace all remaining whitespace (spaces, tabs) with single space
         normalized = re.sub(r'\s+', ' ', text)
@@ -72,8 +174,12 @@ class QuoteSearchTester:
         # Remove trailing punctuation that might differ (periods, commas, semicolons)
         normalized = normalized.rstrip('.,;:!?')
         
+        # Normalize semicolons to periods for matching (both are sentence separators)
+        # This handles cases where quote has "at study" but source has "at study;"
+        normalized = re.sub(r';\s*', '. ', normalized)
+        
         # Normalize spacing around punctuation - ensure single space after punctuation
-        normalized = re.sub(r'\s*([,.;:!?])\s*', r'\1 ', normalized)
+        normalized = re.sub(r'\s*([,.:!?])\s*', r'\1 ', normalized)
         
         # Remove extra spaces that might remain
         normalized = re.sub(r'\s+', ' ', normalized)
@@ -232,6 +338,7 @@ class QuoteSearchTester:
         Fast algorithm to find quote words in sequence in source text.
         Returns (start_word_idx, end_word_idx) or None if not found.
         Uses a single pass through the source text - much faster than nested loops.
+        Handles split words (e.g., "gen eral" matches "general").
         """
         if not quote_words or len(quote_words) < 3:
             return None
@@ -241,6 +348,7 @@ class QuoteSearchTester:
             return None
         
         # Build a map of word -> list of positions for fast lookup
+        # Also check for split words by combining consecutive words
         word_positions = {}
         for idx, word in enumerate(source_words):
             cleaned = word.strip('.,;:!?()[]{}"\'').lower()
@@ -248,6 +356,15 @@ class QuoteSearchTester:
                 if cleaned not in word_positions:
                     word_positions[cleaned] = []
                 word_positions[cleaned].append(idx)
+            
+            # Check if this word combined with next word matches any quote word
+            if idx + 1 < len(source_words):
+                next_word = source_words[idx + 1].strip('.,;:!?()[]{}"\'').lower()
+                combined = cleaned + next_word
+                if len(combined) >= 4:  # Only for reasonable combined lengths
+                    if combined not in word_positions:
+                        word_positions[combined] = []
+                    word_positions[combined].append(idx)  # Store position of first word
         
         # Try to find quote words in sequence
         # Start from each position of the first quote word
@@ -262,17 +379,34 @@ class QuoteSearchTester:
             # Try to find remaining words in sequence
             for word_idx in range(1, len(quote_words)):
                 word = quote_words[word_idx]
-                if word not in word_positions:
-                    break
                 
-                # Find next occurrence of this word after current position
+                # Try exact match first
                 found = False
-                for pos in word_positions[word]:
-                    if pos > current_pos and pos <= current_pos + 10:  # Allow up to 10 words gap
-                        matched_positions.append(pos)
-                        current_pos = pos
-                        found = True
-                        break
+                if word in word_positions:
+                    for pos in word_positions[word]:
+                        if pos > current_pos and pos <= current_pos + 10:  # Allow up to 10 words gap
+                            matched_positions.append(pos)
+                            current_pos = pos
+                            found = True
+                            break
+                
+                # If not found, try matching against split words (combined consecutive words)
+                if not found:
+                    # Check if we can match by combining source words
+                    for check_pos in range(current_pos + 1, min(current_pos + 3, len(source_words))):
+                        # Try combining 2 words
+                        if check_pos < len(source_words):
+                            w1 = source_words[check_pos].strip('.,;:!?()[]{}"\'').lower()
+                            if check_pos + 1 < len(source_words):
+                                w2 = source_words[check_pos + 1].strip('.,;:!?()[]{}"\'').lower()
+                                combined = w1 + w2
+                                if combined == word:
+                                    matched_positions.append(check_pos)
+                                    current_pos = check_pos + 1  # Skip next word since we used it
+                                    found = True
+                                    break
+                        if found:
+                            break
                 
                 if not found:
                     break
