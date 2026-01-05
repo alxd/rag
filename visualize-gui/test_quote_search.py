@@ -47,23 +47,32 @@ class QuoteSearchTester:
         
         # Remove page numbers and formatting artifacts
         # Patterns like: "10 15 20 25 30 351157b" (sequences of numbers)
+        # Also handle "5 10 15 20 25 30 35" (sequences starting with single digits)
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+[a-z]?\b', '', text)
         text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+[a-z]?\b', '', text)
-        # Shorter sequences: "10 15 20 25 30"
+        # Shorter sequences: "10 15 20 25 30" or "5 10 15 20 25 30"
         text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\b', '', text)
-        # Even shorter: "10 15 20" or "5 10 15 20"
+        # Even shorter: "10 15 20" or "5 10 15 20" or "5 10 15 20 25"
         text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\b', '', text)
         # Very short: "5 10 15" or "10 15"
         text = re.sub(r'\b\d+\s+\d+\s+\d+\b', '', text)
         text = re.sub(r'\b\d+\s+\d+\b', '', text)
         
         # File names and paths: "DSHPC081-2_Body_p001-203.indd" or "DSHPC081-2_Body_p001-203. indd"
+        # Also handle patterns like "5 DSHPC081-2_Body_p001-203.indd 16922/06/19 3:15 PM 170"
+        # Remove number + filename + number + date pattern
+        text = re.sub(r'\b\d+\s+[A-Z0-9_-]+\.\s*(indd|pdf|txt|docx?)\s+\d+[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\s*\d{2}\s*(AM|PM)?\s+\d+\b', '', text, flags=re.IGNORECASE)
+        # Remove standalone file names
         text = re.sub(r'\b[A-Z0-9_-]+\.\s*(indd|pdf|txt|docx?)\b', '', text, flags=re.IGNORECASE)
         # Also handle without the dot before extension
         text = re.sub(r'\b[A-Z0-9_-]+\s+(indd|pdf|txt|docx?)\b', '', text, flags=re.IGNORECASE)
         
         # Dates in various formats: "22/06/19 3:15 PM" or "22/06/19 3: 14 PM" (with space in time)
+        # Also handle patterns like "16922/06/19" (long number before date)
+        text = re.sub(r'\b\d{3,}[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\s*\d{2}\s*(AM|PM)?\b', '', text, flags=re.IGNORECASE)
         text = re.sub(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\s*\d{2}\s*(AM|PM)?\b', '', text, flags=re.IGNORECASE)
-        # Also handle dates without time: "22/06/19"
+        # Also handle dates without time: "22/06/19" or "16922/06/19"
+        text = re.sub(r'\b\d{3,}[/-]\d{1,2}[/-]\d{2,4}\b', '', text)
         text = re.sub(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', '', text)
         
         # Remove time patterns followed by numbers/letters: ":14 PM 711125b" or ":14 PM 351127a5"

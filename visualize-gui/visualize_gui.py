@@ -249,7 +249,8 @@ class RAGConsistencyAnalyzer:
         results = {}
         
         # Analyze each parameter individually (for within-parameter analysis)
-        if run_within_param:
+        # Also run if sensitivity is requested, as it depends on individual_parameters
+        if run_within_param or run_sensitivity:
             parameters = ['temperature', 'top_p', 'top_k', 'bm25_weight']
             individual_results = {}
             
@@ -430,8 +431,22 @@ class RAGConsistencyAnalyzer:
             print(f"[SEMANTIC VIZ ERROR] Failed to create t-SNE plot: {e}")
             return None
 
-    def generate_cross_author_analysis(self, output_dir, current_folder, valid_folders, folder_concepts):
-        """Generate cross-author semantic similarity analysis with heatmaps, 2D embeddings, and network graphs"""
+    def generate_cross_author_analysis(self, output_dir, current_folder, valid_folders, folder_concepts,
+                                       tsne_font_size=5, tsne_n_components=2, tsne_color_palette='Set3',
+                                       tsne_proximity_threshold=None, tsne_show_labels=True):
+        """Generate cross-author semantic similarity analysis with heatmaps, 2D embeddings, and network graphs
+        
+        Args:
+            output_dir: Output directory for visualizations
+            current_folder: Current folder name
+            valid_folders: List of valid folder paths
+            folder_concepts: Dictionary mapping folders to concepts
+            tsne_font_size: Font size for t-SNE labels
+            tsne_n_components: Number of dimensions (2 or 3)
+            tsne_color_palette: Color palette name
+            tsne_proximity_threshold: Proximity threshold for grouping (None to disable)
+            tsne_show_labels: Whether to show concept labels
+        """
         if not self.model:
             return None
             
@@ -502,8 +517,57 @@ class RAGConsistencyAnalyzer:
             
             # 2. Generate 2D Embedding Map (t-SNE)
             print(f"[CROSS-AUTHOR] Generating t-SNE plot...")
-            tsne_path = self._create_cross_author_tsne(df, folder_names, output_dir)
+            # Use the parameters passed to this function
+            tsne_path = self._create_cross_author_tsne(df, folder_names, output_dir,
+                                                       font_size=tsne_font_size,
+                                                       n_components=tsne_n_components,
+                                                       color_palette=tsne_color_palette,
+                                                       proximity_threshold=tsne_proximity_threshold,
+                                                       show_labels=tsne_show_labels)
             print(f"[CROSS-AUTHOR] t-SNE result: {tsne_path}")
+            
+            # Compute clustering once and share between both visualizations to ensure consistency
+            from sklearn.cluster import KMeans
+            from sklearn.decomposition import PCA
+            import numpy as np
+            
+            X = np.stack(df["embedding"])
+            n_clusters = min(20, len(df) // 3)
+            if n_clusters < 2:
+                n_clusters = 2
+            
+            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+            cluster_labels = kmeans.fit_predict(X)
+            cluster_centers = kmeans.cluster_centers_
+            
+            # Create shared PCA projection
+            pca = PCA(n_components=2, random_state=42)
+            X_2d = pca.fit_transform(X)
+            centers_2d = pca.transform(cluster_centers)
+            
+            # 2b. Generate alternative less-crowded visualization
+            alt_viz_path = None
+            try:
+                print(f"[CROSS-AUTHOR] Generating alternative visualization...")
+                alt_viz_path = self._create_alternative_clustering_viz(df, folder_names, output_dir, 
+                                                                      cluster_labels, cluster_centers, X_2d, centers_2d)
+                print(f"[CROSS-AUTHOR] Alternative visualization result: {alt_viz_path}")
+            except Exception as alt_viz_error:
+                print(f"[CROSS-AUTHOR] Failed to create alternative visualization: {alt_viz_error}")
+                import traceback
+                traceback.print_exc()
+            
+            # 2c. Generate varying radius clustering visualization
+            radius_viz_path = None
+            try:
+                print(f"[CROSS-AUTHOR] Generating varying radius visualization...")
+                radius_viz_path = self._create_varying_radius_clustering_viz(df, folder_names, output_dir,
+                                                                             cluster_labels, cluster_centers, X_2d, centers_2d)
+                print(f"[CROSS-AUTHOR] Varying radius visualization result: {radius_viz_path}")
+            except Exception as radius_viz_error:
+                print(f"[CROSS-AUTHOR] Failed to create varying radius visualization: {radius_viz_error}")
+                import traceback
+                traceback.print_exc()
             
             # 3. Generate Semantic Network Graph
             print(f"[CROSS-AUTHOR] Generating network graph...")
@@ -518,6 +582,8 @@ class RAGConsistencyAnalyzer:
             return {
                 'heatmap': heatmap_path,
                 'tsne': tsne_path,
+                'alternative_viz': alt_viz_path,
+                'varying_radius_viz': radius_viz_path,
                 'network': network_path,
                 'csv': csv_path,
                 'between_author_sim': between_author_sim,
@@ -596,54 +662,139 @@ class RAGConsistencyAnalyzer:
         colors = plt.cm.Set3(np.linspace(0, 1, len(folder_names)))
         return {author: colors[i] for i, author in enumerate(sorted(folder_names))}
 
-    def _create_cross_author_tsne(self, df, folder_names, output_dir):
-        """Create 2D embedding map showing concept clustering by author"""
+    def _create_cross_author_tsne(self, df, folder_names, output_dir, 
+                                   font_size=5, n_components=2, color_palette='Set3', 
+                                   proximity_threshold=None, show_labels=True):
+        """Create 2D embedding map showing concept clustering by author
+        
+        Args:
+            df: DataFrame with concepts and embeddings
+            folder_names: List of folder/author names
+            output_dir: Output directory for saving plots
+            font_size: Font size for concept labels (default: 5)
+            n_components: Number of dimensions for t-SNE (2 or 3, default: 2)
+            color_palette: Matplotlib color palette name (default: 'Set3')
+            proximity_threshold: If set, group nodes within this distance together (default: None)
+            show_labels: Whether to show concept labels (default: True)
+        """
         try:
             from sklearn.manifold import TSNE
             import matplotlib.pyplot as plt
+            from mpl_toolkits.mplot3d import Axes3D
             import numpy as np
+            from scipy.cluster.hierarchy import linkage, fcluster
+            from scipy.spatial.distance import pdist
             
             # Stack all embeddings
             X = np.stack(df["embedding"])
             
-            # Apply t-SNE
-            tsne = TSNE(n_components=2, perplexity=min(20, len(df)-1), random_state=42)
+            # Apply t-SNE with configurable dimensions
+            n_components = max(2, min(3, int(n_components)))  # Ensure 2 or 3
+            tsne = TSNE(n_components=n_components, perplexity=min(20, len(df)-1), random_state=42)
             X_2d = tsne.fit_transform(X)
             
-            # Create scatter plot
-            plt.figure(figsize=(12, 10))
+            # Get color palette
+            try:
+                cmap = plt.cm.get_cmap(color_palette)
+                colors = cmap(np.linspace(0, 1, len(folder_names)))
+                author_colors = {author: colors[i] for i, author in enumerate(sorted(folder_names))}
+            except:
+                # Fallback to default
+                author_colors = self._get_author_color_mapping(folder_names)
             
-            # Color by author using consistent mapping
-            author_colors = self._get_author_color_mapping(folder_names)
+            # Apply proximity grouping if threshold is set
+            cluster_labels = None
+            if proximity_threshold is not None and proximity_threshold > 0:
+                try:
+                    # Compute pairwise distances
+                    distances = pdist(X_2d)
+                    # Perform hierarchical clustering
+                    linkage_matrix = linkage(distances, method='ward')
+                    # Create clusters based on threshold
+                    cluster_labels = fcluster(linkage_matrix, proximity_threshold, criterion='distance')
+                except:
+                    cluster_labels = None
             
+            # Create plot (2D or 3D)
+            if n_components == 3:
+                fig = plt.figure(figsize=(14, 12))
+                ax = fig.add_subplot(111, projection='3d')
+            else:
+                fig, ax = plt.subplots(figsize=(12, 10))
+            
+            # Plot by author
             for author in folder_names:
                 mask = df["author"] == author
                 if mask.any():
                     author_data = df[mask]
                     concept_count = len(author_data)
+                    author_indices = df[mask].index
                     
-                    plt.scatter(X_2d[mask, 0], X_2d[mask, 1], 
-                              label=f"{author} ({concept_count} concepts)", alpha=0.7, s=100, c=[author_colors[author]])
+                    # Get coordinates for this author
+                    if n_components == 3:
+                        ax.scatter(X_2d[mask, 0], X_2d[mask, 1], X_2d[mask, 2],
+                                  label=f"{author} ({concept_count} concepts)", 
+                                  alpha=0.7, s=100, c=[author_colors[author]])
+                    else:
+                        ax.scatter(X_2d[mask, 0], X_2d[mask, 1],
+                                  label=f"{author} ({concept_count} concepts)", 
+                                  alpha=0.7, s=100, c=[author_colors[author]])
                     
-                    # Add concept labels for 90% of concepts (or all if less than 50)
-                    max_labels = min(int(concept_count * 0.9), concept_count) if concept_count > 50 else concept_count
-                    
-                    for idx, (_, row) in enumerate(author_data.iterrows()):
-                        if idx < max_labels:
-                            concept = row['concept']
-                            # Truncate long concept names
-                            display_concept = concept[:12] + '...' if len(concept) > 12 else concept
-                            plt.annotate(display_concept, 
-                                       (X_2d[mask][idx, 0], X_2d[mask][idx, 1]),
-                                       xytext=(2, 2), textcoords='offset points',
-                                       fontsize=5, alpha=0.8)
+                    # Add concept labels if enabled
+                    if show_labels:
+                        # Show fewer labels if there are many concepts
+                        max_labels = min(int(concept_count * 0.9), concept_count) if concept_count > 50 else concept_count
+                        
+                        for idx, (_, row) in enumerate(author_data.iterrows()):
+                            if idx < max_labels:
+                                concept = row['concept']
+                                # Truncate long concept names
+                                display_concept = concept[:12] + '...' if len(concept) > 12 else concept
+                                if n_components == 3:
+                                    ax.text(X_2d[mask][idx, 0], X_2d[mask][idx, 1], X_2d[mask][idx, 2],
+                                           display_concept, fontsize=font_size, alpha=0.8)
+                                else:
+                                    ax.annotate(display_concept, 
+                                               (X_2d[mask][idx, 0], X_2d[mask][idx, 1]),
+                                               xytext=(2, 2), textcoords='offset points',
+                                               fontsize=font_size, alpha=0.8)
             
-            plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-            plt.title("Concept Embeddings by Author\n(Closer points = more similar concepts)", 
+            # Add cluster grouping visualization if enabled
+            if cluster_labels is not None:
+                # Draw circles/ellipses around clusters
+                unique_clusters = np.unique(cluster_labels)
+                for cluster_id in unique_clusters:
+                    cluster_mask = cluster_labels == cluster_id
+                    if np.sum(cluster_mask) > 1:  # Only draw for clusters with multiple points
+                        cluster_points = X_2d[cluster_mask]
+                        if n_components == 3:
+                            # For 3D, draw a sphere approximation
+                            center = cluster_points.mean(axis=0)
+                            radius = np.max(np.linalg.norm(cluster_points - center, axis=1))
+                            # Draw a simple circle in the XY plane
+                            theta = np.linspace(0, 2*np.pi, 100)
+                            ax.plot(center[0] + radius * np.cos(theta), 
+                                   center[1] + radius * np.sin(theta),
+                                   center[2], 'k--', alpha=0.3, linewidth=1)
+                        else:
+                            # For 2D, draw a circle
+                            center = cluster_points.mean(axis=0)
+                            radius = np.max(np.linalg.norm(cluster_points - center, axis=1))
+                            circle = plt.Circle(center, radius, fill=False, linestyle='--', 
+                                              alpha=0.3, color='gray', linewidth=1)
+                            ax.add_patch(circle)
+            
+            ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+            ax.set_title("Concept Embeddings by Author\n(Closer points = more similar concepts)", 
                      fontsize=14, pad=20)
-            plt.xlabel("t-SNE Dimension 1", fontsize=12)
-            plt.ylabel("t-SNE Dimension 2", fontsize=12)
-            plt.grid(True, alpha=0.3)
+            if n_components == 3:
+                ax.set_xlabel("t-SNE Dimension 1", fontsize=12)
+                ax.set_ylabel("t-SNE Dimension 2", fontsize=12)
+                ax.set_zlabel("t-SNE Dimension 3", fontsize=12)
+            else:
+                ax.set_xlabel("t-SNE Dimension 1", fontsize=12)
+                ax.set_ylabel("t-SNE Dimension 2", fontsize=12)
+            ax.grid(True, alpha=0.3)
             plt.tight_layout()
             
             tsne_path = os.path.join(output_dir, "cross_author_tsne.png")
@@ -654,6 +805,410 @@ class RAGConsistencyAnalyzer:
             return tsne_path
         except Exception as e:
             print(f"[CROSS-AUTHOR ERROR] Failed to create t-SNE: {e}")
+            return None
+    
+    def _create_alternative_clustering_viz(self, df, folder_names, output_dir, 
+                                          cluster_labels=None, cluster_centers=None, X_2d=None, centers_2d=None):
+        """Create an alternative, less crowded visualization using cluster centers with pie charts showing composition
+        
+        Args:
+            df: DataFrame with concepts and embeddings
+            folder_names: List of folder/author names
+            output_dir: Output directory
+            cluster_labels: Pre-computed cluster labels (optional, will compute if None)
+            cluster_centers: Pre-computed cluster centers (optional)
+            X_2d: Pre-computed 2D projection of embeddings (optional)
+            centers_2d: Pre-computed 2D projection of cluster centers (optional)
+        """
+        try:
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Circle
+            import numpy as np
+            from collections import Counter
+            
+            # Use provided clustering or compute new
+            if cluster_labels is None:
+                from sklearn.cluster import KMeans
+                from sklearn.decomposition import PCA
+                X = np.stack(df["embedding"])
+                n_clusters = min(20, len(df) // 3)
+                if n_clusters < 2:
+                    n_clusters = 2
+                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                cluster_labels = kmeans.fit_predict(X)
+                cluster_centers = kmeans.cluster_centers_
+                pca = PCA(n_components=2, random_state=42)
+                X_2d = pca.fit_transform(X)
+                centers_2d = pca.transform(cluster_centers)
+            
+            n_clusters = len(np.unique(cluster_labels))
+            
+            # For each cluster, find the most representative concept (closest to center)
+            representative_concepts = []
+            X_full = np.stack(df["embedding"])  # Need original embeddings for distance calculation
+            for cluster_id in range(n_clusters):
+                cluster_mask = cluster_labels == cluster_id
+                if np.sum(cluster_mask) > 0:
+                    cluster_points = X_full[cluster_mask]
+                    cluster_center = cluster_centers[cluster_id]
+                    # Find closest point to center
+                    distances = np.linalg.norm(cluster_points - cluster_center, axis=1)
+                    closest_idx = np.argmin(distances)
+                    cluster_df_indices = df.index[cluster_mask]
+                    representative_idx = cluster_df_indices[closest_idx]
+                    representative_concepts.append(representative_idx)
+            
+            # Calculate minimum distance between cluster centers to prevent overlap
+            min_distance = float('inf')
+            for i in range(n_clusters):
+                for j in range(i + 1, n_clusters):
+                    dist = np.linalg.norm(centers_2d[i] - centers_2d[j])
+                    if dist < min_distance:
+                        min_distance = dist
+            
+            # Calculate plot extent to determine appropriate pie chart size
+            x_range = np.max(centers_2d[:, 0]) - np.min(centers_2d[:, 0])
+            y_range = np.max(centers_2d[:, 1]) - np.min(centers_2d[:, 1])
+            plot_extent = max(x_range, y_range)
+            
+            # Set pie chart radius with minimum size for visibility
+            # Use 6-10% of plot extent as base, with minimum size guarantee
+            min_radius_absolute = plot_extent * 0.06  # Minimum 6% of plot extent - ensures visibility
+            base_radius_relative = max(min_distance * 0.25, min_radius_absolute)  # At least minimum size
+            max_radius_relative = min(min_distance * 0.4, plot_extent * 0.10)  # Maximum 10%
+            min_radius_relative = min_radius_absolute  # Use minimum for all
+            
+            # Create the plot
+            fig, ax = plt.subplots(figsize=(16, 14))
+            
+            # Get color mapping
+            author_colors = self._get_author_color_mapping(folder_names)
+            
+            # Plot cluster members first (so they appear behind the centers)
+            for cluster_id in range(n_clusters):
+                cluster_mask = cluster_labels == cluster_id
+                if np.sum(cluster_mask) > 0:
+                    cluster_points_2d = X_2d[cluster_mask]
+                    cluster_df_subset = df[cluster_mask]
+                    
+                    # Plot each member with its actual author color - make them larger and more visible
+                    for idx, (_, row) in enumerate(cluster_df_subset.iterrows()):
+                        author = row['author']
+                        ax.scatter(cluster_points_2d[idx, 0], cluster_points_2d[idx, 1],
+                                  s=80, c=[author_colors[author]], alpha=0.6, 
+                                  edgecolors='white', linewidths=0.5, marker='o')
+            
+            # Plot cluster centers with pie charts showing composition
+            for cluster_id in range(n_clusters):
+                cluster_mask = cluster_labels == cluster_id
+                if np.sum(cluster_mask) > 0:
+                    cluster_df_subset = df[cluster_mask]
+                    
+                    # Count authors in this cluster
+                    author_counts = Counter(cluster_df_subset['author'])
+                    total_count = sum(author_counts.values())
+                    
+                    # Get the representative concept
+                    rep_idx = representative_concepts[cluster_id]
+                    concept = df.loc[rep_idx, 'concept']
+                    
+                    center_x, center_y = centers_2d[cluster_id, 0], centers_2d[cluster_id, 1]
+                    
+                    # Draw pie chart showing author composition
+                    # Use minimum size to ensure visibility, scale slightly with cluster size
+                    size_factor = min(total_count / 20, 1.0)  # Scale from 0 to 1 based on cluster size
+                    pie_radius = min_radius_relative + (base_radius_relative - min_radius_relative) * size_factor
+                    pie_radius = min(pie_radius, max_radius_relative)  # Cap at maximum
+                    
+                    # Check for overlap and adjust center position if needed
+                    adjusted_x, adjusted_y = center_x, center_y
+                    for other_cluster_id in range(n_clusters):
+                        if other_cluster_id != cluster_id:
+                            other_mask = cluster_labels == other_cluster_id
+                            if np.sum(other_mask) > 0:
+                                other_center = centers_2d[other_cluster_id]
+                                other_count = sum(Counter(df[other_mask]['author']).values())
+                                # Calculate other cluster's radius
+                                other_size_factor = min(other_count / 20, 1.0)
+                                other_radius = min_radius_relative + (base_radius_relative - min_radius_relative) * other_size_factor
+                                other_radius = min(other_radius, max_radius_relative)
+                                
+                                # Check distance
+                                dist = np.linalg.norm([center_x - other_center[0], center_y - other_center[1]])
+                                if dist < (pie_radius + other_radius) * 1.15:  # 15% margin
+                                    # Move center slightly away
+                                    direction = np.array([center_x - other_center[0], center_y - other_center[1]])
+                                    if np.linalg.norm(direction) > 0:
+                                        direction = direction / np.linalg.norm(direction)
+                                        move_distance = (pie_radius + other_radius) * 1.15 - dist
+                                        adjusted_x = center_x + direction[0] * move_distance * 0.5
+                                        adjusted_y = center_y + direction[1] * move_distance * 0.5
+                    
+                    center_x, center_y = adjusted_x, adjusted_y
+                    
+                    if len(author_counts) > 1:
+                        # Multiple authors - create pie chart
+                        sizes = [author_counts[author] for author in sorted(author_counts.keys())]
+                        colors_list = [author_colors[author] for author in sorted(author_counts.keys())]
+                        
+                        # Create pie chart using wedges
+                        if sizes and sum(sizes) > 0:
+                            start_angle = 90  # Start at top
+                            for size, color in zip(sizes, colors_list):
+                                angle = 360 * (size / total_count)
+                                # Draw wedge
+                                theta = np.linspace(0, angle, 50)
+                                x_wedge = center_x + pie_radius * np.cos(np.radians(theta + start_angle))
+                                y_wedge = center_y + pie_radius * np.sin(np.radians(theta + start_angle))
+                                ax.fill([center_x] + list(x_wedge) + [center_x], 
+                                       [center_y] + list(y_wedge) + [center_y],
+                                       color=color, alpha=0.6, edgecolor='black', linewidth=1.2)
+                                start_angle += angle
+                    else:
+                        # Single author cluster - draw a solid circle
+                        single_author = list(author_counts.keys())[0]
+                        circle = Circle((center_x, center_y), pie_radius, 
+                                       color=author_colors[single_author], 
+                                       alpha=0.6, edgecolor='black', linewidth=2)
+                        ax.add_patch(circle)
+                    
+                    # Add label for representative concept (shortened, no parentheses text)
+                    # Remove any text in parentheses if present
+                    concept_label = concept.split('(')[0].strip() if '(' in concept else concept
+                    concept_label = concept_label[:20] + ('...' if len(concept_label) > 20 else '')
+                    ax.annotate(concept_label,
+                               (center_x, center_y),
+                               xytext=(8, 8), textcoords='offset points',
+                               fontsize=10, alpha=0.7,  # More transparent
+                               bbox=dict(boxstyle='round,pad=0.5',
+                               facecolor='white', alpha=0.6, edgecolor='black', linewidth=1),  # More transparent
+                               ha='left')
+                    
+                    # Add cluster size annotation (more transparent)
+                    ax.annotate(f"n={total_count}",
+                               (center_x, center_y),
+                               xytext=(8, -15), textcoords='offset points',
+                               fontsize=8, alpha=0.6,  # More transparent
+                               bbox=dict(boxstyle='round,pad=0.3',
+                               facecolor='lightgray', alpha=0.5),  # More transparent
+                               ha='left')
+            
+            # Add legend for authors
+            legend_elements = []
+            for author in folder_names:
+                legend_elements.append(plt.Line2D([0], [0], marker='o', color='w', 
+                                                 markerfacecolor=author_colors[author],
+                                                 markersize=10, label=author, alpha=0.7))
+            
+            ax.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), loc='upper left', title='Authors')
+            ax.set_title("Concept Clusters (Less Crowded View)\nPie charts show author composition, points show individual concepts", 
+                        fontsize=14, pad=20)
+            ax.set_xlabel("PCA Dimension 1", fontsize=12)
+            ax.set_ylabel("PCA Dimension 2", fontsize=12)
+            ax.grid(True, alpha=0.3)
+            plt.tight_layout()
+            
+            alt_viz_path = os.path.join(output_dir, "cross_author_alternative_clustering.png")
+            plt.savefig(alt_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"[CROSS-AUTHOR] Created alternative clustering visualization: {alt_viz_path}")
+            return alt_viz_path
+        except Exception as e:
+            print(f"[CROSS-AUTHOR ERROR] Failed to create alternative visualization: {e}")
+            import traceback
+            traceback.print_exc()
+            return None
+    
+    def _create_varying_radius_clustering_viz(self, df, folder_names, output_dir,
+                                             cluster_labels=None, cluster_centers=None, X_2d=None, centers_2d=None):
+        """Create a visualization with clusters shown as circles with varying radius based on member count
+        
+        Args:
+            df: DataFrame with concepts and embeddings
+            folder_names: List of folder/author names
+            output_dir: Output directory
+            cluster_labels: Pre-computed cluster labels (optional, will compute if None)
+            cluster_centers: Pre-computed cluster centers (optional)
+            X_2d: Pre-computed 2D projection of embeddings (optional)
+            centers_2d: Pre-computed 2D projection of cluster centers (optional)
+        """
+        try:
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Circle
+            import numpy as np
+            from collections import Counter
+            
+            # Use provided clustering or compute new
+            if cluster_labels is None:
+                from sklearn.cluster import KMeans
+                from sklearn.decomposition import PCA
+                X = np.stack(df["embedding"])
+                n_clusters = min(20, len(df) // 3)
+                if n_clusters < 2:
+                    n_clusters = 2
+                kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init=10)
+                cluster_labels = kmeans.fit_predict(X)
+                cluster_centers = kmeans.cluster_centers_
+                pca = PCA(n_components=2, random_state=42)
+                X_2d = pca.fit_transform(X)
+                centers_2d = pca.transform(cluster_centers)
+            
+            n_clusters = len(np.unique(cluster_labels))
+            
+            # Calculate cluster sizes and prepare data
+            cluster_data = []
+            for cluster_id in range(n_clusters):
+                cluster_mask = cluster_labels == cluster_id
+                if np.sum(cluster_mask) > 0:
+                    cluster_df_subset = df[cluster_mask]
+                    author_counts = Counter(cluster_df_subset['author'])
+                    total_count = sum(author_counts.values())
+                    center_x, center_y = centers_2d[cluster_id, 0], centers_2d[cluster_id, 1]
+                    cluster_data.append({
+                        'id': cluster_id,
+                        'center': (center_x, center_y),
+                        'count': total_count,
+                        'author_counts': author_counts,
+                        'points': X_2d[cluster_mask],
+                        'df_subset': cluster_df_subset
+                    })
+            
+            # Calculate minimum distance between cluster centers
+            min_distance = float('inf')
+            for i, cluster_i in enumerate(cluster_data):
+                for j, cluster_j in enumerate(cluster_data):
+                    if i < j:
+                        dist = np.linalg.norm(np.array(cluster_i['center']) - np.array(cluster_j['center']))
+                        if dist < min_distance:
+                            min_distance = dist
+            
+            # Calculate plot extent
+            x_coords = [c['center'][0] for c in cluster_data]
+            y_coords = [c['center'][1] for c in cluster_data]
+            x_range = max(x_coords) - min(x_coords) if x_coords else 1.0
+            y_range = max(y_coords) - min(y_coords) if y_coords else 1.0
+            plot_extent = max(x_range, y_range)
+            
+            # Calculate radius scale based on cluster counts
+            max_count = max([c['count'] for c in cluster_data]) if cluster_data else 1
+            min_count = min([c['count'] for c in cluster_data]) if cluster_data else 1
+            
+            # Set base radius to ensure no overlap
+            # Use 20-40% of minimum distance, scaled by cluster size
+            base_radius = min(min_distance * 0.2, plot_extent * 0.04)
+            max_radius = min(min_distance * 0.4, plot_extent * 0.08)
+            
+            # Create the plot
+            fig, ax = plt.subplots(figsize=(16, 14))
+            
+            # Get color mapping
+            author_colors = self._get_author_color_mapping(folder_names)
+            
+            # Plot cluster members first
+            for cluster_info in cluster_data:
+                for idx, (_, row) in enumerate(cluster_info['df_subset'].iterrows()):
+                    author = row['author']
+                    point = cluster_info['points'][idx]
+                    ax.scatter(point[0], point[1],
+                              s=60, c=[author_colors[author]], alpha=0.5, 
+                              edgecolors='white', linewidths=0.3, marker='o', zorder=1)
+            
+            # Plot clusters as circles with varying radius
+            for cluster_info in cluster_data:
+                center_x, center_y = cluster_info['center']
+                count = cluster_info['count']
+                author_counts = cluster_info['author_counts']
+                
+                # Calculate radius based on cluster size
+                # Scale from base_radius to max_radius based on count
+                if max_count > min_count:
+                    size_factor = (count - min_count) / (max_count - min_count)
+                else:
+                    size_factor = 0.5
+                radius = base_radius + (max_radius - base_radius) * size_factor
+                
+                # Check for overlap with other clusters and adjust if needed
+                for other_cluster in cluster_data:
+                    if other_cluster['id'] != cluster_info['id']:
+                        other_center = other_cluster['center']
+                        other_count = other_cluster['count']
+                        dist = np.linalg.norm(np.array([center_x, center_y]) - np.array(other_center))
+                        
+                        # Calculate other cluster's radius
+                        if max_count > min_count:
+                            other_size_factor = (other_count - min_count) / (max_count - min_count)
+                        else:
+                            other_size_factor = 0.5
+                        other_radius = base_radius + (max_radius - base_radius) * other_size_factor
+                        
+                        # If circles would overlap, reduce radius
+                        if dist < (radius + other_radius) * 1.1:  # 10% margin
+                            max_allowed_radius = dist / 2.2  # Leave 10% gap
+                            radius = min(radius, max_allowed_radius)
+                
+                # Determine circle color - use dominant author or mixed color
+                if len(author_counts) == 1:
+                    # Single author - use that color
+                    dominant_author = list(author_counts.keys())[0]
+                    circle_color = author_colors[dominant_author]
+                else:
+                    # Multiple authors - use a weighted average color
+                    total = sum(author_counts.values())
+                    color_sum = np.array([0.0, 0.0, 0.0, 1.0])  # RGBA
+                    for author, count in author_counts.items():
+                        # Convert color to RGBA
+                        if isinstance(author_colors[author], str):
+                            from matplotlib.colors import to_rgba
+                            color_rgba = np.array(to_rgba(author_colors[author]))
+                        else:
+                            # Already a tuple/array
+                            color_rgba = np.array(author_colors[author])
+                            if len(color_rgba) == 3:
+                                color_rgba = np.append(color_rgba, 1.0)  # Add alpha
+                        color_sum[:3] += color_rgba[:3] * (count / total)
+                    circle_color = tuple(color_sum)
+                
+                # Draw circle
+                circle = Circle((center_x, center_y), radius,
+                               color=circle_color, alpha=0.6,
+                               edgecolor='black', linewidth=2, zorder=2)
+                ax.add_patch(circle)
+                
+                # Add count label
+                ax.annotate(f"n={count}",
+                           (center_x, center_y),
+                           ha='center', va='center',
+                           fontsize=9, fontweight='bold',
+                           color='white' if np.mean(circle_color[:3]) < 0.5 else 'black',
+                           zorder=3)
+            
+            # Add legend for authors
+            legend_elements = []
+            for author in folder_names:
+                legend_elements.append(plt.Line2D([0], [0], marker='o', color='w', 
+                                                 markerfacecolor=author_colors[author],
+                                                 markersize=10, label=author, alpha=0.7))
+            
+            ax.legend(handles=legend_elements, bbox_to_anchor=(1.05, 1), loc='upper left', title='Authors')
+            ax.set_title("Concept Clusters with Varying Radius\nCircle size represents cluster member count", 
+                        fontsize=14, pad=20)
+            ax.set_xlabel("PCA Dimension 1", fontsize=12)
+            ax.set_ylabel("PCA Dimension 2", fontsize=12)
+            ax.grid(True, alpha=0.3)
+            ax.set_aspect('equal', adjustable='box')
+            plt.tight_layout()
+            
+            radius_viz_path = os.path.join(output_dir, "cross_author_varying_radius_clustering.png")
+            plt.savefig(radius_viz_path, dpi=300, bbox_inches='tight')
+            plt.close()
+            
+            print(f"[CROSS-AUTHOR] Created varying radius clustering visualization: {radius_viz_path}")
+            return radius_viz_path
+        except Exception as e:
+            print(f"[CROSS-AUTHOR ERROR] Failed to create varying radius visualization: {e}")
+            import traceback
+            traceback.print_exc()
             return None
 
     def _create_semantic_network(self, df, folder_names, output_dir):
@@ -1279,8 +1834,57 @@ class UpSetGUI:
         
         self.semantic_viz_var = tk.BooleanVar(value=False)
         self.semantic_viz_cb = ttk.Checkbutton(self.consistency_sub_frame, text="D. Semantic Similarity Across Authors / Folders", 
-                                             variable=self.semantic_viz_var, state='disabled')
+                                             variable=self.semantic_viz_var, state='disabled',
+                                             command=self.on_semantic_viz_toggle)
         self.semantic_viz_cb.grid(row=0, column=3, sticky=tk.W, padx=(10, 0), pady=2)
+        
+        # t-SNE Configuration Frame (shown when D is checked)
+        self.tsne_config_frame = ttk.LabelFrame(consistency_frame, text="t-SNE Configuration (Part D)")
+        self.tsne_config_frame.grid(row=2, column=0, columnspan=4, sticky=(tk.W, tk.E), padx=20, pady=5)
+        
+        # Font size
+        ttk.Label(self.tsne_config_frame, text="Font Size:").grid(row=0, column=0, sticky=tk.W, padx=5, pady=2)
+        self.tsne_font_size_var = tk.IntVar(value=5)
+        ttk.Spinbox(self.tsne_config_frame, from_=3, to=20, textvariable=self.tsne_font_size_var, width=5).grid(row=0, column=1, sticky=tk.W, padx=5, pady=2)
+        
+        # Dimensions
+        ttk.Label(self.tsne_config_frame, text="Dimensions:").grid(row=0, column=2, sticky=tk.W, padx=5, pady=2)
+        self.tsne_n_components_var = tk.IntVar(value=2)
+        ttk.Spinbox(self.tsne_config_frame, from_=2, to=3, textvariable=self.tsne_n_components_var, width=5).grid(row=0, column=3, sticky=tk.W, padx=5, pady=2)
+        
+        # Color palette
+        ttk.Label(self.tsne_config_frame, text="Color Palette:").grid(row=0, column=4, sticky=tk.W, padx=5, pady=2)
+        self.tsne_color_palette_var = tk.StringVar(value="Set3")
+        color_palettes = ['Set3', 'Set1', 'Set2', 'tab10', 'tab20', 'viridis', 'plasma', 'inferno', 'magma', 'coolwarm']
+        ttk.Combobox(self.tsne_config_frame, textvariable=self.tsne_color_palette_var, values=color_palettes, 
+                    state="readonly", width=12).grid(row=0, column=5, sticky=tk.W, padx=5, pady=2)
+        
+        # Proximity threshold
+        ttk.Label(self.tsne_config_frame, text="Proximity Grouping:").grid(row=1, column=0, sticky=tk.W, padx=5, pady=2)
+        self.tsne_proximity_var = tk.DoubleVar(value=0.0)
+        proximity_spinbox = ttk.Spinbox(self.tsne_config_frame, from_=0.0, to=10.0, increment=0.5, 
+                                        textvariable=self.tsne_proximity_var, width=5)
+        proximity_spinbox.grid(row=1, column=1, sticky=tk.W, padx=5, pady=2)
+        ttk.Label(self.tsne_config_frame, text="(0 = disabled)").grid(row=1, column=2, sticky=tk.W, padx=2, pady=2)
+        
+        # Show labels
+        self.tsne_show_labels_var = tk.BooleanVar(value=True)
+        self.tsne_show_labels_cb = ttk.Checkbutton(self.tsne_config_frame, text="Show Concept Labels", 
+                       variable=self.tsne_show_labels_var)
+        self.tsne_show_labels_cb.grid(row=1, column=3, sticky=tk.W, padx=5, pady=2)
+        
+        # Store references to widgets that need to be enabled/disabled
+        self.tsne_config_widgets = []
+        for widget in self.tsne_config_frame.winfo_children():
+            if isinstance(widget, (ttk.Spinbox, ttk.Combobox, ttk.Checkbutton)):
+                self.tsne_config_widgets.append(widget)
+        
+        # Initially disable all config widgets
+        for widget in self.tsne_config_widgets:
+            try:
+                widget.config(state='disabled')
+            except:
+                pass
         
         self.aggregate_status_label = ttk.Label(aggregate_frame, text="", foreground="blue")
         self.aggregate_status_label.grid(row=3, column=0, columnspan=4, sticky=(tk.W, tk.E), padx=(0, 5), pady=2)
@@ -7452,7 +8056,29 @@ class UpSetGUI:
                     cross_analyzer = RAGConsistencyAnalyzer(model_name)
                     
                     # Generate cross-author semantic similarity analysis
-                    cross_author_results = cross_analyzer.generate_cross_author_analysis(parent_dir, "all_folders", valid_folders, folder_concepts)
+                    # Get t-SNE configuration from GUI
+                    tsne_font_size = getattr(self, 'tsne_font_size_var', None)
+                    tsne_font_size = tsne_font_size.get() if tsne_font_size else 5
+                    tsne_n_components = getattr(self, 'tsne_n_components_var', None)
+                    tsne_n_components = tsne_n_components.get() if tsne_n_components else 2
+                    tsne_color_palette = getattr(self, 'tsne_color_palette_var', None)
+                    tsne_color_palette = tsne_color_palette.get() if tsne_color_palette else 'Set3'
+                    tsne_proximity = getattr(self, 'tsne_proximity_var', None)
+                    tsne_proximity = tsne_proximity.get() if tsne_proximity else None
+                    if tsne_proximity is not None and tsne_proximity <= 0:
+                        tsne_proximity = None
+                    tsne_show_labels = getattr(self, 'tsne_show_labels_var', None)
+                    tsne_show_labels = tsne_show_labels.get() if tsne_show_labels else True
+                    
+                    # Generate cross-author semantic similarity analysis with t-SNE parameters
+                    cross_author_results = cross_analyzer.generate_cross_author_analysis(
+                        parent_dir, "all_folders", valid_folders, folder_concepts,
+                        tsne_font_size=tsne_font_size,
+                        tsne_n_components=tsne_n_components,
+                        tsne_color_palette=tsne_color_palette,
+                        tsne_proximity_threshold=tsne_proximity,
+                        tsne_show_labels=tsne_show_labels
+                    )
                     
                     # Store visualization paths for later inclusion in DOC
                     if not hasattr(self, 'cross_author_visualizations'):
@@ -7826,6 +8452,57 @@ class UpSetGUI:
                     "It generates heatmaps, 2D embeddings, and network graphs to show conceptual relationships across authors, "
                     "helping identify shared conceptual spaces and author-specific concept patterns."
                 )
+                
+                # Add semantic similarity matrix table if available
+                if (hasattr(self, 'cross_author_visualizations') and 
+                    self.cross_author_visualizations and 
+                    'all_folders' in self.cross_author_visualizations):
+                    viz_data = self.cross_author_visualizations['all_folders']
+                    if viz_data and isinstance(viz_data, dict) and 'between_author_sim' in viz_data:
+                        between_author_sim = viz_data['between_author_sim']
+                        folder_names = list(valid_folders)
+                        folder_names = [os.path.basename(f) for f in folder_names]
+                        
+                        # Create similarity matrix table
+                        doc.add_heading("Semantic Similarity Matrix", level=4)
+                        doc.add_paragraph(
+                            "This table shows the semantic similarity values between all author/folder pairs. "
+                            "Values range from 0 (no similarity) to 1 (identical conceptual space)."
+                        )
+                        
+                        # Create table with similarity values
+                        sim_table = doc.add_table(rows=len(folder_names) + 1, cols=len(folder_names) + 1)
+                        sim_table.style = 'Table Grid'
+                        
+                        # Set column widths
+                        for i, col in enumerate(sim_table.columns):
+                            if i == 0:
+                                col.width = Inches(1.5)  # Author name column
+                            else:
+                                col.width = Inches(1.0)  # Similarity value columns
+                        
+                        # Header row
+                        header_cells = sim_table.rows[0].cells
+                        header_cells[0].text = "Author/Folder"
+                        for i, folder in enumerate(folder_names):
+                            header_cells[i + 1].text = folder
+                        
+                        # Make header bold
+                        for cell in sim_table.rows[0].cells:
+                            for para in cell.paragraphs:
+                                for run in para.runs:
+                                    run.bold = True
+                        
+                        # Data rows
+                        for i, folder1 in enumerate(folder_names):
+                            row = sim_table.rows[i + 1]
+                            row.cells[0].text = folder1
+                            for j, folder2 in enumerate(folder_names):
+                                if i < len(between_author_sim) and j < len(between_author_sim[i]):
+                                    sim_value = between_author_sim[i][j]
+                                    row.cells[j + 1].text = f"{sim_value:.3f}"
+                                else:
+                                    row.cells[j + 1].text = "N/A"
             
             
         except Exception as e:
@@ -7844,16 +8521,38 @@ class UpSetGUI:
             
             # Check for cross-author visualizations (checkbox D)
             if hasattr(self, 'cross_author_visualizations') and self.cross_author_visualizations:
-                has_visualizations = True
-                self._add_cross_author_visualizations_to_doc(doc)
+                # Check if there's actual data
+                for folder_name, viz_data in self.cross_author_visualizations.items():
+                    if viz_data and isinstance(viz_data, dict):
+                        has_visualizations = True
+                        break
+                
+                if has_visualizations:
+                    self._add_cross_author_visualizations_to_doc(doc)
+                else:
+                    print("[SEMANTIC VIZ] Cross-author visualizations dictionary exists but contains no valid data")
+                    doc.add_paragraph(
+                        "Note: Cross-author visualizations were requested but could not be generated. "
+                        "This may be due to insufficient data or an error during analysis."
+                    )
             
             # Check for individual folder visualizations (if any)
             if hasattr(self, 'semantic_visualizations') and self.semantic_visualizations:
-                has_visualizations = True
-                self._add_individual_folder_visualizations_to_doc(doc)
+                has_individual = False
+                for folder_name, viz_paths in self.semantic_visualizations.items():
+                    if viz_paths and (viz_paths.get('heatmap') or viz_paths.get('tsne')):
+                        has_individual = True
+                        break
+                
+                if has_individual:
+                    has_visualizations = True
+                    self._add_individual_folder_visualizations_to_doc(doc)
             
             if not has_visualizations:
                 print("[SEMANTIC VIZ] No visualizations to add to document")
+                doc.add_paragraph(
+                    "Note: No visualizations were generated. This may be due to insufficient data or an error during analysis."
+                )
                 return
             
         except Exception as e:
@@ -7919,6 +8618,36 @@ class UpSetGUI:
                     ('tsne', 't-SNE'),
                     ('network', 'network')
                 ]
+                
+                # Add alternative visualization if available
+                if viz_data.get('alternative_viz') and os.path.exists(viz_data['alternative_viz']):
+                    # Add after the table
+                    doc.add_heading("Alternative Clustering Visualization (Less Crowded)", level=3)
+                    doc.add_paragraph(
+                        "This visualization shows concept clusters using cluster centers with pie charts showing author composition. "
+                        "Pie charts show the proportion of each author in the cluster, and individual concepts are shown as colored points."
+                    )
+                    try:
+                        doc.add_picture(viz_data['alternative_viz'], width=Inches(6))
+                        last_paragraph = doc.paragraphs[-1]
+                        last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    except Exception as img_error:
+                        doc.add_paragraph(f"[Error loading alternative visualization: {img_error}]")
+                
+                # Add varying radius visualization if available
+                if viz_data.get('varying_radius_viz') and os.path.exists(viz_data['varying_radius_viz']):
+                    doc.add_heading("Varying Radius Clustering Visualization", level=3)
+                    doc.add_paragraph(
+                        "This visualization shows concept clusters as circles with varying radius based on the number of cluster members. "
+                        "Larger circles represent clusters with more concepts. Circle colors represent the dominant author or a weighted "
+                        "average of author colors for mixed clusters. Circles are automatically sized to prevent overlap."
+                    )
+                    try:
+                        doc.add_picture(viz_data['varying_radius_viz'], width=Inches(6))
+                        last_paragraph = doc.paragraphs[-1]
+                        last_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    except Exception as img_error:
+                        doc.add_paragraph(f"[Error loading varying radius visualization: {img_error}]")
                 
                 for i, (img_key, img_name) in enumerate(images):
                     cell = table.cell(1, i)
@@ -8387,13 +9116,170 @@ class UpSetGUI:
     def _normalize_text_for_search(self, text):
         """Normalize text by removing all extra whitespace, newlines, and normalizing spaces"""
         import re
+        
+        # Remove XML-like tags (e.g., "<the companions>" -> "the companions")
+        text = re.sub(r'<([^>]+)>', r'\1', text)
+        
+        # Remove section markers with brackets (e.g., "[c6]", "[c1]")
+        text = re.sub(r'\[c\d+\]', '', text, flags=re.IGNORECASE)
+        
+        # Remove stray numbers in brackets (e.g., "[13]", "[5]")
+        text = re.sub(r'\[\d+\]', '', text)
+        
+        # Remove section markers and special characters (e.g., "§4", "§6", "§3")
+        text = re.sub(r'§\d+[a-z]?', '', text)
+        
+        # Remove standalone forward slashes with spaces (e.g., " / " -> " ")
+        text = re.sub(r'\s*/\s*', ' ', text)
+        
+        # Remove number+letter patterns (e.g., "1095b", "1096a", "1095a", "251095a")
+        text = re.sub(r'\b\d{3,}[a-z]\b', '', text)
+        
+        # Remove page numbers and formatting artifacts
+        # Patterns like: "10 15 20 25 30 351157b" (sequences of numbers)
+        # Also handle "5 10 15 20 25 30 35" (sequences starting with single digits)
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+[a-z]?\b', '', text)
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\s+\d+[a-z]?\b', '', text)
+        # Shorter sequences: "10 15 20 25 30" or "5 10 15 20 25 30"
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\s+\d+\b', '', text)
+        # Even shorter: "10 15 20" or "5 10 15 20" or "5 10 15 20 25"
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\s+\d+\b', '', text)
+        # Very short: "5 10 15" or "10 15"
+        text = re.sub(r'\b\d+\s+\d+\s+\d+\b', '', text)
+        text = re.sub(r'\b\d+\s+\d+\b', '', text)
+        
+        # File names and paths: "DSHPC081-2_Body_p001-203.indd" or "DSHPC081-2_Body_p001-203. indd"
+        # Also handle patterns like "5 DSHPC081-2_Body_p001-203.indd 16922/06/19 3:15 PM 170"
+        # Remove number + filename + number + date pattern
+        text = re.sub(r'\b\d+\s+[A-Z0-9_-]+\.\s*(indd|pdf|txt|docx?)\s+\d+[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\s*\d{2}\s*(AM|PM)?\s+\d+\b', '', text, flags=re.IGNORECASE)
+        # Remove standalone file names
+        text = re.sub(r'\b[A-Z0-9_-]+\.\s*(indd|pdf|txt|docx?)\b', '', text, flags=re.IGNORECASE)
+        # Also handle without the dot before extension
+        text = re.sub(r'\b[A-Z0-9_-]+\s+(indd|pdf|txt|docx?)\b', '', text, flags=re.IGNORECASE)
+        
+        # Dates in various formats: "22/06/19 3:15 PM" or "22/06/19 3: 14 PM" (with space in time)
+        # Also handle patterns like "16922/06/19" (long number before date)
+        text = re.sub(r'\b\d{3,}[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\s*\d{2}\s*(AM|PM)?\b', '', text, flags=re.IGNORECASE)
+        text = re.sub(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\s+\d{1,2}:\s*\d{2}\s*(AM|PM)?\b', '', text, flags=re.IGNORECASE)
+        # Also handle dates without time: "22/06/19" or "16922/06/19"
+        text = re.sub(r'\b\d{3,}[/-]\d{1,2}[/-]\d{2,4}\b', '', text)
+        text = re.sub(r'\b\d{1,2}[/-]\d{1,2}[/-]\d{2,4}\b', '', text)
+        
+        # Remove time patterns followed by numbers/letters: ":14 PM 711125b" or ":14 PM 351127a5"
+        text = re.sub(r':\s*\d{1,2}\s*(AM|PM)\s+\d+[a-z]?\d*[a-z]?\b', '', text, flags=re.IGNORECASE)
+        # Remove numbers/letters followed by time patterns: "711125b :14 PM" or "351127a5 :14 PM"
+        text = re.sub(r'\b\d+[a-z]?\d*[a-z]?\s+:\s*\d{1,2}\s*(AM|PM)\b', '', text, flags=re.IGNORECASE)
+        # Remove standalone time patterns with spaces: ":14 PM" (when not part of a date)
+        text = re.sub(r':\s*\d{1,2}\s*(AM|PM)\b', '', text, flags=re.IGNORECASE)
+        
+        # Book/chapter markers: "147Book VIII, Chapter 5" or "4Book I, Chapter 4"
+        text = re.sub(r'\b\d+Book\s+[IVXLC]+\s*,\s*Chapter\s+\d+\b', '', text, flags=re.IGNORECASE)
+        # Also handle without "Chapter": "4Book I"
+        text = re.sub(r'\b\d+Book\s+[IVXLC]+\b', '', text, flags=re.IGNORECASE)
+        
+        # Standalone long number sequences (likely page numbers): "351157b", "41157", "251095a"
+        text = re.sub(r'\b\d{5,}[a-z]?\b', '', text)
+        
+        # Remove patterns like "711125b" (6+ digits + letter) or "351127a5" (6+ digits + letter + digit)
+        text = re.sub(r'\b\d{6,}[a-z]\d*[a-z]?\b', '', text)
+        
+        # Remove standalone single/double/triple digit numbers that are likely page numbers
+        # Pattern: space, 1-3 digits, space (but not part of words or dates)
+        text = re.sub(r'\s+\d{1,3}\s+', ' ', text)
+        
+        # Remove numbers immediately after punctuation: "species.10" -> "species."
+        text = re.sub(r'([.,;:!?])\d{1,3}(?=\s|$|[A-Za-z])', r'\1', text)
+        
+        # Remove numbers at start of sentences/paragraphs: "10 Base people" -> "Base people"
+        text = re.sub(r'^\s*\d+\s+', '', text, flags=re.MULTILINE)
+        
+        # Remove numbers at end of lines (likely page numbers)
+        text = re.sub(r'\s+\d+\s*$', '', text, flags=re.MULTILINE)
+        
+        # Remove numbers attached directly to words (e.g., "nothing5" -> "nothing", "word10" -> "word")
+        # Pattern: word ending in letter + 1-3 digits + (optional hyphen + word or end)
+        text = re.sub(r'([a-zA-Z])\d{1,3}(?=-|$|\s)', r'\1', text)
+        
+        # Remove very short words (1-2 letters) after hyphens that are likely formatting artifacts
+        # Pattern: word-hyphen-very-short-word at end or before punctuation
+        # This handles cases like "nothing5-if" -> "nothing-if" -> "nothing"
+        text = re.sub(r'([a-zA-Z]+)-\s*([a-zA-Z]{1,2})(?=[\s.,;:!?]|$)', r'\1', text)
+        
+        # Remove standalone numbers before words (even if after punctuation): "species.10 Base" -> "species. Base"
+        text = re.sub(r'([.,;:!?])\s*\d{1,3}\s+([A-Za-z])', r'\1 \2', text)
+        
+        # Replace ligatures (common in PDFs): ﬁ → fi, ﬂ → fl, etc.
+        ligature_map = {
+            'ﬁ': 'fi', 'ﬂ': 'fl', 'ﬀ': 'ff', 'ﬃ': 'ffi', 'ﬄ': 'ffl',
+            'æ': 'ae', 'œ': 'oe', 'Æ': 'AE', 'Œ': 'OE',
+        }
+        for ligature, replacement in ligature_map.items():
+            text = text.replace(ligature, replacement)
+        
+        # Replace em dashes (—) and en dashes (–) with hyphens for consistency
+        text = text.replace('—', '-').replace('–', '-')
+        
         # First, handle hyphenation at line breaks (e.g., "properly-\nspeaking" -> "properly speaking")
         # Remove hyphens that are followed by newline/whitespace and a lowercase letter
         text = re.sub(r'-\s+([a-z])', r'\1', text)
         # Also handle hyphens at end of line followed by newline
         text = re.sub(r'-\s*\n\s*([a-z])', r'\1', text)
+        
         # Remove ALL newlines, carriage returns, and other line breaks - make everything continuous
         text = re.sub(r'[\r\n]+', ' ', text)
+        
+        # Handle hyphens between words:
+        # Strategy: Process all word-hyphen-word patterns
+        def process_hyphenated_words(match):
+            first_part = match.group(1).lower()
+            second_part = match.group(2).lower()
+            first_part_orig = match.group(1)  # Preserve original case
+            second_part_orig = match.group(2)  # Preserve original case
+            
+            # List of common short words that should NEVER be joined with the following word
+            # These are typically prepositions, articles, conjunctions, etc.
+            common_short_words = {'for', 'the', 'and', 'but', 'or', 'nor', 'so', 'yet', 'a', 'an', 
+                                'in', 'on', 'at', 'to', 'of', 'is', 'it', 'as', 'be', 'by', 'do', 
+                                'if', 'my', 'no', 'up', 'we', 'he', 'she', 'me', 'us', 'him', 'her',
+                                'his', 'her', 'its', 'our', 'your', 'their', 'this', 'that', 'these', 'those',
+                                'with', 'from', 'into', 'onto', 'upon', 'over', 'under', 'above', 'below',
+                                'between', 'among', 'through', 'during', 'before', 'after', 'while',
+                                'when', 'where', 'why', 'how', 'what', 'who', 'which', 'whom', 'whose'}
+            
+            # If first part is a common short word, always keep separate
+            if first_part in common_short_words:
+                return first_part_orig + ' ' + second_part_orig
+            
+            # If second part is a common short word, always keep separate
+            if second_part in common_short_words:
+                return first_part_orig + ' ' + second_part_orig
+            
+            # Check if this looks like a split word (e.g., "intermedi-ate" -> "intermediate")
+            # Criteria: 
+            # - First part is not a common word (already checked above)
+            # - Second part starts with vowel (common in word splits like "intermedi-ate", "gen-eral")
+            # - Both parts are relatively short
+            # - Combined length is reasonable
+            second_starts_vowel = second_part and second_part[0] in 'aeiou'
+            
+            # Join if it looks like a split word (both parts short, reasonable combined length)
+            # The second part starting with a vowel is a strong indicator of a word split
+            if (second_starts_vowel and 
+                len(first_part) <= 10 and len(second_part) <= 10 and 
+                len(first_part) + len(second_part) <= 20):
+                # Join the words (preserve case of first letter)
+                combined = first_part_orig + second_part_orig
+                return combined
+            
+            # Otherwise, keep as separate words with space
+            return first_part_orig + ' ' + second_part_orig
+        
+        # Match word-hyphen-word patterns (with optional spaces around hyphen)
+        text = re.sub(r'\b([a-zA-Z]+)\s*-\s*([a-zA-Z]+)\b', process_hyphenated_words, text)
+        
+        # Normalize any remaining hyphens with spaces around them (standalone hyphens)
+        text = re.sub(r'\s*-\s*', ' ', text)
+        
         # Replace all remaining whitespace (spaces, tabs) with single space
         normalized = re.sub(r'\s+', ' ', text)
         # Strip leading/trailing whitespace
@@ -9091,6 +9977,18 @@ class UpSetGUI:
         # (requires storing references to the checkboxes)
         # self.agg_group_by_subletters_cb.config(state=state)
         # self.agg_group_by_words_cb.config(state=state)
+
+    def on_semantic_viz_toggle(self):
+        """Enable/disable t-SNE configuration when Part D is toggled"""
+        state = 'normal' if self.semantic_viz_var.get() else 'disabled'
+        # Enable/disable only the interactive widgets (Spinbox, Combobox, Checkbutton)
+        # Labels don't need to be disabled
+        for widget in getattr(self, 'tsne_config_widgets', []):
+            try:
+                widget.config(state=state)
+            except:
+                # Some widgets might not support state, skip them
+                pass
 
     def on_consistency_toggle(self):
         """Enable/disable consistency analysis sub-checkboxes"""
