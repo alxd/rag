@@ -50,3 +50,6 @@ mistralai==1.5.0
 
 matplotlib>=3.0.0
 networkx>=2.0
+
+upsetplot
+seaborn
