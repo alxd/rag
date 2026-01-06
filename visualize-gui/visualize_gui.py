@@ -845,7 +845,9 @@ class RAGConsistencyAnalyzer:
             
             # For each cluster, find the most representative concept (closest to center)
             representative_concepts = []
-            X_full = np.stack(df["embedding"])  # Need original embeddings for distance calculation
+            # Need original embeddings for distance calculation
+            X_full = np.stack(df["embedding"])
+            
             for cluster_id in range(n_clusters):
                 cluster_mask = cluster_labels == cluster_id
                 if np.sum(cluster_mask) > 0:
@@ -897,6 +899,9 @@ class RAGConsistencyAnalyzer:
                         ax.scatter(cluster_points_2d[idx, 0], cluster_points_2d[idx, 1],
                                   s=80, c=[author_colors[author]], alpha=0.6, 
                                   edgecolors='white', linewidths=0.5, marker='o')
+                    
+                    # Draw dotted lines from cluster center to members (after center is drawn)
+                    # This will be done after the pie chart is drawn
             
             # Plot cluster centers with pie charts showing composition
             for cluster_id in range(n_clusters):
@@ -920,8 +925,10 @@ class RAGConsistencyAnalyzer:
                     pie_radius = min_radius_relative + (base_radius_relative - min_radius_relative) * size_factor
                     pie_radius = min(pie_radius, max_radius_relative)  # Cap at maximum
                     
-                    # Check for overlap and adjust center position if needed
+                    # Check for overlap and adjust center position if needed (conservative approach)
                     adjusted_x, adjusted_y = center_x, center_y
+                    max_adjustment = pie_radius * 0.3  # Don't move more than 30% of radius
+                    
                     for other_cluster_id in range(n_clusters):
                         if other_cluster_id != cluster_id:
                             other_mask = cluster_labels == other_cluster_id
@@ -934,15 +941,17 @@ class RAGConsistencyAnalyzer:
                                 other_radius = min(other_radius, max_radius_relative)
                                 
                                 # Check distance
-                                dist = np.linalg.norm([center_x - other_center[0], center_y - other_center[1]])
-                                if dist < (pie_radius + other_radius) * 1.15:  # 15% margin
-                                    # Move center slightly away
-                                    direction = np.array([center_x - other_center[0], center_y - other_center[1]])
+                                dist = np.linalg.norm([adjusted_x - other_center[0], adjusted_y - other_center[1]])
+                                min_required_dist = (pie_radius + other_radius) * 1.1  # 10% margin
+                                
+                                if dist < min_required_dist:
+                                    # Move center slightly away (conservative)
+                                    direction = np.array([adjusted_x - other_center[0], adjusted_y - other_center[1]])
                                     if np.linalg.norm(direction) > 0:
                                         direction = direction / np.linalg.norm(direction)
-                                        move_distance = (pie_radius + other_radius) * 1.15 - dist
-                                        adjusted_x = center_x + direction[0] * move_distance * 0.5
-                                        adjusted_y = center_y + direction[1] * move_distance * 0.5
+                                        move_distance = min((min_required_dist - dist) * 0.3, max_adjustment)
+                                        adjusted_x = adjusted_x + direction[0] * move_distance
+                                        adjusted_y = adjusted_y + direction[1] * move_distance
                     
                     center_x, center_y = adjusted_x, adjusted_y
                     
@@ -992,6 +1001,28 @@ class RAGConsistencyAnalyzer:
                                bbox=dict(boxstyle='round,pad=0.3',
                                facecolor='lightgray', alpha=0.5),  # More transparent
                                ha='left')
+                    
+                    # Draw dotted lines from pie chart center to cluster members
+                    cluster_points_2d = X_2d[cluster_mask]
+                    for point in cluster_points_2d:
+                        ax.plot([center_x, point[0]], [center_y, point[1]],
+                               'k--', alpha=0.2, linewidth=0.8, zorder=0)  # Dotted lines, very transparent
+                    
+                    # Draw a light shaded area (convex hull) around cluster members
+                    if len(cluster_points_2d) > 2:
+                        from scipy.spatial import ConvexHull
+                        try:
+                            hull = ConvexHull(cluster_points_2d)
+                            hull_points = cluster_points_2d[hull.vertices]
+                            # Add center point to create a more connected area
+                            hull_with_center = np.vstack([cluster_points_2d[hull.vertices], [center_x, center_y]])
+                            hull_extended = ConvexHull(hull_with_center)
+                            ax.fill(hull_with_center[hull_extended.vertices, 0],
+                                   hull_with_center[hull_extended.vertices, 1],
+                                   alpha=0.1, color='gray', edgecolor='none', zorder=0)
+                        except:
+                            # If convex hull fails, just skip it
+                            pass
             
             # Add legend for authors
             legend_elements = []
@@ -1105,6 +1136,22 @@ class RAGConsistencyAnalyzer:
             # Get color mapping
             author_colors = self._get_author_color_mapping(folder_names)
             
+            # Find representative concepts for each cluster (for labels)
+            X_full = np.stack(df["embedding"])
+            representative_concepts = {}
+            for cluster_info in cluster_data:
+                cluster_id = cluster_info['id']
+                cluster_mask = cluster_labels == cluster_id
+                if np.sum(cluster_mask) > 0:
+                    cluster_points = X_full[cluster_mask]
+                    cluster_center = cluster_centers[cluster_id]
+                    # Find closest point to center
+                    distances = np.linalg.norm(cluster_points - cluster_center, axis=1)
+                    closest_idx = np.argmin(distances)
+                    cluster_df_indices = df.index[cluster_mask]
+                    representative_idx = cluster_df_indices[closest_idx]
+                    representative_concepts[cluster_id] = df.loc[representative_idx, 'concept']
+            
             # Plot cluster members first
             for cluster_info in cluster_data:
                 for idx, (_, row) in enumerate(cluster_info['df_subset'].iterrows()):
@@ -1182,6 +1229,41 @@ class RAGConsistencyAnalyzer:
                            fontsize=9, fontweight='bold',
                            color='white' if np.mean(circle_color[:3]) < 0.5 else 'black',
                            zorder=3)
+                
+                # Add representative concept label (similar to Alternative Clustering)
+                if cluster_info['id'] in representative_concepts:
+                    concept = representative_concepts[cluster_info['id']]
+                    # Remove any text in parentheses if present
+                    concept_label = concept.split('(')[0].strip() if '(' in concept else concept
+                    concept_label = concept_label[:20] + ('...' if len(concept_label) > 20 else '')
+                    ax.annotate(concept_label,
+                               (center_x, center_y),
+                               xytext=(8, -25), textcoords='offset points',
+                               fontsize=9, alpha=0.7,
+                               bbox=dict(boxstyle='round,pad=0.4',
+                               facecolor='white', alpha=0.6, edgecolor='black', linewidth=1),
+                               ha='left', zorder=4)
+                
+                # Draw dotted lines from circle center to cluster members
+                for point in cluster_info['points']:
+                    ax.plot([center_x, point[0]], [center_y, point[1]],
+                           'k--', alpha=0.2, linewidth=0.8, zorder=0)  # Dotted lines, very transparent
+                
+                # Draw a light shaded area (convex hull) around cluster members
+                if len(cluster_info['points']) > 2:
+                    from scipy.spatial import ConvexHull
+                    try:
+                        hull = ConvexHull(cluster_info['points'])
+                        hull_points = cluster_info['points'][hull.vertices]
+                        # Add center point to create a more connected area
+                        hull_with_center = np.vstack([cluster_info['points'][hull.vertices], [center_x, center_y]])
+                        hull_extended = ConvexHull(hull_with_center)
+                        ax.fill(hull_with_center[hull_extended.vertices, 0],
+                               hull_with_center[hull_extended.vertices, 1],
+                               alpha=0.1, color='gray', edgecolor='none', zorder=0)
+                    except:
+                        # If convex hull fails, just skip it
+                        pass
             
             # Add legend for authors
             legend_elements = []
