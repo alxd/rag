@@ -515,23 +515,37 @@ class RAGConsistencyAnalyzer:
             heatmap_path = self._create_between_author_heatmap(between_author_sim, folder_names, output_dir)
             print(f"[CROSS-AUTHOR] Heatmap result: {heatmap_path}")
             
-            # 2. Generate 2D Embedding Map (t-SNE)
+            # 2. Generate 2D Embedding Map (t-SNE) and get coordinates for reuse
             print(f"[CROSS-AUTHOR] Generating t-SNE plot...")
-            # Use the parameters passed to this function
-            tsne_path = self._create_cross_author_tsne(df, folder_names, output_dir,
-                                                       font_size=tsne_font_size,
-                                                       n_components=tsne_n_components,
-                                                       color_palette=tsne_color_palette,
-                                                       proximity_threshold=tsne_proximity_threshold,
-                                                       show_labels=tsne_show_labels)
+            import numpy as np
+            from sklearn.manifold import TSNE
+            from sklearn.cluster import KMeans
+            
+            # Compute t-SNE coordinates once for all visualizations
+            X = np.stack(df["embedding"])
+            n_components_tsne = max(2, min(3, int(tsne_n_components)))  # Ensure 2 or 3
+            tsne = TSNE(n_components=n_components_tsne, perplexity=min(20, len(df)-1), random_state=42)
+            X_2d_tsne = tsne.fit_transform(X)
+            
+            # Create t-SNE visualization using these coordinates
+            tsne_result = self._create_cross_author_tsne(df, folder_names, output_dir,
+                                                         font_size=tsne_font_size,
+                                                         n_components=tsne_n_components,
+                                                         color_palette=tsne_color_palette,
+                                                         proximity_threshold=tsne_proximity_threshold,
+                                                         show_labels=tsne_show_labels,
+                                                         X_2d_precomputed=X_2d_tsne)
+            if isinstance(tsne_result, tuple):
+                tsne_path, _ = tsne_result  # X_2d_tsne already computed above
+            else:
+                tsne_path = tsne_result
             print(f"[CROSS-AUTHOR] t-SNE result: {tsne_path}")
             
-            # Compute clustering once and share between both visualizations to ensure consistency
-            from sklearn.cluster import KMeans
-            from sklearn.decomposition import PCA
-            import numpy as np
+            # Use t-SNE coordinates for all visualizations
+            X_2d = X_2d_tsne  # For consistency with existing variable names
             
-            X = np.stack(df["embedding"])
+            # Compute clustering once and share between both visualizations to ensure consistency
+            # Use original embeddings for clustering (not t-SNE coordinates)
             n_clusters = min(20, len(df) // 3)
             if n_clusters < 2:
                 n_clusters = 2
@@ -540,10 +554,21 @@ class RAGConsistencyAnalyzer:
             cluster_labels = kmeans.fit_predict(X)
             cluster_centers = kmeans.cluster_centers_
             
-            # Create shared PCA projection
-            pca = PCA(n_components=2, random_state=42)
-            X_2d = pca.fit_transform(X)
-            centers_2d = pca.transform(cluster_centers)
+            # Project cluster centers to t-SNE space
+            # Since t-SNE doesn't have a transform method, we compute centers as mean of cluster points in t-SNE space
+            centers_2d_tsne = []
+            for cluster_id in range(n_clusters):
+                cluster_mask = cluster_labels == cluster_id
+                if np.sum(cluster_mask) > 0:
+                    # Use mean of cluster points in t-SNE space as center
+                    cluster_points_tsne = X_2d_tsne[cluster_mask]
+                    center_tsne = np.mean(cluster_points_tsne, axis=0)
+                    centers_2d_tsne.append(center_tsne)
+            centers_2d_tsne = np.array(centers_2d_tsne)
+            
+            # Use t-SNE coordinates for all visualizations (X_2d_tsne and centers_2d_tsne)
+            X_2d = X_2d_tsne  # For consistency with existing variable names
+            centers_2d = centers_2d_tsne
             
             # 2b. Generate alternative less-crowded visualization
             alt_viz_path = None
@@ -664,7 +689,7 @@ class RAGConsistencyAnalyzer:
 
     def _create_cross_author_tsne(self, df, folder_names, output_dir, 
                                    font_size=5, n_components=2, color_palette='Set3', 
-                                   proximity_threshold=None, show_labels=True):
+                                   proximity_threshold=None, show_labels=True, X_2d_precomputed=None):
         """Create 2D embedding map showing concept clustering by author
         
         Args:
@@ -685,13 +710,17 @@ class RAGConsistencyAnalyzer:
             from scipy.cluster.hierarchy import linkage, fcluster
             from scipy.spatial.distance import pdist
             
-            # Stack all embeddings
-            X = np.stack(df["embedding"])
-            
-            # Apply t-SNE with configurable dimensions
-            n_components = max(2, min(3, int(n_components)))  # Ensure 2 or 3
-            tsne = TSNE(n_components=n_components, perplexity=min(20, len(df)-1), random_state=42)
-            X_2d = tsne.fit_transform(X)
+            # Use precomputed t-SNE coordinates if provided, otherwise compute them
+            if X_2d_precomputed is not None:
+                X_2d = X_2d_precomputed
+            else:
+                # Stack all embeddings
+                X = np.stack(df["embedding"])
+                
+                # Apply t-SNE with configurable dimensions
+                n_components = max(2, min(3, int(n_components)))  # Ensure 2 or 3
+                tsne = TSNE(n_components=n_components, perplexity=min(20, len(df)-1), random_state=42)
+                X_2d = tsne.fit_transform(X)
             
             # Get color palette
             try:
@@ -802,7 +831,8 @@ class RAGConsistencyAnalyzer:
             plt.close()
             
             print(f"[CROSS-AUTHOR] Created cross-author t-SNE: {tsne_path}")
-            return tsne_path
+            # Return both the path and the t-SNE coordinates for reuse
+            return tsne_path, X_2d
         except Exception as e:
             print(f"[CROSS-AUTHOR ERROR] Failed to create t-SNE: {e}")
             return None
@@ -896,9 +926,20 @@ class RAGConsistencyAnalyzer:
                     # Plot each member with its actual author color - make them larger and more visible
                     for idx, (_, row) in enumerate(cluster_df_subset.iterrows()):
                         author = row['author']
-                        ax.scatter(cluster_points_2d[idx, 0], cluster_points_2d[idx, 1],
+                        point_x, point_y = cluster_points_2d[idx, 0], cluster_points_2d[idx, 1]
+                        ax.scatter(point_x, point_y,
                                   s=80, c=[author_colors[author]], alpha=0.6, 
                                   edgecolors='white', linewidths=0.5, marker='o')
+                        
+                        # Add label for each node (half size of main label, transparent)
+                        concept = row['concept']
+                        concept_label = concept.split('(')[0].strip() if '(' in concept else concept
+                        concept_label = concept_label[:15] + ('...' if len(concept_label) > 15 else '')
+                        ax.annotate(concept_label,
+                                   (point_x, point_y),
+                                   xytext=(3, 3), textcoords='offset points',
+                                   fontsize=7, alpha=0.5,  # Half of 10, transparent
+                                   ha='left', va='bottom')
                     
                     # Draw dotted lines from cluster center to members (after center is drawn)
                     # This will be done after the pie chart is drawn
@@ -1121,15 +1162,6 @@ class RAGConsistencyAnalyzer:
             y_range = max(y_coords) - min(y_coords) if y_coords else 1.0
             plot_extent = max(x_range, y_range)
             
-            # Calculate radius scale based on cluster counts
-            max_count = max([c['count'] for c in cluster_data]) if cluster_data else 1
-            min_count = min([c['count'] for c in cluster_data]) if cluster_data else 1
-            
-            # Set base radius to ensure no overlap
-            # Use 20-40% of minimum distance, scaled by cluster size
-            base_radius = min(min_distance * 0.2, plot_extent * 0.04)
-            max_radius = min(min_distance * 0.4, plot_extent * 0.08)
-            
             # Create the plot
             fig, ax = plt.subplots(figsize=(16, 14))
             
@@ -1152,22 +1184,53 @@ class RAGConsistencyAnalyzer:
                     representative_idx = cluster_df_indices[closest_idx]
                     representative_concepts[cluster_id] = df.loc[representative_idx, 'concept']
             
+            # FIRST: Recalculate all counts to ensure accuracy (matching Alternative Clustering exactly)
+            for cluster_info in cluster_data:
+                cluster_id = cluster_info['id']
+                cluster_mask = cluster_labels == cluster_id
+                cluster_df_subset = df[cluster_mask]
+                author_counts = Counter(cluster_df_subset['author'])
+                count = sum(author_counts.values())
+                cluster_info['count'] = count
+                cluster_info['author_counts'] = author_counts
+            
+            # NOW recalculate max_count and min_count AFTER all counts are updated
+            max_count = max([c['count'] for c in cluster_data]) if cluster_data else 1
+            min_count = min([c['count'] for c in cluster_data]) if cluster_data else 1
+            
+            # Set base radius to ensure no overlap (recalculate after count updates)
+            # Use 20-40% of minimum distance, scaled by cluster size
+            base_radius = min(min_distance * 0.2, plot_extent * 0.04)
+            max_radius = min(min_distance * 0.4, plot_extent * 0.08)
+            
             # Plot cluster members first
             for cluster_info in cluster_data:
                 for idx, (_, row) in enumerate(cluster_info['df_subset'].iterrows()):
                     author = row['author']
                     point = cluster_info['points'][idx]
-                    ax.scatter(point[0], point[1],
+                    point_x, point_y = point[0], point[1]
+                    ax.scatter(point_x, point_y,
                               s=60, c=[author_colors[author]], alpha=0.5, 
                               edgecolors='white', linewidths=0.3, marker='o', zorder=1)
+                    
+                    # Add label for each node (half size of main label, transparent)
+                    concept = row['concept']
+                    concept_label = concept.split('(')[0].strip() if '(' in concept else concept
+                    concept_label = concept_label[:15] + ('...' if len(concept_label) > 15 else '')
+                    ax.annotate(concept_label,
+                               (point_x, point_y),
+                               xytext=(3, 3), textcoords='offset points',
+                               fontsize=4.5, alpha=0.5,  # Half of 9, transparent
+                               ha='left', va='bottom', zorder=1)
             
             # Plot clusters as circles with varying radius
             for cluster_info in cluster_data:
                 center_x, center_y = cluster_info['center']
+                # Use already recalculated count (from the loop above)
                 count = cluster_info['count']
                 author_counts = cluster_info['author_counts']
                 
-                # Calculate radius based on cluster size
+                # Calculate radius based on cluster size (using updated max_count/min_count)
                 # Scale from base_radius to max_radius based on count
                 if max_count > min_count:
                     size_factor = (count - min_count) / (max_count - min_count)
@@ -5408,13 +5471,55 @@ class UpSetGUI:
                             print(f"[QUOTES DEBUG] Full citation: '{full_citation_text}'")
                             # Use full citation if available, otherwise short quote
                             if full_citation_text and full_citation_text != "No citation available":
-                                # Split quotes by semicolons (as formatted in the new system)
-                                quote_list = [q.strip() for q in full_citation_text.split(';') if q.strip()]
+                                # Try multiple parsing strategies
+                                quote_list = []
+                                
+                                # Strategy 1: Split by "Quote X:" pattern (e.g., "Quote 1:", "Quote 2:")
+                                import re
+                                quote_pattern = r'Quote\s+\d+\s*:'
+                                quote_matches = list(re.finditer(quote_pattern, full_citation_text, re.IGNORECASE))
+                                
+                                if quote_matches:
+                                    # Split by quote markers
+                                    for i, match in enumerate(quote_matches):
+                                        start_pos = match.end()
+                                        # Find end of this quote (start of next quote or end of string)
+                                        if i + 1 < len(quote_matches):
+                                            end_pos = quote_matches[i + 1].start()
+                                        else:
+                                            end_pos = len(full_citation_text)
+                                        
+                                        quote_text = full_citation_text[start_pos:end_pos].strip()
+                                        
+                                        # Remove concept name prefix if present (e.g., "Justice (Dikaiosynē): ")
+                                        # Look for pattern: "Concept Name: " at the start
+                                        concept_prefix_pattern = r'^' + re.escape(concept_name) + r'\s*:\s*'
+                                        quote_text = re.sub(concept_prefix_pattern, '', quote_text, flags=re.IGNORECASE)
+                                        
+                                        if quote_text and quote_text.strip():
+                                            quote_list.append(quote_text.strip())
+                                    
+                                    print(f"[QUOTES DEBUG] Added {len(quote_list)} quotes using Quote X: pattern")
+                                else:
+                                    # Strategy 2: Split by semicolons (as formatted in the new system)
+                                    quote_list = [q.strip() for q in full_citation_text.split(';') if q.strip()]
+                                    
+                                    # For each quote, remove concept name prefix if present
+                                    for i, q in enumerate(quote_list):
+                                        concept_prefix_pattern = r'^' + re.escape(concept_name) + r'\s*:\s*'
+                                        quote_list[i] = re.sub(concept_prefix_pattern, '', q, flags=re.IGNORECASE).strip()
+                                    
+                                    print(f"[QUOTES DEBUG] Added {len(quote_list)} quotes from semicolon split")
+                                
                                 quotes.extend(quote_list)
-                                print(f"[QUOTES DEBUG] Added {len(quote_list)} quotes from full citation")
                             elif short_quote_text and short_quote_text != "No quotes found":
-                                quotes.append(short_quote_text)
-                                print(f"[QUOTES DEBUG] Added 1 quote from short quote")
+                                # Remove concept name prefix from short quote if present
+                                import re
+                                concept_prefix_pattern = r'^' + re.escape(concept_name) + r'\s*:\s*'
+                                cleaned_quote = re.sub(concept_prefix_pattern, '', short_quote_text, flags=re.IGNORECASE).strip()
+                                if cleaned_quote:
+                                    quotes.append(cleaned_quote)
+                                    print(f"[QUOTES DEBUG] Added 1 quote from short quote")
                     elif len(row.cells) >= 2:  # Fallback for old format
                         concept_cell = row.cells[0]
                         quotes_cell = row.cells[1]
@@ -5426,8 +5531,40 @@ class UpSetGUI:
                             print(f"[QUOTES DEBUG] Found matching concept '{concept_name}' in old format table {table_idx}")
                             print(f"[QUOTES DEBUG] Quotes text: '{quotes_text}'")
                             if quotes_text and quotes_text != "No quotes found":
-                                # Split quotes by double line breaks
-                                quote_list = [q.strip() for q in quotes_text.split('\n\n') if q.strip()]
+                                import re
+                                quote_list = []
+                                
+                                # Try splitting by "Quote X:" pattern first
+                                quote_pattern = r'Quote\s+\d+\s*:'
+                                quote_matches = list(re.finditer(quote_pattern, quotes_text, re.IGNORECASE))
+                                
+                                if quote_matches:
+                                    # Split by quote markers
+                                    for i, match in enumerate(quote_matches):
+                                        start_pos = match.end()
+                                        # Find end of this quote (start of next quote or end of string)
+                                        if i + 1 < len(quote_matches):
+                                            end_pos = quote_matches[i + 1].start()
+                                        else:
+                                            end_pos = len(quotes_text)
+                                        
+                                        quote_text = quotes_text[start_pos:end_pos].strip()
+                                        
+                                        # Remove concept name prefix if present
+                                        concept_prefix_pattern = r'^' + re.escape(concept_name) + r'\s*:\s*'
+                                        quote_text = re.sub(concept_prefix_pattern, '', quote_text, flags=re.IGNORECASE)
+                                        
+                                        if quote_text and quote_text.strip():
+                                            quote_list.append(quote_text.strip())
+                                else:
+                                    # Fallback: Split quotes by double line breaks
+                                    quote_list = [q.strip() for q in quotes_text.split('\n\n') if q.strip()]
+                                    
+                                    # Remove concept name prefix from each quote
+                                    for i, q in enumerate(quote_list):
+                                        concept_prefix_pattern = r'^' + re.escape(concept_name) + r'\s*:\s*'
+                                        quote_list[i] = re.sub(concept_prefix_pattern, '', q, flags=re.IGNORECASE).strip()
+                                
                                 quotes.extend(quote_list)
                                 print(f"[QUOTES DEBUG] Added {len(quote_list)} quotes from old format")
             
@@ -9368,6 +9505,31 @@ class UpSetGUI:
         normalized = normalized.strip()
         return normalized
     
+    def _clean_source_info_from_quote(self, quote):
+        """Remove source information and page numbers from quote text (from test_quote_search.py)"""
+        import re
+        # Remove patterns like "Sources: Source 1: Temp=0.5, Top-p=0.95, Top-k=50, BM25=0.0 (BM25 Sweep)"
+        # Remove "Sources:" and everything after it
+        quote = re.sub(r'\s*Sources?:.*$', '', quote, flags=re.IGNORECASE | re.MULTILINE)
+        # Remove "Source X:" patterns
+        quote = re.sub(r'\s*Source\s+\d+:\s*.*$', '', quote, flags=re.IGNORECASE | re.MULTILINE)
+        # Remove parameter patterns like "Temp=0.5, Top-p=0.95, Top-k=50, BM25=0.0"
+        quote = re.sub(r'\s*Temp=[\d.]+[,\s]*Top-p=[\d.]+[,\s]*Top-k=\d+[,\s]*BM25=[\d.]+.*$', '', quote, flags=re.IGNORECASE)
+        # Remove "(BM25 Sweep)" or similar patterns
+        quote = re.sub(r'\s*\([^)]*Sweep[^)]*\)', '', quote, flags=re.IGNORECASE)
+        
+        # Remove page numbers in parentheses or brackets at the end of the quote
+        # Patterns like: [p.92], [p. 92], (p.92), (p. 92), [page 92], (page 92), etc.
+        quote = re.sub(r'\s*\[p\.?\s*\d+\]', '', quote, flags=re.IGNORECASE)
+        quote = re.sub(r'\s*\(p\.?\s*\d+\)', '', quote, flags=re.IGNORECASE)
+        quote = re.sub(r'\s*\[page\s+\d+\]', '', quote, flags=re.IGNORECASE)
+        quote = re.sub(r'\s*\(page\s+\d+\)', '', quote, flags=re.IGNORECASE)
+        # Also handle patterns like [92], (92) at the end (likely page numbers)
+        quote = re.sub(r'\s*\[\d+\]\s*$', '', quote)
+        quote = re.sub(r'\s*\(\d+\)\s*$', '', quote)
+        
+        return quote.strip()
+    
     def _normalize_text_aggressive(self, text):
         """More aggressive normalization for flexible matching - handles punctuation differences"""
         import re
@@ -9487,86 +9649,104 @@ class UpSetGUI:
             print(f"[QUOTES DEBUG] Error writing cache file: {e}")
     
     def _fuzzy_match_quote_in_normalized(self, quote_text, normalized_data):
-        """Match quote against pre-normalized source data with improved matching"""
+        """Match quote against pre-normalized source data using same method as test_quote_search.py"""
         if normalized_data is None:
             return False
         
         normalized_source = normalized_data['normalized_text']
-        clean_quote = self._normalize_text_for_search(quote_text)
         
-        # Strategy 1: Exact normalized match
+        # Clean quote text - remove "Quote X:" prefix and source info (same as test_quote_search.py)
+        if quote_text.startswith("Quote "):
+            parts = quote_text.split(":", 1)
+            if len(parts) > 1:
+                quote_text = parts[1].strip()
+        
+        # Remove XML-like tags from quote (same as test_quote_search.py)
+        import re
+        quote_text = re.sub(r'<([^>]+)>', r'\1', quote_text)
+        quote_text = re.sub(r'&lt;([^&]+)&gt;', r'\1', quote_text)  # Handle HTML entities
+        
+        # Normalize the quote text
+        clean_quote = self._normalize_text_for_search(quote_text)
+        clean_quote = self._clean_source_info_from_quote(clean_quote)
+        
+        if not clean_quote or len(clean_quote) < 10:
+            return False
+        
+        # Strategy 1: Exact normalized match (fastest and most accurate)
         if clean_quote in normalized_source:
             return True
         
-        # Strategy 2: Case-insensitive match
-        if clean_quote.lower() in normalized_source.lower():
+        # Strategy 1b: Quote is a prefix of source (quote is truncated/incomplete)
+        clean_quote_no_punct = clean_quote.rstrip('.,;:!?').strip()
+        if clean_quote_no_punct and normalized_source.startswith(clean_quote_no_punct):
             return True
         
-        # Strategy 3: Aggressive normalization (handles punctuation differences)
-        agg_quote = self._normalize_text_aggressive(quote_text)
+        # Strategy 1c: Source is a prefix of quote (quote has extra words at the end)
+        if normalized_source and clean_quote.startswith(normalized_source):
+            return True
+        
+        # Strategy 2: Case-insensitive exact match
+        clean_quote_lower = clean_quote.lower()
+        normalized_source_lower = normalized_source.lower()
+        if clean_quote_lower in normalized_source_lower:
+            return True
+        
+        # Strategy 2b: Case-insensitive prefix match
+        clean_quote_no_punct_lower = clean_quote_no_punct.lower()
+        if clean_quote_no_punct_lower and normalized_source_lower.startswith(clean_quote_no_punct_lower):
+            return True
+        
+        # Strategy 2c: Case-insensitive reverse prefix match
+        if normalized_source_lower and clean_quote_lower.startswith(normalized_source_lower):
+            return True
+        
+        # Strategy 3: Extract significant words and try sequential matching
+        def extract_significant_words(text):
+            words = []
+            for w in text.split():
+                cleaned = w.strip('.,;:!?()[]{}"\'').lower()
+                if len(cleaned) >= 3:  # Significant words are 3+ chars
+                    words.append(cleaned)
+            return words
+        
+        quote_words = extract_significant_words(clean_quote)
+        quote_words_no_punct = extract_significant_words(clean_quote_no_punct) if clean_quote_no_punct != clean_quote else quote_words
+        
+        if len(quote_words) >= 5:  # Need at least 5 significant words
+            # Try to find words in sequence
+            source_words_list = extract_significant_words(normalized_source)
+            if len(source_words_list) >= 5:
+                quote_idx = 0
+                for source_word in source_words_list:
+                    if quote_idx < len(quote_words) and source_word == quote_words[quote_idx]:
+                        quote_idx += 1
+                        if quote_idx == len(quote_words):
+                            return True
+                
+                # More lenient: if we found at least 70% of words in order
+                if quote_idx >= len(quote_words) * 0.70:
+                    return True
+                
+                # Try without first few words (handles quotes with extra words at start)
+                if len(quote_words) >= 6:
+                    for skip_count in range(1, min(4, len(quote_words) - 4)):
+                        remaining_words = quote_words[skip_count:]
+                        if len(remaining_words) >= 4:
+                            remaining_idx = 0
+                            for source_word in source_words_list:
+                                if remaining_idx < len(remaining_words) and source_word == remaining_words[remaining_idx]:
+                                    remaining_idx += 1
+                                    if remaining_idx == len(remaining_words):
+                                        return True
+                            if remaining_idx >= len(remaining_words) * 0.70:
+                                return True
+        
+        # Strategy 4: Try aggressive normalization (handles punctuation differences)
+        agg_quote = self._normalize_text_aggressive(clean_quote)
         agg_source = self._normalize_text_aggressive(normalized_source)
         if agg_quote.lower() in agg_source.lower():
             return True
-        
-        # Strategy 4: Word-based sequential matching (more lenient)
-        quote_words = []
-        for w in clean_quote.split():
-            cleaned = w.strip('.,;:!?()[]{}"\'').lower()
-            if len(cleaned) > 1:  # Changed from > 2 to > 1 to include more words
-                quote_words.append(cleaned)
-        
-        source_words = []
-        for w in normalized_source.split():
-            cleaned = w.strip('.,;:!?()[]{}"\'').lower()
-            if len(cleaned) > 1:  # Changed from > 2 to > 1
-                source_words.append(cleaned)
-        
-        if len(quote_words) >= 3:  # Changed from > 5 to >= 3 for shorter quotes
-            # Check if we can find the quote words in sequence in the source
-            quote_idx = 0
-            consecutive_matches = 0
-            max_consecutive = 0
-            
-            for source_word in source_words:
-                if quote_idx < len(quote_words) and source_word == quote_words[quote_idx]:
-                    quote_idx += 1
-                    consecutive_matches += 1
-                    max_consecutive = max(max_consecutive, consecutive_matches)
-                    if quote_idx == len(quote_words):
-                        return True
-                else:
-                    consecutive_matches = 0
-            
-            # More lenient matching: if we found at least 70% of words in order (changed from 85%)
-            # OR if we have a good consecutive match
-            if quote_idx >= len(quote_words) * 0.70:
-                return True
-            if max_consecutive >= min(3, len(quote_words) * 0.4):  # More lenient consecutive matching
-                return True
-        
-        # Strategy 5: Try without first/last few words (handles prefix/suffix differences like "Quote 1:")
-        if len(quote_words) >= 8:  # Changed from > 10 to >= 8
-            # Try without first 2 and last 2 words
-            middle_quote_words = quote_words[2:-2]
-            if len(middle_quote_words) >= 3:  # Changed from > 5 to >= 3
-                quote_idx = 0
-                for source_word in source_words:
-                    if quote_idx < len(middle_quote_words) and source_word == middle_quote_words[quote_idx]:
-                        quote_idx += 1
-                        if quote_idx == len(middle_quote_words):
-                            return True
-                # Also try partial match of middle words
-                if quote_idx >= len(middle_quote_words) * 0.70:
-                    return True
-        
-        # Strategy 6: Try matching without "Quote X:" prefix if present
-        if quote_text.startswith("Quote "):
-            quote_without_prefix = quote_text.split(":", 1)
-            if len(quote_without_prefix) > 1:
-                quote_after_colon = quote_without_prefix[1].strip()
-                clean_quote_no_prefix = self._normalize_text_for_search(quote_after_colon)
-                if clean_quote_no_prefix.lower() in normalized_source.lower():
-                    return True
         
         return False
     
@@ -9790,29 +9970,43 @@ class UpSetGUI:
                     # Clear cell and add quotes with individual coloring
                     cell.text = ""  # Clear default text
                     
-                    # Process each quote individually
+                    # Process each quote individually (using same method as test_quote_search.py)
                     verified_quotes = []
                     for quote_idx, quote in enumerate(filtered_quotes):
                         print(f"[QUOTES DEBUG]   Quote #{quote_idx + 1} for '{folder_name}': {quote[:50]}...")
                         
+                        # Clean quote text - remove source info (same as test_quote_search.py)
+                        quote_cleaned = self._clean_source_info_from_quote(quote)
+                        
+                        # Preserve "Quote X:" format if present, otherwise add it
+                        quote_to_verify = quote_cleaned
+                        if not quote_to_verify.startswith("Quote "):
+                            # Extract quote number from original if present, otherwise use index
+                            quote_num_match = re.search(r'Quote\s+(\d+)', quote, re.IGNORECASE)
+                            if quote_num_match:
+                                quote_num = quote_num_match.group(1)
+                            else:
+                                quote_num = str(quote_idx + 1)
+                            quote_to_verify = f"Quote {quote_num}: {quote_to_verify}"
+                        
                         # Verify quote if source file is available
                         if source_file_path:
                             print(f"[QUOTES DEBUG]     Searching in: {os.path.basename(source_file_path)}")
-                            page_num, found = self._verify_quote(quote, source_file_path, file_type)
+                            page_num, found = self._verify_quote(quote_to_verify, source_file_path, file_type)
                             
                             if found:
                                 print(f"[QUOTES DEBUG]     ✓ FOUND on page {page_num}")
-                                verified_quotes.append((quote, True, page_num))
+                                verified_quotes.append((quote_to_verify, True, page_num))
                                 verification_stats[folder_name]['found'] += 1
                             else:
                                 print(f"[QUOTES DEBUG]     ✗ NOT FOUND")
-                                verified_quotes.append((quote, False, None))
+                                verified_quotes.append((quote_to_verify, False, None))
                                 verification_stats[folder_name]['not_found'] += 1
                         else:
                             # No source file, mark as not verified
-                            verified_quotes.append((quote, None, None))
+                            verified_quotes.append((quote_to_verify, None, None))
                     
-                    # Add quotes to cell with individual coloring
+                    # Add quotes to cell with individual coloring, preserving "Quote X:" format
                     for quote_idx, (quote, found, page_num) in enumerate(verified_quotes):
                         # Add line break before second and subsequent quotes
                         if quote_idx > 0:
@@ -9820,7 +10014,7 @@ class UpSetGUI:
                         else:
                             para = cell.paragraphs[0]
                         
-                        # Preserve original quote text format (may already have "Quote X:" prefix)
+                        # Quote already has "Quote X:" format from processing above
                         quote_text = quote
                         
                         if found is True and page_num:
