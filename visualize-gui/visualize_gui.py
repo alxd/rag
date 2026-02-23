@@ -714,13 +714,13 @@ class RAGConsistencyAnalyzer:
             if X_2d_precomputed is not None:
                 X_2d = X_2d_precomputed
             else:
-                # Stack all embeddings
-                X = np.stack(df["embedding"])
-                
+            # Stack all embeddings
+            X = np.stack(df["embedding"])
+            
                 # Apply t-SNE with configurable dimensions
                 n_components = max(2, min(3, int(n_components)))  # Ensure 2 or 3
                 tsne = TSNE(n_components=n_components, perplexity=min(20, len(df)-1), random_state=42)
-                X_2d = tsne.fit_transform(X)
+            X_2d = tsne.fit_transform(X)
             
             # Get color palette
             try:
@@ -729,7 +729,7 @@ class RAGConsistencyAnalyzer:
                 author_colors = {author: colors[i] for i, author in enumerate(sorted(folder_names))}
             except:
                 # Fallback to default
-                author_colors = self._get_author_color_mapping(folder_names)
+            author_colors = self._get_author_color_mapping(folder_names)
             
             # Apply proximity grouping if threshold is set
             cluster_labels = None
@@ -772,20 +772,20 @@ class RAGConsistencyAnalyzer:
                     # Add concept labels if enabled
                     if show_labels:
                         # Show fewer labels if there are many concepts
-                        max_labels = min(int(concept_count * 0.9), concept_count) if concept_count > 50 else concept_count
-                        
-                        for idx, (_, row) in enumerate(author_data.iterrows()):
-                            if idx < max_labels:
-                                concept = row['concept']
-                                # Truncate long concept names
-                                display_concept = concept[:12] + '...' if len(concept) > 12 else concept
+                    max_labels = min(int(concept_count * 0.9), concept_count) if concept_count > 50 else concept_count
+                    
+                    for idx, (_, row) in enumerate(author_data.iterrows()):
+                        if idx < max_labels:
+                            concept = row['concept']
+                            # Truncate long concept names
+                            display_concept = concept[:12] + '...' if len(concept) > 12 else concept
                                 if n_components == 3:
                                     ax.text(X_2d[mask][idx, 0], X_2d[mask][idx, 1], X_2d[mask][idx, 2],
                                            display_concept, fontsize=font_size, alpha=0.8)
                                 else:
                                     ax.annotate(display_concept, 
-                                               (X_2d[mask][idx, 0], X_2d[mask][idx, 1]),
-                                               xytext=(2, 2), textcoords='offset points',
+                                       (X_2d[mask][idx, 0], X_2d[mask][idx, 1]),
+                                       xytext=(2, 2), textcoords='offset points',
                                                fontsize=font_size, alpha=0.8)
             
             # Add cluster grouping visualization if enabled
@@ -5502,7 +5502,7 @@ class UpSetGUI:
                                     print(f"[QUOTES DEBUG] Added {len(quote_list)} quotes using Quote X: pattern")
                                 else:
                                     # Strategy 2: Split by semicolons (as formatted in the new system)
-                                    quote_list = [q.strip() for q in full_citation_text.split(';') if q.strip()]
+                                quote_list = [q.strip() for q in full_citation_text.split(';') if q.strip()]
                                     
                                     # For each quote, remove concept name prefix if present
                                     for i, q in enumerate(quote_list):
@@ -5519,7 +5519,7 @@ class UpSetGUI:
                                 cleaned_quote = re.sub(concept_prefix_pattern, '', short_quote_text, flags=re.IGNORECASE).strip()
                                 if cleaned_quote:
                                     quotes.append(cleaned_quote)
-                                    print(f"[QUOTES DEBUG] Added 1 quote from short quote")
+                                print(f"[QUOTES DEBUG] Added 1 quote from short quote")
                     elif len(row.cells) >= 2:  # Fallback for old format
                         concept_cell = row.cells[0]
                         quotes_cell = row.cells[1]
@@ -5558,7 +5558,7 @@ class UpSetGUI:
                                             quote_list.append(quote_text.strip())
                                 else:
                                     # Fallback: Split quotes by double line breaks
-                                    quote_list = [q.strip() for q in quotes_text.split('\n\n') if q.strip()]
+                                quote_list = [q.strip() for q in quotes_text.split('\n\n') if q.strip()]
                                     
                                     # Remove concept name prefix from each quote
                                     for i, q in enumerate(quote_list):
@@ -8743,11 +8743,11 @@ class UpSetGUI:
                 # Check if there's actual data
                 for folder_name, viz_data in self.cross_author_visualizations.items():
                     if viz_data and isinstance(viz_data, dict):
-                        has_visualizations = True
+                has_visualizations = True
                         break
                 
                 if has_visualizations:
-                    self._add_cross_author_visualizations_to_doc(doc)
+                self._add_cross_author_visualizations_to_doc(doc)
                 else:
                     print("[SEMANTIC VIZ] Cross-author visualizations dictionary exists but contains no valid data")
                     doc.add_paragraph(
@@ -8764,8 +8764,8 @@ class UpSetGUI:
                         break
                 
                 if has_individual:
-                    has_visualizations = True
-                    self._add_individual_folder_visualizations_to_doc(doc)
+                has_visualizations = True
+                self._add_individual_folder_visualizations_to_doc(doc)
             
             if not has_visualizations:
                 print("[SEMANTIC VIZ] No visualizations to add to document")
@@ -9296,13 +9296,15 @@ class UpSetGUI:
         return None, None
     
     def _search_quote_in_pdf(self, pdf_path, quote_text):
-        """Search for a quote in a PDF file using cached normalized version"""
+        """Search for a quote in a PDF file using cached normalized version
+        Returns: (page_num, found, matched_text)"""
         normalized_data = self._load_and_normalize_source(pdf_path, "PDF")
         if normalized_data is None:
-            return None, False
+            return None, False, ""
         
         # Use the same fuzzy matching as TXT (search in combined normalized text)
-        if self._fuzzy_match_quote_in_normalized(quote_text, normalized_data):
+        found, matched_text = self._fuzzy_match_quote_in_normalized(quote_text, normalized_data)
+        if found:
             # Find which page the quote is on by searching in normalized pages
             clean_quote = self._normalize_text_for_search(quote_text)
             normalized_pages = normalized_data.get('normalized_pages', {})
@@ -9310,12 +9312,12 @@ class UpSetGUI:
             # Try to find the page number
             for page_num, normalized_page_text in normalized_pages.items():
                 if clean_quote.lower() in normalized_page_text.lower():
-                    return page_num, True
+                    return page_num, True, matched_text
                 # Try aggressive normalization
                 agg_quote = self._normalize_text_aggressive(quote_text)
                 agg_page = self._normalize_text_aggressive(normalized_page_text)
                 if agg_quote.lower() in agg_page.lower():
-                    return page_num, True
+                    return page_num, True, matched_text
             
             # If we can't find exact page, estimate from position in combined text
             normalized_text = normalized_data['normalized_text']
@@ -9328,9 +9330,9 @@ class UpSetGUI:
             avg_chars_per_page = len(normalized_text) / max(1, normalized_data.get('num_pages', 1))
             estimated_page = int(position / avg_chars_per_page) + 1
             estimated_page = min(estimated_page, normalized_data.get('num_pages', 1))
-            return estimated_page, True
+            return estimated_page, True, matched_text
         
-        return None, False
+        return None, False, ""
     
     def _normalize_text_for_search(self, text):
         """Normalize text by removing all extra whitespace, newlines, and normalizing spaces"""
@@ -9531,17 +9533,188 @@ class UpSetGUI:
         return quote.strip()
     
     def _normalize_text_aggressive(self, text):
-        """More aggressive normalization for flexible matching - handles punctuation differences"""
+        """
+        More aggressive normalization for flexible matching.
+        Handles em dashes, hyphens, word splitting, and punctuation differences.
+        """
         import re
-        # First normalize whitespace (this handles line breaks and hyphens)
+        # First normalize whitespace (this handles line breaks, hyphens, em dashes, word splitting)
         normalized = self._normalize_text_for_search(text)
-        # Remove trailing punctuation that might differ (periods, commas, semicolons)
-        normalized = normalized.rstrip('.,;:!?')
+        
+        # Normalize semicolons to periods for matching (both are sentence separators)
+        # This handles cases where quote has "at study" but source has "at study;"
+        normalized = re.sub(r';\s*', '. ', normalized)
+        
         # Normalize spacing around punctuation - ensure single space after punctuation
-        normalized = re.sub(r'\s*([,.;:!?])\s*', r'\1 ', normalized)
+        normalized = re.sub(r'\s*([,.:!?])\s*', r'\1 ', normalized)
+        
+        # Remove trailing punctuation that might differ (periods, commas, semicolons)
+        # Do this AFTER normalizing spacing to avoid issues
+        normalized = normalized.rstrip('.,;:!?')
+        
         # Remove extra spaces that might remain
         normalized = re.sub(r'\s+', ' ', normalized)
         return normalized.strip()
+    
+    def _extract_significant_words(self, text: str) -> list:
+        """Extract significant words from text (filter out very short/common words)"""
+        words = []
+        for w in text.split():
+            cleaned = w.strip('.,;:!?()[]{}"\'').lower()
+            # Only include words with 3+ characters (filters out "a", "an", "the", "is", etc.)
+            if len(cleaned) >= 3:
+                words.append(cleaned)
+        return words
+    
+    def _words_match_fuzzy(self, word1: str, word2: str) -> bool:
+        """
+        Check if two words match, allowing for variations like:
+        - "accordance" vs "accord"
+        - "activity" vs "activity" (exact match)
+        - Common word variations
+        """
+        if word1 == word2:
+            return True
+        
+        # Check if one word is a prefix of the other (for variations like "accordance" vs "accord")
+        if len(word1) >= 5 and len(word2) >= 5:
+            if word1.startswith(word2) or word2.startswith(word1):
+                # Only allow if the shorter word is at least 5 chars (to avoid false matches)
+                shorter = min(len(word1), len(word2))
+                longer = max(len(word1), len(word2))
+                if shorter >= 5 and longer - shorter <= 4:  # Allow up to 4 char difference
+                    return True
+        
+        # Check for common variations
+        variations = {
+            'accordance': 'accord',
+            'accord': 'accordance',
+            'activity': 'activity',  # exact match already handled
+        }
+        if word1 in variations and variations[word1] == word2:
+            return True
+        if word2 in variations and variations[word2] == word1:
+            return True
+        
+        return False
+    
+    def _find_words_in_sequence_fast(self, quote_words: list, source_text: str) -> tuple:
+        """
+        Fast algorithm to find quote words in sequence in source text.
+        Returns (start_word_idx, end_word_idx) or None if not found.
+        Uses a single pass through the source text - much faster than nested loops.
+        Handles split words (e.g., "gen eral" matches "general").
+        """
+        if not quote_words or len(quote_words) < 3:
+            return None
+        
+        source_words = source_text.split()
+        if len(source_words) < len(quote_words):
+            return None
+        
+        # Build a map of word -> list of positions for fast lookup
+        # Also check for split words by combining consecutive words
+        word_positions = {}
+        for idx, word in enumerate(source_words):
+            cleaned = word.strip('.,;:!?()[]{}"\'').lower()
+            if len(cleaned) >= 3:  # Only significant words
+                if cleaned not in word_positions:
+                    word_positions[cleaned] = []
+                word_positions[cleaned].append(idx)
+            
+            # Check if this word combined with next word matches any quote word
+            if idx + 1 < len(source_words):
+                next_word = source_words[idx + 1].strip('.,;:!?()[]{}"\'').lower()
+                combined = cleaned + next_word
+                if len(combined) >= 4:  # Only for reasonable combined lengths
+                    if combined not in word_positions:
+                        word_positions[combined] = []
+                    word_positions[combined].append(idx)  # Store position of first word
+        
+        # Try to find quote words in sequence
+        # Start from each position of the first quote word (try exact match first, then fuzzy)
+        first_word = quote_words[0]
+        first_word_positions = []
+        
+        # Get exact matches
+        if first_word in word_positions:
+            first_word_positions.extend(word_positions[first_word])
+        
+        # Get fuzzy matches for first word
+        for idx, word in enumerate(source_words):
+            cleaned = word.strip('.,;:!?()[]{}"\'').lower()
+            if len(cleaned) >= 3 and self._words_match_fuzzy(cleaned, first_word):
+                if idx not in first_word_positions:
+                    first_word_positions.append(idx)
+        
+        if not first_word_positions:
+            return None
+        
+        for start_pos in first_word_positions:
+            current_pos = start_pos
+            matched_positions = [start_pos]
+            
+            # Try to find remaining words in sequence
+            for word_idx in range(1, len(quote_words)):
+                word = quote_words[word_idx]
+                
+                # Try exact match first
+                found = False
+                if word in word_positions:
+                    for pos in word_positions[word]:
+                        if pos > current_pos and pos <= current_pos + 10:  # Allow up to 10 words gap
+                            matched_positions.append(pos)
+                            current_pos = pos
+                            found = True
+                            break
+                
+                # If not found, try fuzzy matching (handles word variations like "accordance" vs "accord")
+                if not found:
+                    for pos in range(current_pos + 1, min(current_pos + 10, len(source_words))):
+                        source_word = source_words[pos].strip('.,;:!?()[]{}"\'').lower()
+                        if len(source_word) >= 3 and self._words_match_fuzzy(source_word, word):
+                            matched_positions.append(pos)
+                            current_pos = pos
+                            found = True
+                            break
+                
+                # If not found, try matching against split words (combined consecutive words)
+                if not found:
+                    # Check if we can match by combining source words
+                    for check_pos in range(current_pos + 1, min(current_pos + 3, len(source_words))):
+                        # Try combining 2 words
+                        if check_pos < len(source_words):
+                            w1 = source_words[check_pos].strip('.,;:!?()[]{}"\'').lower()
+                            if check_pos + 1 < len(source_words):
+                                w2 = source_words[check_pos + 1].strip('.,;:!?()[]{}"\'').lower()
+                                combined = w1 + w2
+                                if combined == word:
+                                    matched_positions.append(check_pos)
+                                    current_pos = check_pos + 1  # Skip next word since we used it
+                                    found = True
+                                    break
+                        if found:
+                            break
+                
+                if not found:
+                    break
+            
+            # If we found all words in a reasonable sequence
+            if len(matched_positions) == len(quote_words):
+                span = matched_positions[-1] - matched_positions[0]
+                # Check if span is reasonable (not too spread out)
+                if span <= len(quote_words) * 3:
+                    return (matched_positions[0], matched_positions[-1])
+            
+            # Also allow partial matches if we found most words (e.g., 80%+) and there are extra words at the end
+            # This handles cases where the source has extra words like "nothing if" when quote has "nothing."
+            if len(matched_positions) >= int(len(quote_words) * 0.8) and len(matched_positions) >= 5:
+                span = matched_positions[-1] - matched_positions[0]
+                # Allow slightly more spread for partial matches
+                if span <= len(quote_words) * 4:
+                    return (matched_positions[0], matched_positions[-1])
+        
+        return None
     
     def _load_and_normalize_source(self, source_file_path, file_type):
         """Load and normalize a source file, caching the normalized version"""
@@ -9648,10 +9821,64 @@ class UpSetGUI:
         except Exception as e:
             print(f"[QUOTES DEBUG] Error writing cache file: {e}")
     
+    def _extract_matched_text_with_context(self, source, start_idx, length, quote_text="", context_chars=100):
+        """Extract matched text with context before and after (from test_quote_search.py)"""
+        if start_idx == -1:
+            return ""
+        
+        import re
+        # Normalize quote for matching
+        clean_quote = self._normalize_text_for_search(quote_text) if quote_text else ""
+        quote_words = clean_quote.split() if clean_quote else []
+        
+        # Add context before
+        context_start = max(0, start_idx - context_chars)
+        
+        # Find where the quote ends in the source
+        source_from_match = source[start_idx:]
+        source_words = source_from_match.split()
+        
+        # Try to find all words from the quote in sequence
+        quote_word_idx = 0
+        last_matched_word_pos = start_idx
+        char_pos = start_idx
+        
+        for source_word in source_words:
+            if quote_word_idx >= len(quote_words):
+                break
+            
+            # Find this word in the source
+            word_pos = source.find(source_word, char_pos)
+            if word_pos == -1:
+                break
+            
+            # Check if this word matches the current quote word (normalized)
+            source_word_clean = source_word.strip('.,;:!?()[]{}"\'').lower()
+            quote_word_clean = quote_words[quote_word_idx].strip('.,;:!?()[]{}"\'').lower()
+            
+            if source_word_clean == quote_word_clean:
+                quote_word_idx += 1
+                last_matched_word_pos = word_pos + len(source_word)
+            
+            char_pos = word_pos + len(source_word)
+        
+        # If we found all words, extend to the end of the last matched word
+        if quote_word_idx == len(quote_words) and last_matched_word_pos > start_idx:
+            context_end = min(len(source), last_matched_word_pos + context_chars)
+        else:
+            # Fallback: extend by quote length
+            quote_word_count = len(quote_words) if quote_words else 0
+            extend_chars = max(length, quote_word_count * 8)  # ~8 chars per word average
+            context_end = min(len(source), start_idx + extend_chars + context_chars)
+        
+        matched_text = source[context_start:context_end]
+        return matched_text.strip()
+    
     def _fuzzy_match_quote_in_normalized(self, quote_text, normalized_data):
-        """Match quote against pre-normalized source data using same method as test_quote_search.py"""
+        """Match quote against pre-normalized source data using same method as test_quote_search.py
+        Returns: (found: bool, matched_text: str) - matched_text is the actual text from source that matched"""
         if normalized_data is None:
-            return False
+            return False, ""
         
         normalized_source = normalized_data['normalized_text']
         
@@ -9661,103 +9888,215 @@ class UpSetGUI:
             if len(parts) > 1:
                 quote_text = parts[1].strip()
         
-        # Remove XML-like tags from quote (same as test_quote_search.py)
+        # Normalize the quote text
+        # First remove XML-like tags from quote (e.g., "<rather>" -> "rather")
+        # This must happen BEFORE normalization to ensure tags are removed
+        quote_text_original = quote_text
         import re
         quote_text = re.sub(r'<([^>]+)>', r'\1', quote_text)
+        
+        # Also remove XML tags that might have been normalized differently
         quote_text = re.sub(r'&lt;([^&]+)&gt;', r'\1', quote_text)  # Handle HTML entities
         
-        # Normalize the quote text
         clean_quote = self._normalize_text_for_search(quote_text)
         clean_quote = self._clean_source_info_from_quote(clean_quote)
         
         if not clean_quote or len(clean_quote) < 10:
-            return False
+            return False, ""
         
         # Strategy 1: Exact normalized match (fastest and most accurate)
-        if clean_quote in normalized_source:
-            return True
+        idx = normalized_source.find(clean_quote)
+        if idx != -1:
+            matched_text = self._extract_matched_text_with_context(normalized_source, idx, len(clean_quote), quote_text=clean_quote, context_chars=100)
+            return True, matched_text
         
         # Strategy 1b: Quote is a prefix of source (quote is truncated/incomplete)
+        # Check if the quote (without trailing punctuation) matches the start of source text
         clean_quote_no_punct = clean_quote.rstrip('.,;:!?').strip()
         if clean_quote_no_punct and normalized_source.startswith(clean_quote_no_punct):
-            return True
+            matched_text = self._extract_matched_text_with_context(normalized_source, 0, len(clean_quote_no_punct) + 50, quote_text=clean_quote_no_punct, context_chars=100)
+            return True, matched_text
         
         # Strategy 1c: Source is a prefix of quote (quote has extra words at the end)
+        # Check if the source text matches the start of the quote
         if normalized_source and clean_quote.startswith(normalized_source):
-            return True
+            matched_text = self._extract_matched_text_with_context(normalized_source, 0, len(normalized_source), quote_text=normalized_source, context_chars=100)
+            return True, matched_text
         
         # Strategy 2: Case-insensitive exact match
         clean_quote_lower = clean_quote.lower()
         normalized_source_lower = normalized_source.lower()
-        if clean_quote_lower in normalized_source_lower:
-            return True
+        idx = normalized_source_lower.find(clean_quote_lower)
+        if idx != -1:
+            matched_text = self._extract_matched_text_with_context(normalized_source, idx, len(clean_quote), quote_text=clean_quote, context_chars=100)
+            return True, matched_text
         
-        # Strategy 2b: Case-insensitive prefix match
+        # Strategy 2b: Case-insensitive prefix match (quote is truncated)
         clean_quote_no_punct_lower = clean_quote_no_punct.lower()
         if clean_quote_no_punct_lower and normalized_source_lower.startswith(clean_quote_no_punct_lower):
-            return True
+            matched_text = self._extract_matched_text_with_context(normalized_source, 0, len(clean_quote_no_punct) + 50, quote_text=clean_quote_no_punct, context_chars=100)
+            return True, matched_text
         
-        # Strategy 2c: Case-insensitive reverse prefix match
+        # Strategy 2c: Case-insensitive reverse prefix match (quote has extra words)
         if normalized_source_lower and clean_quote_lower.startswith(normalized_source_lower):
-            return True
+            matched_text = self._extract_matched_text_with_context(normalized_source, 0, len(normalized_source), quote_text=normalized_source, context_chars=100)
+            return True, matched_text
         
-        # Strategy 3: Extract significant words and try sequential matching
-        def extract_significant_words(text):
-            words = []
-            for w in text.split():
-                cleaned = w.strip('.,;:!?()[]{}"\'').lower()
-                if len(cleaned) >= 3:  # Significant words are 3+ chars
-                    words.append(cleaned)
-            return words
+        # Strategy 3: Try removing common words and matching significant words only
+        # Extract significant words (3+ chars) and try to find them in sequence
+        # Also try without trailing punctuation for better matching
+        quote_words = self._extract_significant_words(clean_quote)
+        quote_words_no_punct = self._extract_significant_words(clean_quote_no_punct) if clean_quote_no_punct != clean_quote else quote_words
         
-        quote_words = extract_significant_words(clean_quote)
-        quote_words_no_punct = extract_significant_words(clean_quote_no_punct) if clean_quote_no_punct != clean_quote else quote_words
-        
+        # Try with original quote words first
         if len(quote_words) >= 5:  # Need at least 5 significant words
-            # Try to find words in sequence
-            source_words_list = extract_significant_words(normalized_source)
+            # Try to find a substring that contains these words in order
+            match_result = self._find_words_in_sequence_fast(quote_words, normalized_source)
+            if match_result:
+                start_idx, end_idx = match_result
+                source_words = normalized_source.split()
+                # Extend to show at least as many words as the quote, or more
+                quote_word_count = len(clean_quote.split())
+                extend_words = max(quote_word_count, end_idx - start_idx + 10)
+                context_start = max(0, start_idx - 5)
+                context_end = min(len(source_words), start_idx + extend_words + 5)
+                matched_words = source_words[context_start:context_end]
+                matched_text = ' '.join(matched_words)
+                return True, matched_text
+            
+            # Strategy 3a: Try finding a subsequence of quote words in source (handles quotes with extra words at start and end)
+            # This handles cases where quote has "the just is a sort of proportion... the person struck..."
+            # but book only has "The person struck..."
+            # Try to find a substantial subsequence (at least 5 consecutive words from the quote)
+            source_words_list = self._extract_significant_words(normalized_source)
             if len(source_words_list) >= 5:
-                quote_idx = 0
-                for source_word in source_words_list:
-                    if quote_idx < len(quote_words) and source_word == quote_words[quote_idx]:
-                        quote_idx += 1
-                        if quote_idx == len(quote_words):
-                            return True
+                # Find the longest matching subsequence
+                best_match_start = -1
+                best_match_end = -1
+                best_match_length = 0
                 
-                # More lenient: if we found at least 70% of words in order
-                if quote_idx >= len(quote_words) * 0.70:
-                    return True
+                # Try starting from each position in the quote
+                for quote_start in range(len(quote_words) - 4):  # Need at least 5 words
+                    # Try to find this subsequence in the source
+                    quote_subseq = quote_words[quote_start:]
+                    source_idx = 0
+            quote_idx = 0
+                    match_start = -1
+                    match_end = -1
+                    
+                    while source_idx < len(source_words_list) and quote_idx < len(quote_subseq):
+                        # Try fuzzy match for word variations (e.g., "accordance" vs "accord")
+                        if self._words_match_fuzzy(source_words_list[source_idx], quote_subseq[quote_idx]):
+                            if match_start == -1:
+                                match_start = source_idx
+                            match_end = source_idx
+                    quote_idx += 1
+                            source_idx += 1
+                else:
+                            source_idx += 1
+                            # If we had a partial match, reset if we've gone too far
+                            if match_start != -1 and source_idx - match_start > len(quote_subseq) * 2:
+                                match_start = -1
+                                match_end = -1
+                                quote_idx = 0
+                    
+                    # If we found a good match (at least 5 words or 70% of the subsequence)
+                    if match_start != -1 and quote_idx >= max(5, int(len(quote_subseq) * 0.7)):
+                        match_length = match_end - match_start + 1
+                        if match_length > best_match_length:
+                            best_match_length = match_length
+                            best_match_start = match_start
+                            best_match_end = match_end
                 
-                # Try without first few words (handles quotes with extra words at start)
-                if len(quote_words) >= 6:
-                    for skip_count in range(1, min(4, len(quote_words) - 4)):
-                        remaining_words = quote_words[skip_count:]
-                        if len(remaining_words) >= 4:
-                            remaining_idx = 0
-                            for source_word in source_words_list:
-                                if remaining_idx < len(remaining_words) and source_word == remaining_words[remaining_idx]:
-                                    remaining_idx += 1
-                                    if remaining_idx == len(remaining_words):
-                                        return True
-                            if remaining_idx >= len(remaining_words) * 0.70:
-                                return True
+                if best_match_start != -1 and best_match_length >= 5:
+                    source_words = normalized_source.split()
+                    # Map significant word indices back to actual word indices
+                    sig_to_actual = {}
+                    sig_idx = 0
+                    for actual_idx, word in enumerate(source_words):
+                        word_lower = word.strip('.,;:!?()[]{}"\'').lower()
+                        if len(word_lower) >= 3:
+                            sig_to_actual[sig_idx] = actual_idx
+                            sig_idx += 1
+                    
+                    if best_match_start in sig_to_actual and best_match_end in sig_to_actual:
+                        start_word_idx = sig_to_actual[best_match_start]
+                        end_word_idx = sig_to_actual[best_match_end]
+                        context_start = max(0, start_word_idx - 5)
+                        context_end = min(len(source_words), end_word_idx + 10)
+                        matched_words = source_words[context_start:context_end]
+                        matched_text = ' '.join(matched_words)
+                        return True, matched_text
+            
+            # Strategy 3b: Try matching without first few words (handles quotes with extra words at start)
+            # Try skipping first 1-3 words and see if the rest matches
+            if len(quote_words) >= 6:  # Need enough words to skip some
+                for skip_count in range(1, min(4, len(quote_words) - 4)):  # Skip 1-3 words, keep at least 4
+                    remaining_words = quote_words[skip_count:]
+                    if len(remaining_words) >= 4:
+                        match_result = self._find_words_in_sequence_fast(remaining_words, normalized_source)
+                        if match_result:
+                            start_idx, end_idx = match_result
+                            source_words = normalized_source.split()
+                            quote_word_count = len(clean_quote.split())
+                            extend_words = max(quote_word_count, end_idx - start_idx + 10)
+                            context_start = max(0, start_idx - 5)
+                            context_end = min(len(source_words), start_idx + extend_words + 5)
+                            matched_words = source_words[context_start:context_end]
+                            matched_text = ' '.join(matched_words)
+                            return True, matched_text
+            
+            # Strategy 3c: Try matching quote without trailing punctuation (handles missing periods)
+            if len(quote_words_no_punct) >= 5 and quote_words_no_punct != quote_words:
+                match_result = self._find_words_in_sequence_fast(quote_words_no_punct, normalized_source)
+                if match_result:
+                    start_idx, end_idx = match_result
+                    source_words = normalized_source.split()
+                    quote_word_count = len(clean_quote_no_punct.split())
+                    extend_words = max(quote_word_count, end_idx - start_idx + 10)
+                    context_start = max(0, start_idx - 5)
+                    context_end = min(len(source_words), start_idx + extend_words + 5)
+                    matched_words = source_words[context_start:context_end]
+                    matched_text = ' '.join(matched_words)
+                    return True, matched_text
         
         # Strategy 4: Try aggressive normalization (handles punctuation differences)
+        # Use clean_quote instead of quote_text to ensure consistent normalization
         agg_quote = self._normalize_text_aggressive(clean_quote)
         agg_source = self._normalize_text_aggressive(normalized_source)
-        if agg_quote.lower() in agg_source.lower():
-            return True
+        agg_quote_lower = agg_quote.lower()
+        agg_source_lower = agg_source.lower()
         
-        return False
+        idx = agg_source_lower.find(agg_quote_lower)
+        if idx != -1:
+            # Map back to original source
+            quote_words_agg = self._extract_significant_words(agg_quote)
+            if len(quote_words_agg) >= 5:
+                match_result = self._find_words_in_sequence_fast(quote_words_agg, normalized_source)
+                if match_result:
+                    start_idx, end_idx = match_result
+                    source_words = normalized_source.split()
+                    # Extend to show at least as many words as the quote, or more
+                    quote_word_count = len(clean_quote.split())
+                    extend_words = max(quote_word_count, end_idx - start_idx + 10)
+                    context_start = max(0, start_idx - 5)
+                    context_end = min(len(source_words), start_idx + extend_words + 5)
+                    matched_words = source_words[context_start:context_end]
+                    matched_text = ' '.join(matched_words)
+                    return True, matched_text
+        
+        return False, ""
     
     def _search_quote_in_txt(self, txt_path, quote_text):
-        """Search for a quote in a TXT file using cached normalized version"""
+        """Search for a quote in a TXT file using cached normalized version
+        Returns: (page_num, found, matched_text)"""
         normalized_data = self._load_and_normalize_source(txt_path, "TXT")
         if normalized_data is None:
-            return None, False
+            return None, False, ""
         
         # Match against normalized source
-        if self._fuzzy_match_quote_in_normalized(quote_text, normalized_data):
+        found, matched_text = self._fuzzy_match_quote_in_normalized(quote_text, normalized_data)
+        if found:
             # Find position for page estimation
             clean_quote = self._normalize_text_for_search(quote_text)
             normalized_text = normalized_data['normalized_text']
@@ -9767,20 +10106,21 @@ class UpSetGUI:
                 position = len(normalized_text) // 2
             
             estimated_page = (position // 2000) + 1
-            return estimated_page, True
+            return estimated_page, True, matched_text
         
-        return None, False
+        return None, False, ""
     
     def _verify_quote(self, quote_text, source_file_path, file_type):
-        """Verify if a quote exists in the source file"""
+        """Verify if a quote exists in the source file
+        Returns: (page_num, found, matched_text)"""
         if file_type == "PDF":
-            page_num, found = self._search_quote_in_pdf(source_file_path, quote_text)
+            page_num, found, matched_text = self._search_quote_in_pdf(source_file_path, quote_text)
+            return page_num, found, matched_text
         elif file_type == "TXT":
-            page_num, found = self._search_quote_in_txt(source_file_path, quote_text)
+            page_num, found, matched_text = self._search_quote_in_txt(source_file_path, quote_text)
+            return page_num, found, matched_text
         else:
-            return None, False
-        
-        return page_num, found
+            return None, False, ""
     
     def _add_quotes_table_to_doc(self, doc, valid_folders, quotes_data, parent_folder=None):
         """Add quotes table to the document after RAG Parameter Consistency Analysis"""
@@ -9992,22 +10332,25 @@ class UpSetGUI:
                         # Verify quote if source file is available
                         if source_file_path:
                             print(f"[QUOTES DEBUG]     Searching in: {os.path.basename(source_file_path)}")
-                            page_num, found = self._verify_quote(quote_to_verify, source_file_path, file_type)
+                            page_num, found, matched_text = self._verify_quote(quote_to_verify, source_file_path, file_type)
                             
                             if found:
                                 print(f"[QUOTES DEBUG]     ✓ FOUND on page {page_num}")
-                                verified_quotes.append((quote_to_verify, True, page_num))
+                                if matched_text:
+                                    matched_snippet = matched_text[:200] + "..." if len(matched_text) > 200 else matched_text
+                                    print(f"[QUOTES DEBUG]     Matched: {matched_snippet}")
+                                verified_quotes.append((quote_to_verify, True, page_num, matched_text))
                                 verification_stats[folder_name]['found'] += 1
                             else:
                                 print(f"[QUOTES DEBUG]     ✗ NOT FOUND")
-                                verified_quotes.append((quote_to_verify, False, None))
+                                verified_quotes.append((quote_to_verify, False, None, ""))
                                 verification_stats[folder_name]['not_found'] += 1
                         else:
                             # No source file, mark as not verified
-                            verified_quotes.append((quote_to_verify, None, None))
+                            verified_quotes.append((quote_to_verify, None, None, ""))
                     
                     # Add quotes to cell with individual coloring, preserving "Quote X:" format
-                    for quote_idx, (quote, found, page_num) in enumerate(verified_quotes):
+                    for quote_idx, (quote, found, page_num, matched_text) in enumerate(verified_quotes):
                         # Add line break before second and subsequent quotes
                         if quote_idx > 0:
                             para = cell.add_paragraph()
@@ -10046,6 +10389,153 @@ class UpSetGUI:
                             shd.set(qn('w:val'), 'clear')
                             rPr.append(shd)
                         # If found is None, no coloring (source file not available)
+                        
+                        # Add matched text if available (same as test_quote_search.py) with word highlighting
+                        if matched_text and found is True:
+                            para_matched = cell.add_paragraph()
+                            
+                            # Clean quote text for matching (remove "Quote X:" prefix)
+                            clean_quote_for_matching = quote_text
+                            if quote_text.startswith("Quote "):
+                                parts = quote_text.split(":", 1)
+                                if len(parts) > 1:
+                                    clean_quote_for_matching = parts[1].strip()
+                            
+                            # Normalize both for comparison
+                            clean_quote = self._normalize_text_for_search(clean_quote_for_matching)
+                            clean_matched = self._normalize_text_for_search(matched_text)
+                            
+                            matched_lower = clean_matched.lower()
+                            quote_lower = clean_quote.lower()
+                            
+                            # Try to find the full quote in the matched text
+                            idx = matched_lower.find(quote_lower)
+                            
+                            if idx != -1:
+                                # Found exact match - highlight only the matching portion
+                                # Find position in original matched_text
+                                # Simple approach: find in original text
+                                original_idx = matched_text.lower().find(clean_quote_for_matching.lower())
+                                if original_idx == -1:
+                                    original_idx = matched_text.lower().find(quote_lower)
+                                
+                                if original_idx != -1:
+                                    # Truncate before text to avoid performance issues
+                                    max_before_length = 150
+                                    before = matched_text[:original_idx]
+                                    if len(before) > max_before_length:
+                                        before = "..." + before[-max_before_length:]
+                                    
+                                    # Use original quote length for match portion
+                                    match_portion = matched_text[original_idx:original_idx+len(clean_quote_for_matching)]
+                                    
+                                    # Truncate match portion if too long (safety check)
+                                    max_match_length = 300
+                                    if len(match_portion) > max_match_length:
+                                        match_portion = match_portion[:max_match_length] + "..."
+                                    
+                                    after = matched_text[original_idx+len(clean_quote_for_matching):]
+                                    
+                                    # Add text with highlighting
+                                    run_label = para_matched.add_run("  → Matched: ")
+                                    run_label.font.size = Inches(0.08)
+                                    run_label.italic = True
+                                    run_label.font.color.rgb = RGBColor(0, 0, 0)  # Black
+                                    
+                                    if before:
+                                        run_before = para_matched.add_run(before)
+                                        run_before.font.size = Inches(0.08)
+                                        run_before.font.color.rgb = RGBColor(0, 0, 0)  # Black
+                                    
+                                    # Highlight the matching portion (green and underlined)
+                                    run_match = para_matched.add_run(match_portion)
+                                    run_match.font.size = Inches(0.08)
+                                    run_match.font.color.rgb = RGBColor(0, 100, 0)  # Dark green
+                                    run_match.underline = True
+                                    
+                                    # Truncate after text if too long
+                                    after_display = after[:100] + "..." if len(after) > 100 else after
+                                    if after_display:
+                                        run_after = para_matched.add_run(after_display)
+                                        run_after.font.size = Inches(0.08)
+                                        run_after.font.color.rgb = RGBColor(0, 0, 0)  # Black
+                                else:
+                                    # Fallback: show full text without highlighting
+                                    run_label = para_matched.add_run("  → Matched: ")
+                                    run_label.font.size = Inches(0.08)
+                                    run_label.italic = True
+                                    matched_display = matched_text[:300] + "..." if len(matched_text) > 300 else matched_text
+                                    run_matched = para_matched.add_run(matched_display)
+                                    run_matched.font.size = Inches(0.08)
+                                    run_matched.font.color.rgb = RGBColor(0, 100, 0)
+                            else:
+                                # Partial match: highlight matching words
+                                # Truncate matched text to avoid performance issues with very long texts
+                                max_matched_length = 500  # Limit to 500 characters for word-by-word processing
+                                matched_text_truncated = matched_text[:max_matched_length] + ("..." if len(matched_text) > max_matched_length else "")
+                                
+                                quote_words = clean_quote.split()
+                                matched_words_list = matched_text_truncated.split()
+                                
+                                # Limit number of words to process to avoid freezing
+                                max_words_to_process = 200
+                                if len(matched_words_list) > max_words_to_process:
+                                    matched_words_list = matched_words_list[:max_words_to_process]
+                                    matched_text_truncated = " ".join(matched_words_list) + "..."
+                                
+                                if len(quote_words) >= 3:
+                                    # Find which words from the quote are in the matched text
+                                    matched_word_indices = set()
+                                    quote_words_lower = [w.strip('.,;:!?()[]{}"\'').lower() for w in quote_words]
+                                    
+                                    for i, matched_word in enumerate(matched_words_list):
+                                        matched_word_clean = matched_word.strip('.,;:!?()[]{}"\'').lower()
+                                        for quote_word_clean in quote_words_lower:
+                                            if matched_word_clean == quote_word_clean:
+                                                matched_word_indices.add(i)
+                                                break
+                                    
+                                    if matched_word_indices:
+                                        # Add text with word-by-word highlighting
+                                        run_label = para_matched.add_run("  → Matched: ")
+                                        run_label.font.size = Inches(0.08)
+                                        run_label.font.italic = True
+                                        run_label.font.color.rgb = RGBColor(0, 0, 0)  # Black
+                                        
+                                        # Process words in batches to avoid performance issues
+                                        for i, word in enumerate(matched_words_list):
+                                            if i > 0:
+                                                para_matched.add_run(" ").font.size = Inches(0.08)
+                                            
+                                            if i in matched_word_indices:
+                                                # Highlight matched words (green and underlined)
+                                                run_word = para_matched.add_run(word)
+                                                run_word.font.size = Inches(0.08)
+                                                run_word.font.color.rgb = RGBColor(0, 100, 0)  # Dark green
+                                                run_word.underline = True
+                                            else:
+                                                # Regular text (black)
+                                                run_word = para_matched.add_run(word)
+                                                run_word.font.size = Inches(0.08)
+                                                run_word.font.color.rgb = RGBColor(0, 0, 0)  # Black
+                                    else:
+                                        # No word matches found, show full text
+                                        run_label = para_matched.add_run("  → Matched: ")
+                                        run_label.font.size = Inches(0.08)
+                                        run_label.italic = True
+                                        matched_display = matched_text[:300] + "..." if len(matched_text) > 300 else matched_text
+                                        run_matched = para_matched.add_run(matched_display)
+                                        run_matched.font.size = Inches(0.08)
+                                        run_matched.font.color.rgb = RGBColor(0, 100, 0)
+                                else:
+                                    # Quote too short, show full text
+                                    run_label = para_matched.add_run("  → Matched: ")
+                                    run_label.font.size = Inches(0.08)
+                                    run_label.italic = True
+                                    matched_display = matched_text[:300] + "..." if len(matched_text) > 300 else matched_text
+                                    run_matched = para_matched.add_run(matched_display)
+                                    run_matched.font.size = Inches(0.08)
+                                    run_matched.font.color.rgb = RGBColor(0, 100, 0)
                     
                     # Add sources if available (add after all quotes)
                     if sources:
@@ -10065,14 +10555,14 @@ class UpSetGUI:
                     
                     # Truncate if too long (but preserve sources)
                     # Count characters in quotes only, not sources
-                    quotes_text_length = sum(len(q) for q, _, _ in verified_quotes)
+                    quotes_text_length = sum(len(q) for q, _, _, _ in verified_quotes)
                     if quotes_text_length > 800:
                         # Truncate quotes but keep sources
                         # Remove quotes paragraphs starting from the end until we're under limit
                         total_length = 0
                         quotes_to_keep = []
                         for quote_data in reversed(verified_quotes):
-                            quote, found, page_num = quote_data
+                            quote, found, page_num, matched_text = quote_data
                             quote_text = quote  # Preserve original format
                             if found is True and page_num:
                                 quote_text = f"{quote_text} [p.{page_num}]"
@@ -10084,7 +10574,7 @@ class UpSetGUI:
                         
                         # Rebuild cell with truncated quotes
                         cell.text = ""
-                        for quote_idx, (quote, found, page_num) in enumerate(quotes_to_keep):
+                        for quote_idx, (quote, found, page_num, matched_text) in enumerate(quotes_to_keep):
                             if quote_idx > 0:
                                 para = cell.add_paragraph()
                             else:
@@ -10113,6 +10603,108 @@ class UpSetGUI:
                                 shd.set(qn('w:fill'), '8B0000')
                                 shd.set(qn('w:val'), 'clear')
                                 rPr.append(shd)
+                            
+                            # Add matched text if available (with word highlighting - same logic as above)
+                            if matched_text and found is True:
+                                para_matched = cell.add_paragraph()
+                                
+                                # Clean quote text for matching
+                                clean_quote_for_matching = quote
+                                if quote.startswith("Quote "):
+                                    parts = quote.split(":", 1)
+                                    if len(parts) > 1:
+                                        clean_quote_for_matching = parts[1].strip()
+                                
+                                # Normalize both for comparison
+                                clean_quote = self._normalize_text_for_search(clean_quote_for_matching)
+                                clean_matched = self._normalize_text_for_search(matched_text)
+                                
+                                matched_lower = clean_matched.lower()
+                                quote_lower = clean_quote.lower()
+                                
+                                # Try to find the full quote in the matched text
+                                idx = matched_lower.find(quote_lower)
+                                
+                                if idx != -1:
+                                    # Found exact match - highlight only the matching portion
+                                    original_idx = matched_text.lower().find(clean_quote_for_matching.lower())
+                                    if original_idx == -1:
+                                        original_idx = matched_text.lower().find(quote_lower)
+                                    
+                                    if original_idx != -1:
+                                        # Truncate before text to avoid performance issues
+                                        max_before_length = 150
+                                        before = matched_text[:original_idx]
+                                        if len(before) > max_before_length:
+                                            before = "..." + before[-max_before_length:]
+                                        
+                                        match_portion = matched_text[original_idx:original_idx+len(clean_quote_for_matching)]
+                                        
+                                        # Truncate match portion if too long (safety check)
+                                        max_match_length = 300
+                                        if len(match_portion) > max_match_length:
+                                            match_portion = match_portion[:max_match_length] + "..."
+                                        
+                                        after = matched_text[original_idx+len(clean_quote_for_matching):]
+                                        
+                                        run_label = para_matched.add_run("  → Matched: ")
+                                        run_label.font.size = Inches(0.08)
+                                        run_label.italic = True
+                                        run_label.font.color.rgb = RGBColor(0, 0, 0)
+                                        
+                                        if before:
+                                            para_matched.add_run(before).font.size = Inches(0.08)
+                                        
+                                        run_match = para_matched.add_run(match_portion)
+                                        run_match.font.size = Inches(0.08)
+                                        run_match.font.color.rgb = RGBColor(0, 100, 0)
+                                        run_match.underline = True
+                                        
+                                        after_display = after[:100] + "..." if len(after) > 100 else after
+                                        if after_display:
+                                            para_matched.add_run(after_display).font.size = Inches(0.08)
+                                else:
+                                    # Partial match: highlight matching words
+                                    # Truncate matched text to avoid performance issues with very long texts
+                                    max_matched_length = 500  # Limit to 500 characters for word-by-word processing
+                                    matched_text_truncated = matched_text[:max_matched_length] + ("..." if len(matched_text) > max_matched_length else "")
+                                    
+                                    quote_words = clean_quote.split()
+                                    matched_words_list = matched_text_truncated.split()
+                                    
+                                    # Limit number of words to process to avoid freezing
+                                    max_words_to_process = 200
+                                    if len(matched_words_list) > max_words_to_process:
+                                        matched_words_list = matched_words_list[:max_words_to_process]
+                                        matched_text_truncated = " ".join(matched_words_list) + "..."
+                                    
+                                    if len(quote_words) >= 3:
+                                        matched_word_indices = set()
+                                        quote_words_lower = [w.strip('.,;:!?()[]{}"\'').lower() for w in quote_words]
+                                        
+                                        for i, matched_word in enumerate(matched_words_list):
+                                            matched_word_clean = matched_word.strip('.,;:!?()[]{}"\'').lower()
+                                            for quote_word_clean in quote_words_lower:
+                                                if matched_word_clean == quote_word_clean:
+                                                    matched_word_indices.add(i)
+                                                    break
+                                        
+                                        if matched_word_indices:
+                                            run_label = para_matched.add_run("  → Matched: ")
+                                            run_label.font.size = Inches(0.08)
+                                            run_label.italic = True
+                                            
+                                            for i, word in enumerate(matched_words_list):
+                                                if i > 0:
+                                                    para_matched.add_run(" ").font.size = Inches(0.08)
+                                                
+                                                if i in matched_word_indices:
+                                                    run_word = para_matched.add_run(word)
+                                                    run_word.font.size = Inches(0.08)
+                                                    run_word.font.color.rgb = RGBColor(0, 100, 0)
+                                                    run_word.underline = True
+                                                else:
+                                                    para_matched.add_run(word).font.size = Inches(0.08)
                         
                         # Re-add sources after truncated quotes
                         if sources:
